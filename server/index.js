@@ -61,12 +61,14 @@ app.use(
       mongoUrl: process.env.MONGO_URI,
       collectionName: "sessions",
     }),
-    cookie: {
-      httpOnly: true,
-      sameSite: "none",
-      secure: true,
-      maxAge: 1000 * 60 * 60 * 2,
-    },
+  cookie: {
+  httpOnly: true,
+  sameSite: "none",
+  secure: true,
+  path: "/",              // 🔥 זה הפתרון
+  maxAge: 1000 * 60 * 60 * 2,
+}
+
   })
 );
 
