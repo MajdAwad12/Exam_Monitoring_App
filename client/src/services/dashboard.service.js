@@ -1,5 +1,8 @@
 // ===== file: client/src/services/dashboard.service.js =====
-const API_BASE = import.meta.env.VITE_API_BASE
+
+// ✅ Always use same-origin (Vercel rewrites -> Render)
+const API_BASE = "";
+
 async function handle(res) {
   if (res.status === 204) return null;
 
@@ -36,7 +39,7 @@ async function http(url, options = {}) {
   const res = await fetch(`${API_BASE}${url}`, {
     ...options,
     headers,
-    credentials: "include",
+    credentials: "include", // ✅ send session cookie always
   });
 
   return handle(res);
