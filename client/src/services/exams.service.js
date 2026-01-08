@@ -1,5 +1,8 @@
-// client/src/services/exams.service.js
-const API_BASE = import.meta.env.VITE_API_BASE;
+// ===== file: client/src/services/exams.service.js =====
+
+// ✅ Always same-origin (Vercel rewrites -> Render)
+const API_BASE = "";
+
 async function handle(res) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -33,24 +36,20 @@ export async function createExam(payload) {
 
 /**
  * Start exam
- * - Normal: POST /api/exams/:id/start
- * - Force:  POST /api/exams/:id/start?force=1  (also sends body {force:true} for compatibility)
  */
 export async function startExam(examId, { force = false } = {}) {
   const qs = force ? "?force=1" : "";
   const res = await fetch(`${API_BASE}/api/exams/${examId}/start${qs}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" }, // ✅ so server can read body too
+    headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ force: Boolean(force) }), // ✅ supports server body.force as well
+    body: JSON.stringify({ force: Boolean(force) }),
   });
   return handle(res);
 }
 
 /**
  * End exam
- * - POST /api/exams/:id/end
- * Server now allows end ONLY if exam is ACTIVE in real time window.
  */
 export async function endExam(examId) {
   const res = await fetch(`${API_BASE}/api/exams/${examId}/end`, {
@@ -60,7 +59,10 @@ export async function endExam(examId) {
   return handle(res);
 }
 
-// ✅ Admin Update/Delete
+// =========================
+// Admin
+// =========================
+
 export async function updateExamAdmin(examId, payload) {
   const res = await fetch(`${API_BASE}/api/admin/exams/${examId}`, {
     method: "PUT",
