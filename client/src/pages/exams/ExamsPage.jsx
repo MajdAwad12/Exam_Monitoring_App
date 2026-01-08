@@ -1,6 +1,8 @@
 // ===============================
 // file: client/src/pages/exams/ExamPage.jsx
 // ===============================
+const API_BASE = import.meta.env.VITE_API_BASE
+
 import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import RocketLoader from "../../components/loading/RocketLoader.jsx";
