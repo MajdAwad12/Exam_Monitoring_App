@@ -87,7 +87,7 @@ export default function ExamPage() {
         setLoading(true);
         setError("");
 
-        const res = await fetch("http://localhost:5000/api/exams", { credentials: "include" });
+        const res = await fetch(`${API_BASE}/api/exams`, { credentials: "include" });
         if (!res.ok) {
           let msg = "Failed to load exams";
           try {
