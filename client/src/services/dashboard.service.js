@@ -1,5 +1,5 @@
 // ===== file: client/src/services/dashboard.service.js =====
-const API_BASE = import.meta.env.VITE_API_BASE
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 async function handle(res) {
   if (res.status === 204) return null;
 

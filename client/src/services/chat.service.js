@@ -1,5 +1,5 @@
 // ===== file: client/src/services/chat.service.js =====
-const API_BASE = import.meta.env.VITE_API_BASE
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 async function handle(res) {
   let data = {};
   try {
