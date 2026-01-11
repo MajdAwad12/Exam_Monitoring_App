@@ -1,3 +1,5 @@
+import path from "path";
+import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -77,6 +79,23 @@ app.use("/api/student", studentRoutes);
 // NOTE: exams are stored in the MongoDB collection "moddle" (see Exam model).
 // The API is kept under /api/exams for simplicity.
 
+// =========================
+// Serve React build (production)
+// =========================
+if (process.env.NODE_ENV === "production") {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+
+  // from: server/index.js -> ../client/dist
+  const distPath = path.join(__dirname, "..", "client", "dist");
+
+  app.use(express.static(distPath));
+
+  // For React Router (SPA): return index.html for any unknown route
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+}
 
 
 // ✅ START
