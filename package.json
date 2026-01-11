@@ -1,8 +1,0 @@
-{
-  "name": "exam-monitoring-app",
-  "private": true,
-  "scripts": {
-    "build": "npm --prefix client install --include=dev && npm --prefix client run build && npm --prefix server install",
-    "start": "npm --prefix server start"
-  }
-}
