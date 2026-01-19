@@ -1,3 +1,4 @@
+//
 // client/src/services/auth.service.js
 
 // ✅ If VITE_API_BASE is not defined (Render same-domain),

@@ -1,4 +1,4 @@
-// CHATBOT_chatbot 
+// CHATBOT_
 // server/src/controllers/chat.controller.js
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Exam from "../models/Exam.js";
