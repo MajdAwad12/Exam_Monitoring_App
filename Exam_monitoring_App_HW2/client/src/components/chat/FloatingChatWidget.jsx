@@ -5,6 +5,7 @@ import { chatWithAI } from "../../services/chat.service";
 /**
  * Supervisor-first minimal chat UI (ENGLISH ONLY):
  * ✅ No tabs, no overload
+ * ✅ Expand/Collapse "Quick Questions"
  * ✅ Only a few ready "help bubbles" for proctor during exam
  * ✅ Free text question is still supported
  * ✅ Messages scroll (real chat feel)
@@ -16,12 +17,14 @@ import { chatWithAI } from "../../services/chat.service";
    (Keep it short and direct)
 ========================= */
 const QUICK_BUBBLES = [
-  { q: "What is the current exam?", hint: "Shows the running exam (DB truth)." },
-  { q: "How many students are not arrived?", hint: "Not arrived count (DB truth)." },
-  { q: "Which students went to the toilet more than 3 times?", hint: "Lists students with toilet exits > 3." },
-  { q: "Which student is outside right now?", hint: "Students outside now (temp_out / active toilet)." },
-  { q: "List not arrived students", hint: "List not arrived students (safe truncation)." },
-  { q: "How do I track a toilet break?", hint: "UI guidance only (no DB)." },
+  { q: "What is the next exam?", hint: "Shows the next upcoming exam (DB truth)." },
+  { q: "How can I mark the student?", hint: "UI guidance (how-to)." },
+  {
+    q: "Which students went to the toilet more than 3 times? Give me names.",
+    hint: "Lists students with toilet exits > 3 (DB truth).",
+  },
+  { q: "How do I move a student to another class?", hint: "Transfer steps (UI guidance)." },
+  { q: "Which students not arrived yet? Give me names.", hint: "Lists not arrived students (DB truth)." },
 ];
 
 /* =========================
@@ -33,9 +36,21 @@ function sleep(ms) {
 
 function calcThinkingMs(userText) {
   const len = (userText || "").trim().length;
-  const base = 260 + Math.min(520, Math.floor(len * 8));
-  const jitter = Math.floor(Math.random() * 150);
+  const base = 220 + Math.min(420, Math.floor(len * 7));
+  const jitter = Math.floor(Math.random() * 120);
   return base + jitter;
+}
+
+function normalizeEnglishOnly(s) {
+  // Keep UI English-only: if user types Hebrew accidentally, warn gently.
+  // NOTE: This only blocks client-side send; server is still source of truth.
+  const text = String(s || "").trim();
+  if (!text) return { ok: false, text: "" };
+
+  const hasHebrew = /[\u0590-\u05FF]/.test(text);
+  if (hasHebrew) return { ok: false, text };
+
+  return { ok: true, text };
 }
 
 /* =========================
@@ -72,8 +87,9 @@ function Chip({ text, hint, onClick, disabled }) {
       disabled={disabled}
       title={hint || ""}
       className="text-[11px] px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-60 max-w-full"
+      type="button"
     >
-      <span className="truncate block max-w-[280px]">{text}</span>
+      <span className="truncate block max-w-[320px]">{text}</span>
     </button>
   );
 }
@@ -87,10 +103,24 @@ export default function FloatingChatWidget() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // Expand/Collapse quick bubbles
+  const [showQuick, setShowQuick] = useState(() => {
+    const v = localStorage.getItem("chat_quick_collapsed");
+    return v ? v !== "1" : true;
+  });
+
+  function toggleQuick() {
+    setShowQuick((v) => {
+      const next = !v;
+      localStorage.setItem("chat_quick_collapsed", next ? "0" : "1");
+      return next;
+    });
+  }
+
   const initialBotMessage =
     "Hi 👋 I’m your Exam Assistant.\n" +
-    "Use the quick bubbles for instant supervisor answers from the database.\n" +
-    "Or type a question (English only).";
+    "Use Quick Questions for the demo.\n" +
+    "You can also type a question (English only).";
 
   const [messages, setMessages] = useState([{ from: "bot", text: initialBotMessage }]);
   const endRef = useRef(null);
@@ -106,6 +136,18 @@ export default function FloatingChatWidget() {
     const clean = (text ?? "").trim();
     if (!clean || isLoading) return;
 
+    // English-only check (client)
+    const eng = normalizeEnglishOnly(clean);
+    if (!eng.ok) {
+      setInput("");
+      setMessages((m) => [
+        ...m,
+        { from: "me", text: clean },
+        { from: "bot", text: "Please use English only for the presentation 🙂" },
+      ]);
+      return;
+    }
+
     setInput("");
     setIsLoading(true);
     setMessages((m) => [...m, { from: "me", text: clean }]);
@@ -114,7 +156,7 @@ export default function FloatingChatWidget() {
       await sleep(calcThinkingMs(clean));
       const data = await chatWithAI({ message: clean });
       const replyText = data?.text || "Sorry, I couldn't generate an answer. Try again.";
-      await sleep(80 + Math.floor(Math.random() * 140));
+      await sleep(70 + Math.floor(Math.random() * 120));
       setMessages((m) => [...m, { from: "bot", text: replyText }]);
     } catch {
       await sleep(120);
@@ -153,6 +195,7 @@ export default function FloatingChatWidget() {
                 onClick={clearChat}
                 className="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/20 text-xs font-semibold"
                 title="Clear chat"
+                type="button"
               >
                 Clear
               </button>
@@ -161,21 +204,38 @@ export default function FloatingChatWidget() {
                 onClick={() => setOpen(false)}
                 className="w-9 h-9 rounded-2xl hover:bg-white/15 flex items-center justify-center text-xl"
                 title="Close"
+                type="button"
               >
                 ×
               </button>
             </div>
           </div>
 
-          {/* Bubbles (sticky) */}
+          {/* Quick Questions (expand/collapse) */}
           <div className="sticky top-0 z-10 bg-white border-b border-slate-200">
             <div className="px-4 py-3">
-              <div className="text-[11px] text-slate-500 mb-2">Quick supervisor questions</div>
-              <div className="flex flex-wrap gap-2">
-                {bubbles.map((it) => (
-                  <Chip key={it.q} text={it.q} hint={it.hint} disabled={isLoading} onClick={() => sendText(it.q)} />
-                ))}
-              </div>
+              <button
+                onClick={toggleQuick}
+                className="w-full flex items-center justify-between"
+                type="button"
+                title={showQuick ? "Collapse quick questions" : "Expand quick questions"}
+              >
+                <div className="text-[11px] text-slate-500">Quick Questions</div>
+                <div className="text-sm font-extrabold text-slate-700">{showQuick ? "−" : "+"}</div>
+              </button>
+
+              {showQuick ? (
+                <>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {bubbles.map((it) => (
+                      <Chip key={it.q} text={it.q} hint={it.hint} disabled={isLoading} onClick={() => sendText(it.q)} />
+                    ))}
+                  </div>
+                  <div className="mt-2 text-[11px] text-slate-500">
+                    Tip: These 5 questions are optimized for your demo.
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
 
@@ -219,19 +279,22 @@ export default function FloatingChatWidget() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && send()}
                 className="flex-1 px-3 py-2 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                placeholder='Type a question… (e.g., "How many not arrived?")'
+                placeholder='Type a question… (e.g., "What is the next exam?")'
                 disabled={isLoading}
               />
               <button
                 onClick={send}
                 disabled={isLoading || !input.trim()}
                 className="px-4 py-2 rounded-2xl bg-sky-600 text-white font-semibold hover:bg-sky-700 disabled:opacity-60"
+                type="button"
               >
                 Send
               </button>
             </div>
 
-            <div className="mt-2 text-[11px] text-slate-500">Tip: Use bubbles for instant supervisor answers.</div>
+            <div className="mt-2 text-[11px] text-slate-500">
+              English only • Use Quick Questions for the presentation.
+            </div>
           </div>
         </div>
       )}
@@ -242,6 +305,7 @@ export default function FloatingChatWidget() {
           onClick={() => setOpen(true)}
           className="w-14 h-14 rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 text-white shadow-xl hover:brightness-110 flex items-center justify-center"
           title="Open Exam Assistant"
+          type="button"
         >
           <BubbleIcon />
         </button>

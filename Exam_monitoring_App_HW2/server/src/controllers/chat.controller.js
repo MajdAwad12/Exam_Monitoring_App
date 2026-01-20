@@ -367,8 +367,15 @@ function isExamReportQuestion(t) {
  * Anything that expects facts from DB: lists, counts, rankings, stats, schedule, etc.
  */
 function isDbRequiredQuestion(tRaw) {
-  const t = norm(tRaw);
-
+    const t = norm(tRaw);
+    if (
+    t.startsWith("how") ||
+    t.includes("how to") ||
+    t.includes("how can i") ||
+    t.includes("how do i")
+  ) {
+    return false;
+  }
   // Time now is DB-free
   if (isTimeNowQuestion(t)) return false;
 
@@ -1362,17 +1369,16 @@ export async function chatWithAI(req, res) {
 
     resetDailyIfNeeded();
 
-    // 1) DB-required -> DB ONLY
+    // 1) FAQ FIRST (how-to / meaning UI guidance)
+    const faq = faqAnswer(message);
+    if (faq) return res.json({ text: faq });
+
+        // 2) DB-required -> DB ONLY
     const t = norm(message);
     if (isDbRequiredQuestion(t)) {
       const ans = await dbDirectAnswer(message, actor);
       return res.json({ text: ans || "I don't have that information available in the database right now." });
     }
-
-    // 2) FAQ (only for how/meaning UI guidance)
-    const faq = faqAnswer(message);
-    if (faq) return res.json({ text: faq });
-
     // 3) Non-DB question -> Gemini allowed
     const maxPerDay = Number(process.env.GEMINI_MAX_PER_DAY || 50);
     if (mem.geminiUsed >= maxPerDay) {
