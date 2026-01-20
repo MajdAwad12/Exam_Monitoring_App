@@ -329,7 +329,7 @@ export default function StudentMyExamReportPage() {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-extrabold tracking-wide text-slate-900">MESSAGES (Exam Chat)</h3>
+              <h3 className="text-sm font-extrabold tracking-wide text-slate-900">MESSAGES </h3>
               <div className="mt-3 space-y-2">
                 {Array.isArray(report.messages) && report.messages.length ? (
                   report.messages.map((m, i) => (
