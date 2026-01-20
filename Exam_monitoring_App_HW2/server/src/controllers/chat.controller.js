@@ -4,14 +4,20 @@ import Exam from "../models/Exam.js";
 import TransferRequest from "../models/TransferRequest.js";
 
 /**
- * ✅ Safety-first chatbot:
- * - ANY numeric / DB question -> DB ONLY (no Gemini guessing).
- * - Gemini is used ONLY for: "how to", explanations, general knowledge.
- * - Fixes:
- *   1) next exam reliably (status optional, uses examDate/startAt)
- *   2) timezone (APP_TZ with fallback Asia/Jerusalem)
- *   3) room normalization everywhere (including transfers)
- *   4) toilet stats from report.studentStats, optionally per student
+ * ✅ Safety-first chatbot (Production-style):
+ * - ANY factual / DB question -> DB ONLY (NO Gemini guessing).
+ * - Gemini is used ONLY for: "how to", explanations, general knowledge (no numbers).
+ *
+ * ✅ Improvements in this version:
+ * 1) Strong English-only intent detection (more coverage, less false negatives).
+ * 2) Upcoming exams list + second upcoming exam.
+ * 3) Students who are NOT ARRIVED (list).
+ * 4) Top students by toilet exits (from report.studentStats) + optional room scope.
+ * 5) "Report for exam X" (running/ended/scheduled) by:
+ *    - exam id
+ *    - course name match
+ *    - "next/current/running/last" keywords
+ * 6) Safer responses: if not available -> clear DB message (no fake answers).
  */
 
 /* =========================
@@ -43,14 +49,15 @@ const FAQ = [
     answer: "Purple indicates a pending transfer request waiting for approval/rejection.",
   },
   {
-    match: (t) => t.includes("report") || t.includes("history") || t.includes("export") || t.includes("csv") || t.includes("pdf"),
+    match: (t) =>
+      t.includes("report") || t.includes("history") || t.includes("export") || t.includes("csv") || t.includes("pdf"),
     answer:
       "Reports/History (Lecturer/Admin):\n- Open Reports/History from the exam view\n- Review statistics/incidents\n- Export CSV or print to PDF (if available in your UI).",
   },
   {
     match: (t) => t === "help" || t.includes("what can you do") || t.includes("commands"),
     answer:
-      "I can help with:\n- Running exam info (course, rooms, supervisors, lecturers)\n- Live counts (present/not arrived/temp out/finished)\n- Toilet stats\n- Current time (your timezone)\n- Next scheduled exam\n- Time remaining\n- Transfers stats\n- Recent events/messages\n\nTip: ask \"room A-101\" (or A101) to focus on one room, or \"all rooms\" for totals.",
+      "I can help with:\n- Running exam info (course, rooms, supervisors, lecturers)\n- Live counts (present/not arrived/temp out/finished)\n- Lists (not arrived students)\n- Toilet stats + top students by exits\n- Next/Upcoming exams + second upcoming exam\n- Transfer stats\n- Recent events/messages\n- Generate a short report for a specific exam\n\nTip: ask \"room A-101\" (or A101) to focus on one room, or \"all rooms\" for totals.",
   },
 ];
 
@@ -152,6 +159,18 @@ function clampLines(text, maxLines = 18) {
   return lines.slice(0, maxLines).join("\n") + "\n…";
 }
 
+function isValidObjectIdLike(s) {
+  return /^[a-f0-9]{24}$/i.test(String(s || "").trim());
+}
+
+function pickTopN(text, def = 5, min = 3, max = 20) {
+  const m = String(text || "").match(/\btop\s+(\d{1,2})\b/i);
+  if (!m) return def;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(max, Math.max(min, n));
+}
+
 /* =========================
    ✅ Room normalization
 ========================= */
@@ -223,7 +242,7 @@ function resolveRoomScope(text, actor) {
 }
 
 /* =========================
-   Intent detection
+   Intent detection (English)
 ========================= */
 function isTimeNowQuestion(t) {
   return (
@@ -237,6 +256,23 @@ function isNextExamQuestion(t) {
   return t.includes("next exam") || t.includes("upcoming exam") || (t.includes("exam") && t.includes("next"));
 }
 
+function isUpcomingExamsListQuestion(t) {
+  return (
+    (t.includes("upcoming") && t.includes("exams")) ||
+    (t.includes("future") && t.includes("exams")) ||
+    (t.includes("list") && t.includes("exams")) ||
+    (t.includes("what") && t.includes("exams") && (t.includes("upcoming") || t.includes("future")))
+  );
+}
+
+function isSecondUpcomingExamQuestion(t) {
+  return (
+    (t.includes("second") && t.includes("upcoming") && t.includes("exam")) ||
+    (t.includes("second") && t.includes("next") && t.includes("exam")) ||
+    (t.includes("2nd") && t.includes("exam"))
+  );
+}
+
 function isToiletQuestion(t) {
   return t.includes("toilet") || t.includes("bathroom") || t.includes("restroom");
 }
@@ -245,10 +281,37 @@ function looksLikeCountQuestion(t) {
   return t.includes("how many") || t.includes("count") || t.includes("number") || t.includes("how much");
 }
 
+function isListNotArrivedStudentsQuestion(t) {
+  return (
+    (t.includes("which") || t.includes("who") || t.includes("list") || t.includes("show")) &&
+    (t.includes("not arrived") || t.includes("haven't arrived") || t.includes("hasn't arrived") || t.includes("didn't arrive"))
+  );
+}
+
+function isTopToiletStudentsQuestion(t) {
+  return (
+    (t.includes("top") || t.includes("most") || t.includes("highest")) &&
+    (t.includes("toilet") || t.includes("bathroom") || t.includes("restroom")) &&
+    (t.includes("students") || t.includes("student") || t.includes("who"))
+  );
+}
+
+function isExamReportQuestion(t) {
+  return (
+    t.includes("report for") ||
+    t.includes("generate report") ||
+    t.includes("exam report") ||
+    (t.includes("report") && t.includes("exam"))
+  );
+}
+
+function isRunningExamQuestion(t) {
+  return t.includes("running") || t.includes("current exam") || t.includes("what exam") || t.includes("which exam");
+}
+
 /**
  * ✅ DB-required questions:
- * - anything with numbers about rooms/students/attendance/toilet/transfers/events/messages
- * - or explicit exam/system stats
+ * Anything that expects facts from DB: lists, counts, rankings, stats, exams schedule, etc.
  */
 function isDbRequiredQuestion(tRaw) {
   const t = norm(tRaw);
@@ -256,16 +319,26 @@ function isDbRequiredQuestion(tRaw) {
   // Time now is DB-free
   if (isTimeNowQuestion(t)) return false;
 
-  // Next exam is DB
+  // Explicit DB intents
   if (isNextExamQuestion(t)) return true;
+  if (isUpcomingExamsListQuestion(t)) return true;
+  if (isSecondUpcomingExamQuestion(t)) return true;
+  if (isExamReportQuestion(t)) return true;
+  if (isListNotArrivedStudentsQuestion(t)) return true;
+  if (isTopToiletStudentsQuestion(t)) return true;
 
   const triggers = [
     "how many",
     "count",
     "number",
+    "list",
+    "show",
+    "who",
+    "which",
     "present",
     "absent",
     "not arrived",
+    "haven't arrived",
     "temp out",
     "finished",
     "attendance",
@@ -285,13 +358,17 @@ function isDbRequiredQuestion(tRaw) {
     "summary",
     "time remaining",
     "time left",
+    "upcoming",
+    "future",
+    "schedule",
+    "next",
   ];
 
   return triggers.some((k) => t.includes(k));
 }
 
 /* =========================
-   Running exam (role-scoped)
+   Exam lookup (role-scoped)
 ========================= */
 async function findRunningExamForActor(actor) {
   const baseOr = [
@@ -341,23 +418,13 @@ async function findRunningExamForActor(actor) {
   return (await Exam.find({ $or: baseOr }).sort(sort).limit(1))[0] || null;
 }
 
-/* =========================
-   ✅ Next exam (robust)
-   - Works even if status is missing or not exactly "scheduled"
-   - Uses examDate OR startAt
-========================= */
 async function findNextExamForActor(actor) {
   const now = new Date();
   const sort = { examDate: 1, startAt: 1, createdAt: 1 };
 
-  // "future" definition:
-  // - examDate >= now OR startAt >= now
-  // - and NOT ended
   const futureBase = {
     $and: [
-      {
-        $or: [{ examDate: { $gte: now } }, { startAt: { $gte: now } }],
-      },
+      { $or: [{ examDate: { $gte: now } }, { startAt: { $gte: now } }] },
       { status: { $ne: "ended" } },
     ],
   };
@@ -371,7 +438,6 @@ async function findNextExamForActor(actor) {
 
   const query = roleFilter ? { $and: [futureBase, roleFilter] } : futureBase;
 
-  // Prefer scheduled first, but if schema doesn't have it, still returns earliest future.
   const scheduledFirst = await Exam.find({
     $and: [query, { $or: [{ status: "scheduled" }, { status: { $exists: false } }, { status: "" }] }],
   })
@@ -382,6 +448,148 @@ async function findNextExamForActor(actor) {
 
   const anyFuture = await Exam.find(query).sort(sort).limit(1);
   return anyFuture?.[0] || null;
+}
+
+async function listUpcomingExamsForActor(actor, limit = 5) {
+  const now = new Date();
+  const sort = { examDate: 1, startAt: 1, createdAt: 1 };
+
+  const futureBase = {
+    $and: [
+      { $or: [{ examDate: { $gte: now } }, { startAt: { $gte: now } }] },
+      { status: { $ne: "ended" } },
+    ],
+  };
+
+  const roleFilter =
+    actor?.role === "lecturer"
+      ? { $or: [{ "lecturer.id": actor._id }, { coLecturers: { $elemMatch: { id: actor._id } } }] }
+      : actor?.role === "supervisor"
+      ? { supervisors: { $elemMatch: { id: actor._id } } }
+      : null;
+
+  const query = roleFilter ? { $and: [futureBase, roleFilter] } : futureBase;
+
+  return await Exam.find(query).sort(sort).limit(limit);
+}
+
+async function findLatestEndedExamForActor(actor) {
+  const sort = { endAt: -1, examDate: -1, createdAt: -1 };
+
+  const base = { status: "ended" };
+
+  if (actor?.role === "admin") {
+    return (await Exam.find(base).sort(sort).limit(1))[0] || null;
+  }
+
+  if (actor?.role === "lecturer") {
+    return (
+      (await Exam.find({
+        $and: [
+          base,
+          { $or: [{ "lecturer.id": actor._id }, { coLecturers: { $elemMatch: { id: actor._id } } }] },
+        ],
+      })
+        .sort(sort)
+        .limit(1))[0] || null
+    );
+  }
+
+  if (actor?.role === "supervisor") {
+    return (
+      (await Exam.find({
+        $and: [base, { supervisors: { $elemMatch: { id: actor._id } } }],
+      })
+        .sort(sort)
+        .limit(1))[0] || null
+    );
+  }
+
+  return (await Exam.find(base).sort(sort).limit(1))[0] || null;
+}
+
+/* =========================
+   Exam targeting from user text
+========================= */
+function extractExamIdFromText(text) {
+  const s = String(text || "");
+  const m = s.match(/\b([a-f0-9]{24})\b/i);
+  return m?.[1] || null;
+}
+
+function extractCourseNameHint(text) {
+  const s = String(text || "").trim();
+
+  // "report for Algorithms - Midterm"
+  const m1 = s.match(/report\s+for\s+(.+)$/i);
+  if (m1?.[1]) return m1[1].trim();
+
+  // exam: "Algorithms - Midterm"
+  const m2 = s.match(/\bexam\s*[:\-]\s*(.+)$/i);
+  if (m2?.[1]) return m2[1].trim();
+
+  // quoted name
+  const m3 = s.match(/"([^"]{3,80})"/);
+  if (m3?.[1]) return m3[1].trim();
+
+  return null;
+}
+
+async function findExamByCourseNameFuzzy(actor, courseHint) {
+  const hint = String(courseHint || "").trim();
+  if (!hint) return null;
+
+  const re = new RegExp(hint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+
+  // we search across recent exams first (future + running + ended), limited for safety
+  const sort = { examDate: -1, startAt: -1, createdAt: -1 };
+
+  const roleFilter =
+    actor?.role === "lecturer"
+      ? { $or: [{ "lecturer.id": actor._id }, { coLecturers: { $elemMatch: { id: actor._id } } }] }
+      : actor?.role === "supervisor"
+      ? { supervisors: { $elemMatch: { id: actor._id } } }
+      : null;
+
+  const q = roleFilter
+    ? { $and: [roleFilter, { courseName: re }] }
+    : { courseName: re };
+
+  return (await Exam.find(q).sort(sort).limit(1))[0] || null;
+}
+
+async function resolveTargetExamForReport(actor, userText) {
+  const t = norm(userText);
+
+  const id = extractExamIdFromText(userText);
+  if (id && isValidObjectIdLike(id)) {
+    const doc = await Exam.findById(id);
+    if (doc) return doc;
+  }
+
+  if (t.includes("running") || t.includes("current")) {
+    const running = await findRunningExamForActor(actor);
+    if (running) return running;
+  }
+
+  if (t.includes("next")) {
+    const nx = await findNextExamForActor(actor);
+    if (nx) return nx;
+  }
+
+  if (t.includes("last") || t.includes("previous") || t.includes("ended")) {
+    const last = await findLatestEndedExamForActor(actor);
+    if (last) return last;
+  }
+
+  const courseHint = extractCourseNameHint(userText);
+  if (courseHint) {
+    const byName = await findExamByCourseNameFuzzy(actor, courseHint);
+    if (byName) return byName;
+  }
+
+  // fallback order: running -> next -> latest ended
+  return (await findRunningExamForActor(actor)) || (await findNextExamForActor(actor)) || (await findLatestEndedExamForActor(actor));
 }
 
 /* =========================
@@ -414,6 +622,21 @@ function countAttendance(exam, roomId = null) {
   return counts;
 }
 
+function listStudentsByStatus(exam, status, roomId = null) {
+  const arr = Array.isArray(exam?.attendance) ? exam.attendance : [];
+  const target = roomId ? normalizeRoomId(roomId) : null;
+
+  const filtered = arr.filter((a) => {
+    const st = String(a?.status || "not_arrived");
+    if (st !== status) return false;
+    if (!target) return true;
+    const r = normalizeRoomId(a?.roomId || a?.classroom || "");
+    return r === target;
+  });
+
+  return filtered;
+}
+
 /* ===== Transfers stats (normalized) ===== */
 async function getTransferStats(examId, roomId = null) {
   const base = { examId };
@@ -426,8 +649,6 @@ async function getTransferStats(examId, roomId = null) {
   let roomPending = null;
   if (roomId) {
     const target = normalizeRoomId(roomId);
-    // normalize DB fields on the fly using regex variants: A101, A-101, A_101
-    // We can't easily normalize inside Mongo without aggregation, so we use regex:
     const pretty = prettyRoomId(target); // A-101
     const raw = target; // A101
     const re = new RegExp(`^${raw}$|^${pretty}$|^${raw[0]}[-_]?${raw.slice(1)}$`, "i");
@@ -443,8 +664,7 @@ async function getTransferStats(examId, roomId = null) {
 }
 
 /* =========================
-   ✅ Toilet stats from report.studentStats (Map)
-   + support per student by name / studentNumber
+   Toilet stats from report.studentStats (Map)
 ========================= */
 function getToiletStatsFromReport(exam, roomId = null) {
   const statsMap = exam?.report?.studentStats;
@@ -482,45 +702,56 @@ function getToiletStatsFromReport(exam, roomId = null) {
   return { supported: true, totalToiletCount, activeNow, totalToiletMs };
 }
 
-/* ===== per-student toilet count (strict DB) ===== */
-function findStudentInAttendance(exam, qRaw) {
-  const q = String(qRaw || "").trim().toLowerCase();
-  if (!q) return null;
+function buildTopToiletStudents(exam, roomId = null, topN = 5) {
+  const statsMap = exam?.report?.studentStats;
+  if (!statsMap) return { supported: false, rows: [] };
 
+  const entries = statsMap instanceof Map ? Array.from(statsMap.entries()) : Object.entries(statsMap);
   const att = Array.isArray(exam?.attendance) ? exam.attendance : [];
-  // try student number
-  const numMatch = q.match(/\b\d{5,12}\b/);
-  if (numMatch) {
-    const num = numMatch[0];
-    return att.find((a) => String(a?.studentNumber || "").trim() === num) || null;
+
+  const byId = new Map();
+  for (const a of att) {
+    if (!a?.studentId) continue;
+    byId.set(String(a.studentId), a);
   }
 
-  // try name contains
-  return (
-    att.find((a) => String(a?.name || "").toLowerCase().includes(q)) ||
-    null
-  );
-}
+  const target = roomId ? normalizeRoomId(roomId) : null;
 
-function getStudentToiletFromReport(exam, studentAttendanceRow) {
-  const statsMap = exam?.report?.studentStats;
-  if (!statsMap || !studentAttendanceRow?.studentId) return { supported: false };
+  const rows = [];
+  for (const [sid, st] of entries) {
+    const a = byId.get(String(sid));
+    if (!a) continue;
 
-  const sid = String(studentAttendanceRow.studentId);
-  const st =
-    statsMap instanceof Map ? statsMap.get(sid) : statsMap[sid];
+    const r = normalizeRoomId(a?.roomId || a?.classroom || "");
+    if (target && r !== target) continue;
 
-  if (!st) return { supported: false };
+    const toiletCount = Number(st?.toiletCount || 0);
+    const totalToiletMs = Number(st?.totalToiletMs || 0);
 
-  const toiletCount = Number(st?.toiletCount || 0);
-  const totalToiletMs = Number(st?.totalToiletMs || 0);
-  const activeNow = st?.activeToilet?.leftAt ? 1 : 0;
+    if (toiletCount <= 0) continue;
 
-  return { supported: true, toiletCount, totalToiletMs, activeNow };
+    rows.push({
+      studentId: String(sid),
+      name: a?.name || "Student",
+      studentNumber: a?.studentNumber || "",
+      roomId: r,
+      seat: a?.seat || "",
+      toiletCount,
+      totalToiletMs,
+      status: a?.status || "",
+    });
+  }
+
+  rows.sort((a, b) => {
+    if (b.toiletCount !== a.toiletCount) return b.toiletCount - a.toiletCount;
+    return b.totalToiletMs - a.totalToiletMs;
+  });
+
+  return { supported: true, rows: rows.slice(0, topN) };
 }
 
 /* =========================
-   ✅ DB direct answers (ONLY truth)
+   DB direct answers (ONLY truth)
 ========================= */
 async function dbDirectAnswer(userText, actor) {
   const t = norm(userText);
@@ -533,20 +764,109 @@ async function dbDirectAnswer(userText, actor) {
     return `Current time (${tz}): ${nowStr}`;
   }
 
+  // Upcoming exams list
+  if (isUpcomingExamsListQuestion(t)) {
+    const tz = getTZ();
+    const list = await listUpcomingExamsForActor(actor, 6);
+    if (!list?.length) return "I couldn't find upcoming exams in the database.";
+
+    const lines = list.slice(0, 5).map((ex, idx) => {
+      const when = ex.startAt || ex.examDate;
+      return `${idx + 1}) ${examTitle(ex)} — ${formatDT(when, tz)} — status: ${ex.status || "scheduled"}`;
+    });
+
+    return `Upcoming exams:\n${lines.join("\n")}`;
+  }
+
+  // Second upcoming exam
+  if (isSecondUpcomingExamQuestion(t)) {
+    const tz = getTZ();
+    const list = await listUpcomingExamsForActor(actor, 3);
+    if (!list?.length) return "I couldn't find upcoming exams in the database.";
+    if (list.length < 2) {
+      const only = list[0];
+      const when = only.startAt || only.examDate;
+      return `There is only one upcoming exam:\n1) ${examTitle(only)} — ${formatDT(when, tz)} — status: ${only.status || "scheduled"}`;
+    }
+    const second = list[1];
+    const when = second.startAt || second.examDate;
+    return `Second upcoming exam:\n${examTitle(second)}\n- Date: ${formatDT(when, tz)}\n- Status: ${second.status || "scheduled"}`;
+  }
+
   // Next exam
   if (isNextExamQuestion(t)) {
     const nx = await findNextExamForActor(actor);
     if (!nx) return "I couldn't find an upcoming exam in the database.";
     const tz = getTZ();
     const when = nx.startAt || nx.examDate;
-    return (
-      `Next exam: ${examTitle(nx)}\n` +
-      `- Date: ${formatDT(when, tz)}\n` +
-      `- Status: ${nx.status || "scheduled"}`
-    );
+    return `Next exam: ${examTitle(nx)}\n- Date: ${formatDT(when, tz)}\n- Status: ${nx.status || "scheduled"}`;
   }
 
-  // For any other DB answers, we need a running exam
+  // Report for exam X (running/next/last/by name/by id)
+  if (isExamReportQuestion(t)) {
+    const ex = await resolveTargetExamForReport(actor, userText);
+    if (!ex) return "I couldn't find that exam in the database.";
+
+    const tz = getTZ();
+    const when = ex.startAt || ex.examDate;
+    const rooms = (ex.classrooms || []).map((r) => r?.name || r?.id).filter(Boolean);
+    const supervisors = Array.isArray(ex.supervisors) ? ex.supervisors : [];
+
+    // Summary:
+    const summary = ex?.report?.summary || null;
+    const c = countAttendance(ex, null);
+
+    // Toilet top 5 (if exists)
+    const topN = pickTopN(userText, 5);
+    const topToilet = buildTopToiletStudents(ex, null, topN);
+
+    const lines = [];
+    lines.push(`Exam report: ${examTitle(ex)}`);
+    lines.push(`- Date: ${formatDT(when, tz)}`);
+    lines.push(`- Status: ${ex.status || "scheduled"}`);
+
+    if (rooms.length) lines.push(`- Rooms: ${rooms.length} (${rooms.slice(0, 8).join(", ")}${rooms.length > 8 ? ", …" : ""})`);
+    if (supervisors.length) lines.push(`- Supervisors: ${supervisors.length}`);
+
+    // Prefer stored report.summary if available, otherwise fallback to live attendance counts
+    if (summary) {
+      lines.push(`\nSummary (from report):`);
+      lines.push(`- Total students: ${summary.totalStudents ?? c.total}`);
+      lines.push(`- Present: ${summary.present ?? c.present}`);
+      lines.push(`- Not arrived: ${summary.not_arrived ?? c.not_arrived}`);
+      lines.push(`- Temp out: ${summary.temp_out ?? c.temp_out}`);
+      lines.push(`- Absent: ${summary.absent ?? c.absent}`);
+      lines.push(`- Finished: ${summary.finished ?? c.finished}`);
+      lines.push(`- Incidents: ${summary.incidents ?? 0}`);
+      lines.push(`- Violations: ${summary.violations ?? 0}`);
+      lines.push(`- Transfers: ${summary.transfers ?? 0}`);
+    } else {
+      lines.push(`\nLive attendance snapshot:`);
+      lines.push(`- Total: ${c.total}`);
+      lines.push(`- Present: ${c.present}`);
+      lines.push(`- Not arrived: ${c.not_arrived}`);
+      lines.push(`- Temp out: ${c.temp_out}`);
+      lines.push(`- Absent: ${c.absent}`);
+      lines.push(`- Moving: ${c.moving}`);
+      lines.push(`- Finished: ${c.finished}`);
+    }
+
+    if (topToilet.supported && topToilet.rows.length) {
+      lines.push(`\nTop ${topToilet.rows.length} students by toilet exits:`);
+      for (const r of topToilet.rows) {
+        const mins = Math.round((r.totalToiletMs || 0) / 60000);
+        lines.push(
+          `- ${r.name} (${r.studentNumber || "—"}) — exits: ${r.toiletCount}, total: ${mins} min, room: ${prettyRoomId(r.roomId)}${r.seat ? `, seat: ${r.seat}` : ""}`
+        );
+      }
+    } else {
+      lines.push(`\nTop toilet students: not available (no studentStats in report).`);
+    }
+
+    return lines.join("\n");
+  }
+
+  // For any other "live" DB answers, we usually need a running exam
   const exam = await findRunningExamForActor(actor);
   if (!exam) return "I couldn't find a running exam right now in the database.";
 
@@ -556,7 +876,11 @@ async function dbDirectAnswer(userText, actor) {
   const where = roomId ? `Room ${prettyRoomId(roomId)}` : "All rooms";
 
   // Time remaining
-  if (t.includes("time remaining") || (t.includes("time") && (t.includes("remaining") || t.includes("left"))) || (t.includes("when") && t.includes("end"))) {
+  if (
+    t.includes("time remaining") ||
+    (t.includes("time") && (t.includes("remaining") || t.includes("left"))) ||
+    (t.includes("when") && t.includes("end"))
+  ) {
     const end = exam?.endAt ? new Date(exam.endAt) : null;
     if (!end || Number.isNaN(end.getTime())) {
       return `I can't calculate time remaining because endAt is missing.\n(Exam: ${title})`;
@@ -566,26 +890,43 @@ async function dbDirectAnswer(userText, actor) {
     return `Time remaining: ${msToHuman(diff)}\n(Exam: ${title})`;
   }
 
+  // List students NOT ARRIVED
+  if (isListNotArrivedStudentsQuestion(t)) {
+    const list = listStudentsByStatus(exam, "not_arrived", roomId);
+    const total = list.length;
+
+    if (!total) return `No "not arrived" students right now (${where}).\n(Exam: ${title})`;
+
+    const max = pickTopN(userText, 12, 5, 30); // reuse top parsing for "show 15"
+    const slice = list.slice(0, max);
+
+    const lines = slice.map((s, idx) => {
+      const r = prettyRoomId(s?.roomId || s?.classroom || "");
+      const seat = s?.seat ? `, seat: ${s.seat}` : "";
+      const num = s?.studentNumber ? ` (${s.studentNumber})` : "";
+      return `${idx + 1}) ${s?.name || "Student"}${num} — ${r}${seat}`;
+    });
+
+    return `Not arrived students (${where}) — ${total}:\n${lines.join("\n")}\n(Exam: ${title})`;
+  }
+
+  // Top students by toilet exits (live exam scope)
+  if (isTopToiletStudentsQuestion(t)) {
+    const topN = pickTopN(userText, 5);
+    const top = buildTopToiletStudents(exam, roomId, topN);
+    if (!top.supported) return `Top toilet students are not available right now (no studentStats in report).\n(Exam: ${title})`;
+    if (!top.rows.length) return `No toilet exits recorded yet (${where}).\n(Exam: ${title})`;
+
+    const lines = top.rows.map((r, idx) => {
+      const mins = Math.round((r.totalToiletMs || 0) / 60000);
+      return `${idx + 1}) ${r.name} (${r.studentNumber || "—"}) — exits: ${r.toiletCount}, total: ${mins} min, room: ${prettyRoomId(r.roomId)}${r.seat ? `, seat: ${r.seat}` : ""}`;
+    });
+
+    return `Top ${top.rows.length} students by toilet exits (${where}):\n${lines.join("\n")}\n(Exam: ${title})`;
+  }
+
   // Toilet stats (overall or room)
   if (isToiletQuestion(t) && (looksLikeCountQuestion(t) || t.includes("stats") || t.includes("summary"))) {
-    // if question mentions a specific student -> per student
-    if (t.includes("student") || t.includes("name") || t.match(/\b\d{5,12}\b/)) {
-      const stRow = findStudentInAttendance(exam, userText);
-      if (!stRow) return `I couldn't find that student in attendance.\n(Exam: ${title})`;
-
-      const stToilet = getStudentToiletFromReport(exam, stRow);
-      if (!stToilet.supported) return `Toilet stats for this student are not available.\n(Exam: ${title})`;
-
-      const mins = Math.round(stToilet.totalToiletMs / 60000);
-      return (
-        `Toilet stats for ${stRow.name || "student"} (${stRow.studentNumber || ""}):\n` +
-        `- Exits: ${stToilet.toiletCount}\n` +
-        `- Active now: ${stToilet.activeNow}\n` +
-        `- Total time: ${mins} min\n` +
-        `(Exam: ${title})`
-      );
-    }
-
     const toilet = getToiletStatsFromReport(exam, roomId);
     if (!toilet.supported) return `Toilet stats are not available right now.\n(Exam: ${title})`;
 
@@ -616,8 +957,12 @@ async function dbDirectAnswer(userText, actor) {
 
   // Lecturers
   if (t.includes("lecturer") || t.includes("co-lecturer")) {
-    const main = exam.lecturer ? `- Main lecturer: ${exam.lecturer.name} (rooms: ${exam.lecturer.roomIds?.map(prettyRoomId).join(", ") || "--"})` : null;
-    const co = (exam.coLecturers || []).map((l) => `- Co-lecturer: ${l?.name || "Lecturer"} (rooms: ${l?.roomIds?.map(prettyRoomId).join(", ") || "--"})`);
+    const main = exam.lecturer
+      ? `- Main lecturer: ${exam.lecturer.name} (rooms: ${exam.lecturer.roomIds?.map(prettyRoomId).join(", ") || "--"})`
+      : null;
+    const co = (exam.coLecturers || []).map(
+      (l) => `- Co-lecturer: ${l?.name || "Lecturer"} (rooms: ${l?.roomIds?.map(prettyRoomId).join(", ") || "--"})`
+    );
     const lines = [main, ...co].filter(Boolean);
     if (!lines.length) return `No lecturer assignment found.\n(Exam: ${title})`;
     return `Lecturers:\n${lines.join("\n")}\n(Exam: ${title})`;
@@ -680,7 +1025,7 @@ async function dbDirectAnswer(userText, actor) {
     return lines.join("\n");
   }
 
-  // Events count (DB)
+  // Events count / last events
   if (t.includes("events") || t.includes("incidents")) {
     const events = Array.isArray(exam.events) ? exam.events : [];
     const incidentsCount = events.filter((e) => norm(e?.type).includes("incident")).length;
@@ -727,7 +1072,7 @@ async function dbDirectAnswer(userText, actor) {
   }
 
   // default DB answer: running exam
-  if (t.includes("running") || t.includes("current exam") || t.includes("what exam")) {
+  if (isRunningExamQuestion(t)) {
     const tz = getTZ();
     return `Running exam: ${title}\n- Date: ${formatDT(exam.examDate, tz)}\n- Status: ${exam.status}`;
   }
@@ -765,10 +1110,11 @@ async function geminiAnswer({ actor, message }) {
 
   const prompt = `
 You are "Exam Monitoring Assistant".
-IMPORTANT:
-- If the user asks for numbers/stats/anything that should come from the database, reply exactly:
+
+STRICT RULES:
+- If the user asks for ANY database facts (numbers, lists, counts, rankings, schedules, attendance, toilets, transfers, incidents, messages, reports), reply EXACTLY:
   "This question requires database facts. Please ask it as a dashboard/DB query."
-- Otherwise, provide short practical help.
+- Only answer "how to" / explanations / UI guidance.
 
 User:
 - name: ${safeStr(name)}
@@ -829,7 +1175,9 @@ export async function chatWithAI(req, res) {
     // 3) Non-DB question -> Gemini allowed (optional)
     const maxPerDay = Number(process.env.GEMINI_MAX_PER_DAY || 50);
     if (mem.geminiUsed >= maxPerDay) {
-      res.json({ text: "AI quota reached for today. I can still answer dashboard/database questions (counts, rooms, attendance, toilet stats, next exam, etc.)." });
+      res.json({
+        text: "AI quota reached for today. I can still answer dashboard/database questions (counts, rooms, attendance, toilet stats, upcoming exams, reports, etc.).",
+      });
       return;
     }
 
