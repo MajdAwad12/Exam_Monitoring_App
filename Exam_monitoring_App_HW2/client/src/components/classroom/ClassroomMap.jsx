@@ -623,14 +623,6 @@ export default function ClassroomMap({
               ) : null}
             </div>
 
-            <div className="shrink-0 text-right">
-              <div className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-50 border border-slate-200">
-                <span className="text-sm font-extrabold text-slate-900">
-                  {placedCount} / {totalSeats}
-                </span>
-              </div>
-            </div>
-          </div>
 
           <div className="flex flex-wrap items-center gap-2">
            {canCallLecturer && (
