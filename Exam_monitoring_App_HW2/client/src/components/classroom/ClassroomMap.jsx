@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import SeatCard from "./SeatCard.jsx";
 import SeatActionsModal from "./SeatActionsModal.jsx";
-import { msToMMSS, parseSeat, safeStudentKey } from "./utils";
+import { parseSeat, safeStudentKey } from "./utils";
 
 import { updateAttendance } from "../../services/exams.service";
 import { createTransfer, cancelTransfer as apiCancelTransfer } from "../../services/transfers.service";
@@ -587,9 +587,6 @@ export default function ClassroomMap({
     }
   }
 
-  const totalSeats = spec.rows * spec.cols;
-  const placedCount = seatMap.size;
-
   const activeClassroom = useMemo(() => {
     return (exam?.classrooms || []).find((c) => String(c.id) === String(activeRoom));
   }, [exam?.classrooms, activeRoom]);
@@ -598,6 +595,7 @@ export default function ClassroomMap({
     <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="p-5 border-b border-slate-200">
         <div className="flex flex-col gap-4">
+          {/* ✅ Header (no 21/25 block anymore) */}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="text-xs text-slate-500">Live classroom</div>
@@ -622,20 +620,18 @@ export default function ClassroomMap({
                 </div>
               ) : null}
             </div>
-
+          </div>
 
           <div className="flex flex-wrap items-center gap-2">
-           {canCallLecturer && (
-            <button
-              onClick={callLecturerGlobal}
-              disabled={saving}
-              className="px-3 py-2 rounded-2xl text-sm font-extrabold border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-60"
-            >
-              🗣️ Call Lecturer
-            </button>
-          )}
-
-
+            {canCallLecturer && (
+              <button
+                onClick={callLecturerGlobal}
+                disabled={saving}
+                className="px-3 py-2 rounded-2xl text-sm font-extrabold border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-60"
+              >
+                🗣️ Call Lecturer
+              </button>
+            )}
 
             <button
               onClick={() => setCameraOpen((v) => !v)}
@@ -671,7 +667,7 @@ export default function ClassroomMap({
               </button>
             </div>
 
-            {(isLecturer || isAdmin) ? (
+            {isLecturer || isAdmin ? (
               <div className="ml-auto text-[12px] text-slate-500 font-bold">Room is controlled from the Dashboard header.</div>
             ) : null}
           </div>
@@ -701,24 +697,12 @@ export default function ClassroomMap({
 
               <div className="flex flex-wrap gap-2">
                 <FilterChip label="All" active={rosterFilter === "all"} onClick={() => setRosterFilter("all")} />
-                <FilterChip
-                  label="Not arrived"
-                  active={rosterFilter === "not_arrived"}
-                  onClick={() => setRosterFilter("not_arrived")}
-                />
+                <FilterChip label="Not arrived" active={rosterFilter === "not_arrived"} onClick={() => setRosterFilter("not_arrived")} />
                 <FilterChip label="Absent" active={rosterFilter === "absent"} onClick={() => setRosterFilter("absent")} />
-                <FilterChip
-                  label="Finished"
-                  active={rosterFilter === "finished"}
-                  onClick={() => setRosterFilter("finished")}
-                />
+                <FilterChip label="Finished" active={rosterFilter === "finished"} onClick={() => setRosterFilter("finished")} />
                 <FilterChip label="Present" active={rosterFilter === "present"} onClick={() => setRosterFilter("present")} />
                 <FilterChip label="Out" active={rosterFilter === "temp_out"} onClick={() => setRosterFilter("temp_out")} />
-                <FilterChip
-                  label="Transfer"
-                  active={rosterFilter === "transfer"}
-                  onClick={() => setRosterFilter("transfer")}
-                />
+                <FilterChip label="Transfer" active={rosterFilter === "transfer"} onClick={() => setRosterFilter("transfer")} />
 
                 <div className="ml-auto flex items-center gap-2">
                   {moreCount > 0 ? (
@@ -747,7 +731,6 @@ export default function ClassroomMap({
                 const st = normStatus(a?.status);
 
                 // ✅ IMPORTANT: fill the input with "studentNumber" if exists, otherwise "studentId"
-                // This prevents filling Mongo _id by mistake.
                 const idForMark = String(a?.studentNumber || a?.studentId || "").trim();
                 const sidDisplay = String(a?.studentNumber || a?.studentId || "-");
                 const name = String(a?.name || "Student");
