@@ -1,50 +1,36 @@
+```jsx
 // client/src/components/chat/FloatingChatWidget.jsx
 import { useMemo, useRef, useState, useEffect } from "react";
 import { chatWithAI } from "../../services/chat.service";
 
 /**
- * Minimal, clean chat UI:
- * ✅ Quick buttons stay at the top (sticky)
- * ✅ Only 4 primary chips per tab (Live/Help)
- * ✅ "More" opens a compact scrollable drawer (does not push the chat down)
- * ✅ Messages area is the only scroll area (real chat feel)
- * ✅ Clear chat button (no clutter)
+ * Clean & minimal chat UI:
+ * ✅ 6 chips max (no overload)
+ * ✅ Chips stay on top (sticky)
+ * ✅ Messages scroll only (real chat feel)
+ * ✅ Simple Live/Help toggle
+ * ✅ Clear button
  */
 
 /* =========================
-   Live (DB) prompts
+   Quick prompts (MAX 6 each tab)
 ========================= */
-const LIVE_PROMPTS = [
+const LIVE_CHIPS = [
   { q: "Attendance summary (all rooms)", hint: "Total + present/not arrived/temp out/absent/moving/finished." },
-  { q: "Who has not arrived yet?", hint: "List students not arrived yet (running exam)." },
-  { q: "Top 5 students by toilet exits", hint: "Ranking by toiletCount (running exam)." },
-  { q: "List upcoming exams", hint: "Shows upcoming exams from DB." },
-
-  // More
-  { q: "Toilet stats (all rooms)", hint: "Total exits + active now + total time." },
-  { q: "Transfer stats", hint: "Pending/approved/rejected/cancelled." },
-  { q: "Last 5 events", hint: "Recent events (if exists)." },
-  { q: "Last 5 messages", hint: "Recent messages saved in the exam." },
-  { q: "What exam is running now?", hint: "Shows current running exam title/date/status." },
-  { q: "What is the next exam?", hint: "Shows next upcoming exam." },
-  { q: "What is the second upcoming exam?", hint: "Shows 2nd upcoming exam." },
-  { q: "Present count (all rooms)", hint: "How many present now." },
-  { q: "Not arrived count (all rooms)", hint: "How many not arrived now." },
+  { q: "Present count (all rooms)", hint: "How many students are present now." },
+  { q: "Who has not arrived yet?", hint: "List 'not arrived' students (running exam)." },
+  { q: "Top 5 students by toilet exits", hint: "Ranking by toilet exits (if report has stats)." },
+  { q: "List upcoming exams", hint: "Upcoming exams from DB." },
+  { q: "What is the next exam?", hint: "Next scheduled exam from DB." },
 ];
 
-/* =========================
-   Help (FAQ) prompts
-========================= */
-const HELP_PROMPTS = [
+const HELP_CHIPS = [
   { q: "How do I start an exam?", hint: "Steps to start/open dashboard." },
-  { q: "Toilet break — how do I track it?", hint: "How to start/return toilet." },
-  { q: "Transfer to another room", hint: "How transfers work." },
-  { q: "Reports (lecturer only)", hint: "How to open/export reports." },
-
-  // More
-  { q: "Student not arrived (gray) — what does it mean?", hint: "Explains gray status." },
-  { q: "What does 'purple' mean?", hint: "Explains pending transfer color." },
-  { q: "What can you do? (commands)", hint: "Shows assistant capabilities." },
+  { q: "What does green mean?", hint: "Attendance color meaning (present)." },
+  { q: "What does yellow mean?", hint: "Attendance color meaning (temp out / toilet depending on your UI)." },
+  { q: "What does gray mean?", hint: "Not arrived meaning." },
+  { q: "What does purple mean?", hint: "Pending transfer meaning." },
+  { q: "How do I track a toilet break?", hint: "How to start/return toilet." },
 ];
 
 /* =========================
@@ -56,8 +42,8 @@ function sleep(ms) {
 
 function calcThinkingMs(userText) {
   const len = (userText || "").trim().length;
-  const base = 380 + Math.min(850, Math.floor(len * 11)); // lighter feeling
-  const jitter = Math.floor(Math.random() * 180);
+  const base = 320 + Math.min(650, Math.floor(len * 9));
+  const jitter = Math.floor(Math.random() * 160);
   return base + jitter;
 }
 
@@ -112,24 +98,20 @@ function Chip({ text, hint, onClick, disabled }) {
 export default function FloatingChatWidget() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState("live"); // live | help
-  const [showMore, setShowMore] = useState(false);
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const initialBotMessage =
     "Hi! I'm your Exam Assistant.\n" +
-    "Use the quick buttons above for reliable answers.\n" +
+    "Use the quick buttons above for fast answers.\n" +
     'Try: "Attendance summary (all rooms)".';
 
   const [messages, setMessages] = useState([{ from: "bot", text: initialBotMessage }]);
 
   const endRef = useRef(null);
 
-  const livePrimary = useMemo(() => LIVE_PROMPTS.slice(0, 4), []);
-  const liveMore = useMemo(() => LIVE_PROMPTS.slice(4), []);
-  const helpPrimary = useMemo(() => HELP_PROMPTS.slice(0, 4), []);
-  const helpMore = useMemo(() => HELP_PROMPTS.slice(4), []);
+  const primary = useMemo(() => (tab === "live" ? LIVE_CHIPS : HELP_CHIPS), [tab]);
 
   useEffect(() => {
     if (!open) return;
@@ -142,7 +124,6 @@ export default function FloatingChatWidget() {
 
     setInput("");
     setIsLoading(true);
-
     setMessages((m) => [...m, { from: "me", text: clean }]);
 
     try {
@@ -165,16 +146,12 @@ export default function FloatingChatWidget() {
 
   function clearChat() {
     setMessages([{ from: "bot", text: initialBotMessage }]);
-    setShowMore(false);
   }
-
-  const primary = tab === "live" ? livePrimary : helpPrimary;
-  const more = tab === "live" ? liveMore : helpMore;
 
   return (
     <div className="fixed bottom-5 right-5 z-50 select-none">
       {open && (
-        <div className="w-[390px] h-[580px] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+        <div className="w-[380px] h-[560px] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
           {/* Header */}
           <div className="px-4 py-3 bg-gradient-to-r from-sky-600 to-indigo-600 text-white flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -183,7 +160,7 @@ export default function FloatingChatWidget() {
               </div>
               <div className="leading-tight">
                 <div className="font-extrabold tracking-wide">Exam Assistant</div>
-                <div className="text-xs text-white/80">Minimal & reliable</div>
+                <div className="text-xs text-white/80">Fast & minimal</div>
               </div>
             </div>
 
@@ -206,15 +183,11 @@ export default function FloatingChatWidget() {
             </div>
           </div>
 
-          {/* ✅ Sticky top bar (tabs + quick buttons) */}
+          {/* Sticky top: Tabs + Chips (MAX 6) */}
           <div className="sticky top-0 z-10 bg-white border-b border-slate-200">
-            {/* Tabs + More */}
             <div className="px-4 pt-3 flex items-center gap-2">
               <button
-                onClick={() => {
-                  setTab("live");
-                  setShowMore(false);
-                }}
+                onClick={() => setTab("live")}
                 className={
                   "px-3 py-1.5 rounded-full text-xs font-semibold border " +
                   (tab === "live"
@@ -226,10 +199,7 @@ export default function FloatingChatWidget() {
               </button>
 
               <button
-                onClick={() => {
-                  setTab("help");
-                  setShowMore(false);
-                }}
+                onClick={() => setTab("help")}
                 className={
                   "px-3 py-1.5 rounded-full text-xs font-semibold border " +
                   (tab === "help"
@@ -242,16 +212,11 @@ export default function FloatingChatWidget() {
 
               <div className="flex-1" />
 
-              <button
-                onClick={() => setShowMore((s) => !s)}
-                className="text-xs font-semibold text-slate-600 hover:text-slate-900"
-                title="Show more quick questions"
-              >
-                {showMore ? "Less" : "More"}
-              </button>
+              <div className="text-[11px] text-slate-500">
+                {tab === "live" ? "DB answers" : "UI guidance"}
+              </div>
             </div>
 
-            {/* Primary chips */}
             <div className="px-4 py-3">
               <div className="flex flex-wrap gap-2">
                 {primary.map((it) => (
@@ -264,27 +229,10 @@ export default function FloatingChatWidget() {
                   />
                 ))}
               </div>
-
-              {/* More drawer (compact, scrollable) */}
-              {showMore && (
-                <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 max-h-28 overflow-auto">
-                  <div className="flex flex-wrap gap-2">
-                    {more.map((it) => (
-                      <Chip
-                        key={it.q}
-                        text={it.q}
-                        hint={it.hint}
-                        disabled={isLoading}
-                        onClick={() => sendText(it.q)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Messages (scrollable area only) */}
+          {/* Messages */}
           <div className="flex-1 px-3 py-3 overflow-auto space-y-2 bg-slate-50">
             {messages.map((m, idx) => {
               const isMe = m.from === "me";
@@ -337,8 +285,7 @@ export default function FloatingChatWidget() {
             </div>
 
             <div className="mt-2 text-[11px] text-slate-500">
-              <span className="font-semibold">Live (DB)</span> = guaranteed data.{" "}
-              <span className="font-semibold">Help</span> = UI guidance.
+              Tip: Use chips for quick questions.
             </div>
           </div>
         </div>
@@ -357,3 +304,4 @@ export default function FloatingChatWidget() {
     </div>
   );
 }
+```
