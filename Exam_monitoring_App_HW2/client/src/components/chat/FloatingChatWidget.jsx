@@ -3,7 +3,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { chatWithAI } from "../../services/chat.service";
 
 /**
- * Supervisor-first minimal chat UI:
+ * Supervisor-first minimal chat UI (ENGLISH ONLY):
  * ✅ No tabs, no overload
  * ✅ Only a few ready "help bubbles" for proctor during exam
  * ✅ Free text question is still supported
@@ -16,12 +16,12 @@ import { chatWithAI } from "../../services/chat.service";
    (Keep it short and direct)
 ========================= */
 const QUICK_BUBBLES = [
-  { q: "מה המבחן הנוכחי?", hint: "Shows the running exam (DB truth)." },
-  { q: "כמה סטודנטים לא הגיעו?", hint: "Not arrived count (DB truth)." },
-  { q: "מי יצא לשירותים יותר מ 3 פעמים?", hint: "Lists students with toilet exits > 3." },
-  { q: "איזה סטודנט בחוץ עכשיו?", hint: "Students outside now (temp_out / active toilet)." },
-  { q: "מי לא הגיע עדיין? (רשימה)", hint: "List not arrived students (safe truncation)." },
-  { q: "How do I track a toilet break?", hint: "UI guidance only." },
+  { q: "What is the current exam?", hint: "Shows the running exam (DB truth)." },
+  { q: "How many students are not arrived?", hint: "Not arrived count (DB truth)." },
+  { q: "Which students went to the toilet more than 3 times?", hint: "Lists students with toilet exits > 3." },
+  { q: "Which student is outside right now?", hint: "Students outside now (temp_out / active toilet)." },
+  { q: "List not arrived students", hint: "List not arrived students (safe truncation)." },
+  { q: "How do I track a toilet break?", hint: "UI guidance only (no DB)." },
 ];
 
 /* =========================
@@ -50,12 +50,7 @@ function BubbleIcon() {
         strokeWidth="1.8"
         strokeLinejoin="round"
       />
-      <path
-        d="M8.2 12h.01M12 12h.01M15.8 12h.01"
-        className="stroke-white"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
+      <path d="M8.2 12h.01M12 12h.01M15.8 12h.01" className="stroke-white" strokeWidth="2.2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -94,8 +89,8 @@ export default function FloatingChatWidget() {
 
   const initialBotMessage =
     "Hi 👋 I’m your Exam Assistant.\n" +
-    "Use the bubbles for fast supervisor answers (DB).\n" +
-    'Or type a question (Hebrew/English).';
+    "Use the quick bubbles for instant supervisor answers from the database.\n" +
+    "Or type a question (English only).";
 
   const [messages, setMessages] = useState([{ from: "bot", text: initialBotMessage }]);
   const endRef = useRef(null);
@@ -224,7 +219,7 @@ export default function FloatingChatWidget() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && send()}
                 className="flex-1 px-3 py-2 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                placeholder='Type a question… (e.g., "כמה סטודנטים לא הגיעו?")'
+                placeholder='Type a question… (e.g., "How many not arrived?")'
                 disabled={isLoading}
               />
               <button
