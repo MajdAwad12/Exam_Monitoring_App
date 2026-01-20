@@ -624,7 +624,6 @@ export default function ClassroomMap({
             </div>
 
             <div className="shrink-0 text-right">
-              <div className="text-xs text-slate-500">Placed</div>
               <div className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-50 border border-slate-200">
                 <span className="text-sm font-extrabold text-slate-900">
                   {placedCount} / {totalSeats}

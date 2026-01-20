@@ -8,17 +8,18 @@ import TransferRequest from "../models/TransferRequest.js";
  * - ANY factual / DB question -> DB ONLY (NO Gemini guessing).
  * - Gemini is used ONLY for: "how to", explanations, general knowledge (no numbers).
  *
- * ✅ Key fixes:
- * 1) Strong English-only intent detection.
- * 2) Upcoming exams list + second upcoming exam.
- * 3) Students NOT ARRIVED (list with safe truncation).
- * 4) Top students by toilet exits:
+ * ✅ Key fixes (Updated for your presentation):
+ * 1) ✅ English + Hebrew intent detection for the supervisor questions.
+ * 2) ✅ Direct DB answers for:
+ *    - כמה סטודנטים לא הגיעו?
+ *    - מה המבחן הנוכחי?
+ *    - מי יצא לשירותים יותר מ X פעמים? (default 3)
+ *    - איזה סטודנט בחוץ עכשיו?
+ * 3) Upcoming exams list + second upcoming exam.
+ * 4) Not arrived (count + list with safe truncation).
+ * 5) Toilet stats:
  *    - Primary: report.studentStats
  *    - Fallback: exam.events (best-effort count)
- * 5) "Report for exam X" resolves exam by:
- *    - exam id
- *    - course name match
- *    - "next/current/running/last" keywords
  * 6) ✅ ACL: exam id lookup is role-scoped (no data leak).
  */
 
@@ -32,9 +33,9 @@ const FAQ = [
       "To start an exam:\n- Open Exam List\n- Select the exam\n- Click Start Exam (or Open Dashboard if already running)\n- Choose a room tab to monitor attendance and seats.",
   },
   {
-  match: (t) =>
-    (t.includes("gray") || t.includes("grey") || t.includes("not arrived")) &&
-    (t.includes("mean") || t.includes("meaning") || t.includes("what does") || t.includes("explain")),
+    match: (t) =>
+      (t.includes("gray") || t.includes("grey") || t.includes("not arrived")) &&
+      (t.includes("mean") || t.includes("meaning") || t.includes("what does") || t.includes("explain")),
     answer:
       "Not arrived (gray) means the student has not checked in yet.\nAfter QR scan or marking Present, the student appears on the room map.",
   },
@@ -228,7 +229,13 @@ function wantsAllRooms(text) {
     t.includes("overall") ||
     t.includes("in total") ||
     t.includes("every room") ||
-    t.includes("all of them")
+    t.includes("all of them") ||
+    // Hebrew common
+    t.includes("כל הכיתות") ||
+    t.includes("כל החדרים") ||
+    t.includes("בכל החדרים") ||
+    t.includes("בסך הכל") ||
+    t.includes("בכללי")
   );
 }
 
@@ -256,7 +263,7 @@ function resolveRoomScope(text, actor) {
 }
 
 /* =========================
-   Intent detection (English)
+   Intent detection (English + Hebrew)
 ========================= */
 function isTimeNowQuestion(t) {
   return (
@@ -271,7 +278,6 @@ function isNextExamQuestion(t) {
 }
 
 function isUpcomingExamsListQuestion(t) {
-  // ✅ stricter: must include upcoming/future/scheduled
   return (
     (t.includes("upcoming") && t.includes("exams")) ||
     (t.includes("future") && t.includes("exams")) ||
@@ -290,18 +296,42 @@ function isSecondUpcomingExamQuestion(t) {
 }
 
 function isToiletQuestion(t) {
-  return t.includes("toilet") || t.includes("bathroom") || t.includes("restroom");
+  return (
+    t.includes("toilet") ||
+    t.includes("bathroom") ||
+    t.includes("restroom") ||
+    // Hebrew
+    t.includes("שירותים")
+  );
 }
 
 function looksLikeCountQuestion(t) {
-  return t.includes("how many") || t.includes("count") || t.includes("number") || t.includes("how much");
+  return (
+    t.includes("how many") ||
+    t.includes("count") ||
+    t.includes("number") ||
+    t.includes("how much") ||
+    // Hebrew
+    t.includes("כמה")
+  );
 }
 
 function isListNotArrivedStudentsQuestion(t) {
   return (
-    (t.includes("which") || t.includes("who") || t.includes("list") || t.includes("show")) &&
-    (t.includes("not arrived") || t.includes("haven't arrived") || t.includes("hasn't arrived") || t.includes("didn't arrive"))
+    ((t.includes("which") || t.includes("who") || t.includes("list") || t.includes("show")) &&
+      (t.includes("not arrived") ||
+        t.includes("haven't arrived") ||
+        t.includes("hasn't arrived") ||
+        t.includes("didn't arrive"))) ||
+    // Hebrew
+    (t.includes("מי") && (t.includes("לא הגיע") || t.includes("לא הגיעו") || t.includes("לא הגיע עדיין"))) ||
+    (t.includes("רשימה") && (t.includes("לא הגיע") || t.includes("לא הגיעו")))
   );
+}
+
+function isNotArrivedCountQuestionHeb(t) {
+  // "כמה סטודנטים לא הגיעו" / "כמה לא הגיעו"
+  return t.includes("כמה") && (t.includes("לא הגיע") || t.includes("לא הגיעו") || t.includes("לא הגיעו עדיין"));
 }
 
 function isTopToiletStudentsQuestion(t) {
@@ -312,17 +342,52 @@ function isTopToiletStudentsQuestion(t) {
   );
 }
 
-function isExamReportQuestion(t) {
+function isToiletMoreThanQuestionHeb(t) {
+  // "מי יצא לשירותים יותר מ 3 פעמים"
   return (
-    t.includes("report for") ||
-    t.includes("generate report") ||
-    t.includes("exam report") ||
-    (t.includes("report") && t.includes("exam"))
+    (t.includes("מי") || t.includes("איזה") || t.includes("רשימה")) &&
+    t.includes("שירותים") &&
+    (t.includes("יותר מ") || t.includes(">") || t.includes("מעל"))
   );
 }
 
+function parseHebMoreThanNumber(t, def = 3) {
+  // catches: "יותר מ 3" / "מעל 4" / "> 2"
+  const m1 = t.match(/יותר\s*מ\s*(\d{1,2})/i);
+  if (m1?.[1]) return Number(m1[1]);
+
+  const m2 = t.match(/מעל\s*(\d{1,2})/i);
+  if (m2?.[1]) return Number(m2[1]);
+
+  const m3 = t.match(/>\s*(\d{1,2})/i);
+  if (m3?.[1]) return Number(m3[1]);
+
+  return def;
+}
+
+function isExamReportQuestion(t) {
+  return t.includes("report for") || t.includes("generate report") || t.includes("exam report") || (t.includes("report") && t.includes("exam"));
+}
+
 function isRunningExamQuestion(t) {
-  return t.includes("running") || t.includes("current exam") || t.includes("what exam") || t.includes("which exam");
+  return (
+    t.includes("running") ||
+    t.includes("current exam") ||
+    t.includes("what exam") ||
+    t.includes("which exam") ||
+    // Hebrew
+    t.includes("מה המבחן הנוכחי") ||
+    (t.includes("איזה") && t.includes("מבחן") && (t.includes("עכשיו") || t.includes("נוכחי"))) ||
+    (t.includes("מה") && t.includes("מבחן") && (t.includes("עכשיו") || t.includes("נוכחי")))
+  );
+}
+
+function isOutsideNowQuestionHeb(t) {
+  // "איזה סטודנט בחוץ עכשיו" / "מי בחוץ עכשיו"
+  return (
+    (t.includes("בחוץ") || t.includes("מחוץ")) &&
+    (t.includes("עכשיו") || t.includes("כרגע") || t.includes("ברגע זה") || t.includes("מי") || t.includes("איזה"))
+  );
 }
 
 /**
@@ -334,6 +399,12 @@ function isDbRequiredQuestion(tRaw) {
 
   // Time now is DB-free
   if (isTimeNowQuestion(t)) return false;
+
+  // Hebrew direct intents
+  if (isNotArrivedCountQuestionHeb(t)) return true;
+  if (isRunningExamQuestion(t)) return true;
+  if (isToiletMoreThanQuestionHeb(t)) return true;
+  if (isOutsideNowQuestionHeb(t)) return true;
 
   // Explicit DB intents
   if (isNextExamQuestion(t)) return true;
@@ -382,7 +453,23 @@ function isDbRequiredQuestion(tRaw) {
     "current exam",
     "exam running",
     "what exam",
-
+    // Hebrew common DB triggers
+    "כמה",
+    "סטודנטים",
+    "סטודנט",
+    "נוכחי",
+    "עכשיו",
+    "כרגע",
+    "לא הגיע",
+    "לא הגיעו",
+    "שירותים",
+    "בחוץ",
+    "מחוץ",
+    "כיתה",
+    "חדר",
+    "נוכחות",
+    "העברות",
+    "דוח",
   ];
 
   return triggers.some((k) => t.includes(k));
@@ -477,10 +564,7 @@ async function findNextExamForActor(actor) {
   const sort = { examDate: 1, startAt: 1, createdAt: 1 };
 
   const futureBase = {
-    $and: [
-      { $or: [{ examDate: { $gte: now } }, { startAt: { $gte: now } }] },
-      { status: { $ne: "ended" } },
-    ],
+    $and: [{ $or: [{ examDate: { $gte: now } }, { startAt: { $gte: now } }] }, { status: { $ne: "ended" } }],
   };
 
   const roleFilter =
@@ -511,10 +595,7 @@ async function listUpcomingExamsForActor(actor, limit = 5) {
   const sort = { examDate: 1, startAt: 1, createdAt: 1 };
 
   const futureBase = {
-    $and: [
-      { $or: [{ examDate: { $gte: now } }, { startAt: { $gte: now } }] },
-      { status: { $ne: "ended" } },
-    ],
+    $and: [{ $or: [{ examDate: { $gte: now } }, { startAt: { $gte: now } }] }, { status: { $ne: "ended" } }],
   };
 
   const roleFilter =
@@ -542,10 +623,7 @@ async function findLatestEndedExamForActor(actor) {
   if (actor?.role === "lecturer") {
     return (
       (await Exam.find({
-        $and: [
-          base,
-          { $or: [{ "lecturer.id": actor._id }, { coLecturers: { $elemMatch: { id: actor._id } } }] },
-        ],
+        $and: [base, { $or: [{ "lecturer.id": actor._id }, { coLecturers: { $elemMatch: { id: actor._id } } }] }],
       })
         .sort(sort)
         .limit(1))[0] || null
@@ -628,21 +706,20 @@ async function resolveTargetExamForReport(actor, userText) {
   const id = extractExamIdFromText(userText);
   if (id && isValidObjectIdLike(id)) {
     const doc = await Exam.findById(id);
-    // ✅ ACL check (critical)
     if (doc && actorCanAccessExam(actor, doc)) return doc;
   }
 
-  if (t.includes("running") || t.includes("current")) {
+  if (t.includes("running") || t.includes("current") || t.includes("נוכחי") || t.includes("עכשיו")) {
     const running = await findRunningExamForActor(actor);
     if (running) return running;
   }
 
-  if (t.includes("next")) {
+  if (t.includes("next") || t.includes("הבא")) {
     const nx = await findNextExamForActor(actor);
     if (nx) return nx;
   }
 
-  if (t.includes("last") || t.includes("previous") || t.includes("ended")) {
+  if (t.includes("last") || t.includes("previous") || t.includes("ended") || t.includes("אחרון") || t.includes("הסתיים")) {
     const last = await findLatestEndedExamForActor(actor);
     if (last) return last;
   }
@@ -711,8 +788,8 @@ async function getTransferStats(examId, roomId = null) {
   let roomPending = null;
   if (roomId) {
     const target = normalizeRoomId(roomId);
-    const pretty = prettyRoomId(target); // A-101
-    const raw = target; // A101
+    const pretty = prettyRoomId(target);
+    const raw = target;
     const re = new RegExp(`^${raw}$|^${pretty}$|^${raw[0]}[-_]?${raw.slice(1)}$`, "i");
 
     roomPending = await TransferRequest.countDocuments({
@@ -799,6 +876,7 @@ function buildTopToiletStudentsFromReport(exam, roomId = null, topN = 5) {
       seat: a?.seat || "",
       toiletCount,
       totalToiletMs,
+      activeNow: !!(st?.activeToilet?.leftAt),
     });
   }
 
@@ -812,7 +890,6 @@ function buildTopToiletStudentsFromReport(exam, roomId = null, topN = 5) {
 
 /* =========================
    Toilet stats fallback (Best-effort: exam.events)
-   - We only trust counts (no durations).
 ========================= */
 function buildTopToiletStudentsFromEvents(exam, roomId = null, topN = 5) {
   const events = Array.isArray(exam?.events) ? exam.events : [];
@@ -835,7 +912,6 @@ function buildTopToiletStudentsFromEvents(exam, roomId = null, topN = 5) {
     const isToilet = type.includes("toilet") || desc.includes("toilet") || desc.includes("bathroom") || desc.includes("restroom");
     if (!isToilet) continue;
 
-    // try to count "exit/start/out" events only (avoid return)
     const isReturn = type.includes("return") || desc.includes("return");
     if (isReturn) continue;
 
@@ -868,6 +944,70 @@ function buildTopToiletStudentsFromEvents(exam, roomId = null, topN = 5) {
 
   rows.sort((a, b) => b.toiletCount - a.toiletCount);
   return { supported: true, rows: rows.slice(0, topN) };
+}
+
+/* =========================
+   ✅ NEW helpers for your 4 supervisor questions
+========================= */
+function listToiletAboveThreshold(exam, roomId, threshold) {
+  // Prefer report.studentStats
+  const all = buildTopToiletStudentsFromReport(exam, roomId, 999);
+  if (all.supported) {
+    const rows = (all.rows || []).filter((r) => Number(r.toiletCount || 0) > threshold);
+    rows.sort((a, b) => b.toiletCount - a.toiletCount);
+    return { supported: true, source: "report", rows };
+  }
+
+  // Fallback: events
+  const ev = buildTopToiletStudentsFromEvents(exam, roomId, 999);
+  if (ev.supported) {
+    const rows = (ev.rows || []).filter((r) => Number(r.toiletCount || 0) > threshold);
+    rows.sort((a, b) => b.toiletCount - a.toiletCount);
+    return { supported: true, source: "events", rows };
+  }
+
+  return { supported: false, source: "none", rows: [] };
+}
+
+function listOutsideNow(exam, roomId) {
+  // outside now = status temp_out OR active toilet in report (if exists)
+  const tempOut = listStudentsByStatus(exam, "temp_out", roomId);
+
+  const statsMap = exam?.report?.studentStats;
+  let activeToilet = [];
+  if (statsMap) {
+    const entries = statsMap instanceof Map ? Array.from(statsMap.entries()) : Object.entries(statsMap);
+    const att = Array.isArray(exam?.attendance) ? exam.attendance : [];
+    const byId = new Map();
+    for (const a of att) if (a?.studentId) byId.set(String(a.studentId), a);
+
+    const target = roomId ? normalizeRoomId(roomId) : null;
+
+    for (const [sid, st] of entries) {
+      const leftAt = st?.activeToilet?.leftAt ? new Date(st.activeToilet.leftAt) : null;
+      if (!leftAt || Number.isNaN(leftAt.getTime())) continue;
+
+      const a = byId.get(String(sid));
+      if (!a) continue;
+
+      const r = normalizeRoomId(a?.roomId || a?.classroom || "");
+      if (target && r !== target) continue;
+
+      activeToilet.push(a);
+    }
+  }
+
+  // Deduplicate by studentId
+  const seen = new Set();
+  const merged = [];
+  for (const s of [...tempOut, ...activeToilet]) {
+    const id = String(s?.studentId || "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    merged.push(s);
+  }
+
+  return merged;
 }
 
 /* =========================
@@ -973,7 +1113,9 @@ async function dbDirectAnswer(userText, actor) {
       lines.push(`\nTop ${topToiletReport.rows.length} students by toilet exits (report):`);
       for (const r of topToiletReport.rows) {
         const mins = Math.round((r.totalToiletMs || 0) / 60000);
-        lines.push(`- ${r.name} (${r.studentNumber || "—"}) — exits: ${r.toiletCount}, total: ${mins} min, room: ${prettyRoomId(r.roomId)}${r.seat ? `, seat: ${r.seat}` : ""}`);
+        lines.push(
+          `- ${r.name} (${r.studentNumber || "—"}) — exits: ${r.toiletCount}, total: ${mins} min, room: ${prettyRoomId(r.roomId)}${r.seat ? `, seat: ${r.seat}` : ""}`
+        );
       }
     } else if (topToiletEvents?.supported && topToiletEvents.rows.length) {
       lines.push(`\nTop ${topToiletEvents.rows.length} students by toilet exits (events fallback):`);
@@ -997,6 +1139,67 @@ async function dbDirectAnswer(userText, actor) {
   const roomId = scope.scope === "room" ? scope.roomId : null;
   const where = roomId ? `Room ${prettyRoomId(roomId)}` : "All rooms";
 
+  /* =========================
+     ✅ Direct answers for TODAY presentation (Hebrew-friendly)
+  ========================= */
+
+  // 1) כמה סטודנטים לא הגיעו?
+  if (isNotArrivedCountQuestionHeb(t)) {
+    const c = roomId ? countAttendance(exam, roomId) : countAttendance(exam, null);
+    return `Not arrived (${where}): ${c.not_arrived} / ${c.total}\n(Exam: ${title})`;
+  }
+
+  // 2) מה המבחן הנוכחי?
+  if (isRunningExamQuestion(t)) {
+    const tz = getTZ();
+    const when = exam.startAt || exam.examDate;
+    return `Running exam: ${title}\n- Date: ${formatDT(when, tz)}\n- Status: ${exam.status || "running"}`;
+  }
+
+  // 3) מי יצא לשירותים יותר מ X פעמים?
+  if (isToiletMoreThanQuestionHeb(t)) {
+    const threshold = parseHebMoreThanNumber(t, 3);
+    const out = listToiletAboveThreshold(exam, roomId, threshold);
+
+    if (!out.supported) {
+      return `Toilet stats are not available right now.\n(Exam: ${title})`;
+    }
+
+    const rows = out.rows || [];
+    if (!rows.length) {
+      return `No students found with toilet exits > ${threshold} (${where}).\n(Exam: ${title})`;
+    }
+
+    const showN = Math.min(20, rows.length);
+    const lines = rows.slice(0, showN).map((r, idx) => {
+      const seat = r.seat ? `, seat: ${r.seat}` : "";
+      return `${idx + 1}) ${r.name} (${r.studentNumber || "—"}) — exits: ${r.toiletCount}, room: ${prettyRoomId(r.roomId)}${seat}`;
+    });
+
+    const note = out.source === "events" ? "\n(Note: fallback uses events count only; durations require report.studentStats.)" : "";
+    return `Students with toilet exits > ${threshold} (${where}) [${out.source}]:\n${lines.join("\n")}${note}\n(Exam: ${title})`;
+  }
+
+  // 4) איזה סטודנט בחוץ עכשיו?
+  if (isOutsideNowQuestionHeb(t) || (t.includes("outside") && t.includes("now"))) {
+    const outside = listOutsideNow(exam, roomId);
+    if (!outside.length) return `No students are outside right now (${where}).\n(Exam: ${title})`;
+
+    const lines = outside.slice(0, 20).map((s, idx) => {
+      const r = prettyRoomId(s?.roomId || s?.classroom || "");
+      const seat = s?.seat ? `, seat: ${s.seat}` : "";
+      const num = s?.studentNumber ? ` (${s.studentNumber})` : "";
+      return `${idx + 1}) ${s?.name || "Student"}${num} — ${r}${seat}`;
+    });
+
+    const more = outside.length > 20 ? `\nShowing first 20 of ${outside.length}.` : "";
+    return `Students outside now (${where}) — ${outside.length}:\n${lines.join("\n")}${more}\n(Exam: ${title})`;
+  }
+
+  /* =========================
+     Existing English DB answers (kept)
+  ========================= */
+
   // Time remaining
   if (
     t.includes("time remaining") ||
@@ -1004,7 +1207,8 @@ async function dbDirectAnswer(userText, actor) {
     (t.includes("when") && t.includes("end"))
   ) {
     const end = exam?.endAt ? new Date(exam.endAt) : null;
-    if (!end || Number.isNaN(end.getTime())) return `I can't calculate time remaining because endAt is missing.\n(Exam: ${title})`;
+    if (!end || Number.isNaN(end.getTime()))
+      return `I can't calculate time remaining because endAt is missing.\n(Exam: ${title})`;
     const diff = end.getTime() - Date.now();
     if (diff <= 0) return `Exam time window ended.\n(Exam: ${title})`;
     return `Time remaining: ${msToHuman(diff)}\n(Exam: ${title})`;
@@ -1026,11 +1230,12 @@ async function dbDirectAnswer(userText, actor) {
       return `${idx + 1}) ${s?.name || "Student"}${num} — ${r}${seat}`;
     });
 
-    const more = total > slice.length ? `\nShowing first ${slice.length} of ${total}. (Ask "show ${Math.min(20, total)}" if needed.)` : "";
+    const more =
+      total > slice.length ? `\nShowing first ${slice.length} of ${total}. (Ask "show ${Math.min(20, total)}" if needed.)` : "";
     return `Not arrived students (${where}) — ${total}:\n${lines.join("\n")}${more}\n(Exam: ${title})`;
   }
 
-  // Top toilet students
+  // Top toilet students (English)
   if (isTopToiletStudentsQuestion(t)) {
     const topN = pickTopN(userText, 5);
     const topReport = buildTopToiletStudentsFromReport(exam, roomId, topN);
@@ -1069,18 +1274,24 @@ async function dbDirectAnswer(userText, actor) {
     t.includes("stats") ||
     looksLikeCountQuestion(t) ||
     t.includes("students") ||
+    t.includes("student") ||
     t.includes("present") ||
     t.includes("absent") ||
     t.includes("not arrived") ||
     t.includes("temp") ||
-    t.includes("finished")
+    t.includes("finished") ||
+    // Hebrew
+    t.includes("נוכחות") ||
+    t.includes("סטודנטים") ||
+    t.includes("לא הגיע") ||
+    t.includes("בחוץ")
   ) {
     const c = roomId ? countAttendance(exam, roomId) : countAttendance(exam, null);
 
-    const wantsPresent = t.includes("present");
-    const wantsNotArrived = t.includes("not arrived") || (t.includes("not") && t.includes("arrived"));
-    const wantsAbsent = t.includes("absent");
-    const wantsTempOut = t.includes("temp_out") || (t.includes("temp") && t.includes("out"));
+    const wantsPresent = t.includes("present") || t.includes("נוכחים");
+    const wantsNotArrived = t.includes("not arrived") || (t.includes("לא הגיע") || t.includes("לא הגיעו"));
+    const wantsAbsent = t.includes("absent") || t.includes("נעדר");
+    const wantsTempOut = t.includes("temp_out") || (t.includes("temp") && t.includes("out")) || t.includes("בחוץ");
     const wantsMoving = t.includes("moving");
     const wantsFinished = t.includes("finished");
 
@@ -1095,7 +1306,7 @@ async function dbDirectAnswer(userText, actor) {
   }
 
   // Transfers stats
-  if (t.includes("transfer")) {
+  if (t.includes("transfer") || t.includes("העברה") || t.includes("העברות")) {
     const stats = await getTransferStats(exam._id, roomId);
     const lines = [
       `Transfers (All rooms):`,
@@ -1109,13 +1320,13 @@ async function dbDirectAnswer(userText, actor) {
     return lines.join("\n");
   }
 
-  // Events count / last events
-  if (t.includes("events") || t.includes("incidents")) {
+  // Events / incidents
+  if (t.includes("events") || t.includes("incidents") || t.includes("אירועים") || t.includes("תקריות")) {
     const events = Array.isArray(exam.events) ? exam.events : [];
     const incidentsCount = events.filter((e) => norm(e?.type).includes("incident")).length;
 
     if (looksLikeCountQuestion(t)) {
-      if (t.includes("incident")) return `Incidents: ${incidentsCount}\n(Exam: ${title})`;
+      if (t.includes("incident") || t.includes("תקרית")) return `Incidents: ${incidentsCount}\n(Exam: ${title})`;
       return `Events: ${events.length}\n(Exam: ${title})`;
     }
 
@@ -1135,7 +1346,7 @@ async function dbDirectAnswer(userText, actor) {
   }
 
   // Messages
-  if (t.includes("messages") || (t.includes("chat") && t.includes("exam"))) {
+  if (t.includes("messages") || (t.includes("chat") && t.includes("exam")) || t.includes("הודעות")) {
     const msgs = Array.isArray(exam.messages) ? exam.messages : [];
     if (looksLikeCountQuestion(t)) return `Messages saved in this exam: ${msgs.length}\n(Exam: ${title})`;
 
@@ -1153,11 +1364,6 @@ async function dbDirectAnswer(userText, actor) {
 
     if (!last.length) return `No messages recorded yet.\n(Exam: ${title})`;
     return `Last messages:\n${last.join("\n")}\n(Exam: ${title})`;
-  }
-
-  if (isRunningExamQuestion(t)) {
-    const tz = getTZ();
-    return `Running exam: ${title}\n- Date: ${formatDT(exam.examDate, tz)}\n- Status: ${exam.status}`;
   }
 
   return null;
@@ -1247,9 +1453,9 @@ export async function chatWithAI(req, res) {
       return res.json({ text: ans || "I don't have that information available in the database right now." });
     }
 
-      // 2) FAQ (only for how/meaning UI guidance)
-      const faq = faqAnswer(message);
-      if (faq) return res.json({ text: faq });
+    // 2) FAQ (only for how/meaning UI guidance)
+    const faq = faqAnswer(message);
+    if (faq) return res.json({ text: faq });
 
     // 3) Non-DB question -> Gemini allowed
     const maxPerDay = Number(process.env.GEMINI_MAX_PER_DAY || 50);
