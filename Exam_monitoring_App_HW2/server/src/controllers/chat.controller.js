@@ -32,12 +32,16 @@ const FAQ = [
       "To start an exam:\n- Open Exam List\n- Select the exam\n- Click Start Exam (or Open Dashboard if already running)\n- Choose a room tab to monitor attendance and seats.",
   },
   {
-    match: (t) => t.includes("not arrived") || t.includes("gray") || t.includes("grey"),
+  match: (t) =>
+    (t.includes("gray") || t.includes("grey") || t.includes("not arrived")) &&
+    (t.includes("mean") || t.includes("meaning") || t.includes("what does") || t.includes("explain")),
     answer:
       "Not arrived (gray) means the student has not checked in yet.\nAfter QR scan or marking Present, the student appears on the room map.",
   },
   {
-    match: (t) => t.includes("toilet") || t.includes("bathroom") || t.includes("restroom"),
+    match: (t) =>
+      (t.includes("toilet") || t.includes("bathroom") || t.includes("restroom")) &&
+      (t.includes("how") || t.includes("track") || t.includes("start") || t.includes("return") || t.includes("use")),
     answer:
       "Toilet tracking:\n- Click the student seat\n- Start Toilet\n- On return: click Return\nThe system tracks count + total time.",
   },
@@ -374,6 +378,11 @@ function isDbRequiredQuestion(tRaw) {
     "future",
     "schedule",
     "next",
+    "running",
+    "current exam",
+    "exam running",
+    "what exam",
+
   ];
 
   return triggers.some((k) => t.includes(k));
@@ -1231,20 +1240,16 @@ export async function chatWithAI(req, res) {
 
     resetDailyIfNeeded();
 
-    // 1) FAQ first
-    const faq = faqAnswer(message);
-    if (faq) {
-      res.json({ text: faq });
-      return;
-    }
-
-    // 2) DB-required -> DB ONLY
+    // 1) DB-required -> DB ONLY
     const t = norm(message);
     if (isDbRequiredQuestion(t)) {
       const ans = await dbDirectAnswer(message, actor);
-      res.json({ text: ans || "I don't have that information available in the database right now." });
-      return;
+      return res.json({ text: ans || "I don't have that information available in the database right now." });
     }
+
+      // 2) FAQ (only for how/meaning UI guidance)
+      const faq = faqAnswer(message);
+      if (faq) return res.json({ text: faq });
 
     // 3) Non-DB question -> Gemini allowed
     const maxPerDay = Number(process.env.GEMINI_MAX_PER_DAY || 50);
