@@ -38,6 +38,19 @@ if (isProd) {
 ========================= */
 app.use(express.json());
 
+// =========================
+// Health check (keep-alive)
+// =========================
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: "exam-monitoring-server",
+    ts: new Date().toISOString(),
+  });
+});
+
+app.head("/health", (req, res) => res.sendStatus(200));
+
 /* =========================
    CORS
    - For Vercel client + Render server (cross-site cookies), we must use:
