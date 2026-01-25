@@ -1,8 +1,11 @@
-// ===== file: server/src/controllers/dashboard.controller.js =====
+// server/src/controllers/dashboard.controller.js
 import Exam from "../models/Exam.js";
 import User from "../models/User.js";
 import TransferRequest from "../models/TransferRequest.js";
 
+/* =========================
+   helpers
+========================= */
 function isRecipient(msg, user) {
   const uid = String(user._id);
   const toUserIds = (msg.toUserIds || []).map(String);
@@ -59,6 +62,96 @@ function deriveSupervisorRoomId({ user, exam }) {
   return "";
 }
 
+function safeLower(s) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ".")
+    .replace(/[^a-z0-9._-]/g, "");
+}
+
+function pickClassroom(exam, roomId) {
+  const rid = normalizeRoomId(roomId);
+  const list = exam?.classrooms || [];
+  return list.find((c) => normalizeRoomId(c?.id || c?.roomId || c?.name) === rid) || null;
+}
+
+function getRoomCapacity(classroom) {
+  if (!classroom) return 0;
+
+  // common options:
+  if (Number.isFinite(classroom.capacity)) return Number(classroom.capacity);
+
+  const rows = Number(classroom.rows);
+  const cols = Number(classroom.cols);
+  if (Number.isFinite(rows) && Number.isFinite(cols) && rows > 0 && cols > 0) return rows * cols;
+
+  if (Array.isArray(classroom.seats) && classroom.seats.length > 0) return classroom.seats.length;
+
+  return 0; // unknown -> treat as "no capacity info"
+}
+
+function buildSeatCandidates(classroom) {
+  // 1) explicit seats array
+  if (Array.isArray(classroom?.seats) && classroom.seats.length) {
+    return classroom.seats.map((s) => String(s));
+  }
+
+  // 2) rows/cols -> create seat ids: R1C1...
+  const rows = Number(classroom?.rows);
+  const cols = Number(classroom?.cols);
+  if (Number.isFinite(rows) && Number.isFinite(cols) && rows > 0 && cols > 0) {
+    const seats = [];
+    for (let r = 1; r <= rows; r++) {
+      for (let c = 1; c <= cols; c++) seats.push(`R${r}C${c}`);
+    }
+    return seats;
+  }
+
+  // 3) fallback generic seats (will still allow "capacity check" if capacity exists)
+  return [];
+}
+
+function firstFreeSeat({ classroom, attendanceInRoom }) {
+  const used = new Set((attendanceInRoom || []).map((a) => String(a?.seat || "").trim()).filter(Boolean));
+  const candidates = buildSeatCandidates(classroom);
+  for (const s of candidates) {
+    if (!used.has(s)) return s;
+  }
+
+  // fallback seat label if we don't have candidates
+  const n = (attendanceInRoom || []).length + 1;
+  return `S${n}`;
+}
+
+async function makeUniqueUsername(base) {
+  let username = safeLower(base);
+  if (!username) username = `student.${Date.now()}`;
+
+  // ensure unique
+  let tries = 0;
+  while (tries < 20) {
+    // eslint-disable-next-line no-await-in-loop
+    const exists = await User.findOne({ username }).lean();
+    if (!exists) return username;
+    tries++;
+    username = `${username}${Math.floor(Math.random() * 9) + 1}`;
+  }
+  return `${username}.${Date.now()}`;
+}
+
+function mustBeAdmin(req, res) {
+  const role = String(req.user?.role || "").toLowerCase();
+  if (role !== "admin") {
+    res.status(403).json({ message: "FORBIDDEN_ADMIN_ONLY" });
+    return false;
+  }
+  return true;
+}
+
+/* =========================
+   clock + snapshot (existing)
+========================= */
 export async function getClock(req, res) {
   try {
     const userId = req.user?._id;
@@ -364,5 +457,245 @@ export async function getDashboardSnapshot(req, res) {
   } catch (err) {
     console.error("Dashboard error:", err);
     return res.status(500).json({ message: "Dashboard error" });
+  }
+}
+
+/* =========================
+   NEW: Add / Delete Student (Admin only)
+========================= */
+
+/**
+ * POST /api/dashboard/students/add
+ * body: { firstName, lastName, studentId, roomId }
+ */
+export async function addStudentToRunningExam(req, res) {
+  try {
+    if (!mustBeAdmin(req, res)) return;
+
+    const firstName = String(req.body?.firstName || "").trim();
+    const lastName = String(req.body?.lastName || "").trim();
+    const studentId = String(req.body?.studentId || "").trim();
+    const roomId = normalizeRoomId(req.body?.roomId);
+
+    if (!firstName || !lastName || !studentId || !roomId) {
+      return res.status(400).json({ message: "MISSING_FIELDS", need: ["firstName", "lastName", "studentId", "roomId"] });
+    }
+
+    const adminUser = await User.findById(req.user?._id).lean();
+    if (!adminUser) return res.status(404).json({ message: "User not found" });
+
+    const exam = await findRunningExamForUser(adminUser);
+    if (!exam) return res.status(409).json({ message: "NO_RUNNING_EXAM" });
+
+    const classroom = pickClassroom(exam, roomId);
+    if (!classroom) return res.status(404).json({ message: "ROOM_NOT_FOUND", roomId });
+
+    // prevent duplicates by studentId in users OR attendance
+    const existingUser = await User.findOne({ role: "student", studentId }).lean();
+    if (existingUser) {
+      return res.status(409).json({ message: "STUDENT_EXISTS_IN_USERS", studentId });
+    }
+
+    const alreadyInAttendance = (exam.attendance || []).some((a) => String(a?.studentNumber || "") === studentId);
+    if (alreadyInAttendance) {
+      return res.status(409).json({ message: "STUDENT_EXISTS_IN_EXAM", studentId });
+    }
+
+    // capacity check
+    const attendance = exam.attendance || [];
+    const attendanceInRoom = attendance.filter((a) => attRoom(a) === normalizeRoomId(roomId));
+    const cap = getRoomCapacity(classroom);
+
+    // אם אין cap (0) -> לא חוסמים (כי אין לנו מידע)
+    if (cap > 0 && attendanceInRoom.length >= cap) {
+      return res.status(409).json({ message: "ROOM_FULL", roomId, capacity: cap, current: attendanceInRoom.length });
+    }
+
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    // generate username/email/password
+    const baseUsername = `${firstName}.${lastName}.${studentId.slice(-4)}`;
+    const username = await makeUniqueUsername(baseUsername);
+    const email = `${username}@demo.local`;
+    const password = `Stu${studentId.slice(-4)}!`; // demo-only
+
+    const createdUser = await User.create({
+      fullName,
+      username,
+      email,
+      password, // demo-only
+      role: "student",
+      studentId,
+      studentFiles: [],
+      assignedRoomId: null,
+    });
+
+    const seat = firstFreeSeat({ classroom, attendanceInRoom });
+
+    // ensure report maps exist
+    if (!exam.report) exam.report = {};
+    if (!exam.report.studentStats) exam.report.studentStats = new Map();
+    if (!exam.report.studentFiles) exam.report.studentFiles = new Map();
+
+    // attendance record
+    const att = {
+      studentId: createdUser._id,
+      studentNumber: studentId, // used in UI sometimes as code
+      name: fullName,
+      status: "not_arrived",
+      classroom: roomId,
+      roomId,
+      seat,
+      violations: 0,
+      incidentCount: 0,
+      toiletCount: 0,
+      totalToiletMs: 0,
+      arrivedAt: null,
+      finishedAt: null,
+      outStartedAt: null,
+      createdAt: new Date(),
+    };
+
+    exam.attendance = [...(exam.attendance || []), att];
+
+    // init report objects for this student (key = user._id)
+    const key = String(createdUser._id);
+    exam.report.studentStats.set(key, {
+      studentId: key,
+      studentNumber: studentId,
+      name: fullName,
+      roomId,
+      seat,
+      violations: 0,
+      incidents: 0,
+      toiletCount: 0,
+      totalToiletMs: 0,
+      status: "not_arrived",
+    });
+
+    exam.report.studentFiles.set(key, {
+      studentId: key,
+      studentNumber: studentId,
+      name: fullName,
+      roomId,
+      seat,
+      activeToilet: null,
+      events: [],
+      transfers: [],
+      notes: [],
+    });
+
+    // optional: push an event
+    exam.events = [
+      ...(exam.events || []),
+      {
+        at: new Date().toISOString(),
+        type: "STUDENT_ADDED",
+        title: "Student added",
+        description: `${fullName} (${studentId}) added to ${roomId}`,
+        classroom: roomId,
+        by: { id: String(req.user?._id), role: "admin", name: adminUser.fullName || adminUser.username || "admin" },
+      },
+    ].slice(-200);
+
+    await exam.save();
+
+    return res.json({
+      message: "STUDENT_ADDED",
+      student: {
+        id: String(createdUser._id),
+        fullName,
+        studentId,
+        username,
+        email,
+        roomId,
+        seat,
+      },
+    });
+  } catch (err) {
+    console.error("addStudentToRunningExam error:", err);
+    return res.status(500).json({ message: "ADD_STUDENT_ERROR" });
+  }
+}
+
+/**
+ * POST/DELETE /api/dashboard/students/delete
+ * body: { studentId }  // (זה ה-studentId שלך)
+ *
+ * rules:
+ * - אם הכיתה ריקה -> מחזירים CLASS_EMPTY (כי אין מה למחוק)
+ * - אם הסטודנט לא נמצא -> 404
+ */
+export async function deleteStudentFromRunningExam(req, res) {
+  try {
+    if (!mustBeAdmin(req, res)) return;
+
+    const studentId = String(req.body?.studentId || "").trim();
+    if (!studentId) return res.status(400).json({ message: "MISSING_FIELDS", need: ["studentId"] });
+
+    const adminUser = await User.findById(req.user?._id).lean();
+    if (!adminUser) return res.status(404).json({ message: "User not found" });
+
+    const exam = await findRunningExamForUser(adminUser);
+    if (!exam) return res.status(409).json({ message: "NO_RUNNING_EXAM" });
+
+    const attendance = exam.attendance || [];
+    if (!attendance.length) {
+      return res.status(409).json({ message: "CLASS_EMPTY", note: "Exam attendance is empty" });
+    }
+
+    const idx = attendance.findIndex((a) => String(a?.studentNumber || "").trim() === studentId);
+    if (idx === -1) {
+      return res.status(404).json({ message: "STUDENT_NOT_FOUND_IN_EXAM", studentId });
+    }
+
+    const removed = attendance[idx];
+    const roomId = attRoom(removed);
+    const fullName = removed?.name || "";
+
+    // אם רוצים "כיתה ריקה אז מחיקה לא עובדת":
+    // הכוונה הגיונית: אם בכיתה הספציפית אין סטודנטים, אי אפשר למחוק.
+    // אבל כאן אנחנו מוחקים סטודנט שקיים, אז הכיתה לא ריקה.
+    // מה שכן: אם מישהו שלח roomId למחיקה בכיתה ריקה — לא ביקשת, אז נשאר פשוט.
+
+    const newAttendance = attendance.filter((_, i) => i !== idx);
+    exam.attendance = newAttendance;
+
+    // remove from report maps
+    const key = String(removed?.studentId || "");
+    if (exam.report?.studentStats?.delete && key) exam.report.studentStats.delete(key);
+    if (exam.report?.studentFiles?.delete && key) exam.report.studentFiles.delete(key);
+
+    // optional event
+    exam.events = [
+      ...(exam.events || []),
+      {
+        at: new Date().toISOString(),
+        type: "STUDENT_DELETED",
+        title: "Student deleted",
+        description: `${fullName} (${studentId}) deleted from ${roomId}`,
+        classroom: roomId,
+        by: { id: String(req.user?._id), role: "admin", name: adminUser.fullName || adminUser.username || "admin" },
+      },
+    ].slice(-200);
+
+    await exam.save();
+
+    // delete from users collection (system-level)
+    // (אם אתה רוצה למחוק רק מהבחינה ולא מהמערכת — תגיד לי ונכבה את זה)
+    await User.deleteOne({ role: "student", studentId });
+
+    return res.json({
+      message: "STUDENT_DELETED",
+      removed: {
+        studentId,
+        name: fullName,
+        roomId,
+        seat: removed?.seat || "",
+      },
+    });
+  } catch (err) {
+    console.error("deleteStudentFromRunningExam error:", err);
+    return res.status(500).json({ message: "DELETE_STUDENT_ERROR" });
   }
 }
