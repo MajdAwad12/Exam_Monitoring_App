@@ -39,34 +39,42 @@ export default function DashboardPage() {
   const meRole = String(me?.role || "").toLowerCase();
   const isLecturer = meRole === "lecturer" || meRole === "admin";
 
-  const selectedRoomId = useMemo(() => {
-  return String(roomId || activeRoomId || "").trim();
-}, [roomId, activeRoomId]);
-
-const transfersForRoom = useMemo(() => {
-  const rid = selectedRoomId;
-  if (!rid) return transfers || [];
-  return (transfers || []).filter(
-    (t) => String(t?.fromClassroom || "").trim() === rid || String(t?.toClassroom || "").trim() === rid
-  );
-}, [transfers, selectedRoomId]);
-
-const eventsForRoom = useMemo(() => {
-  const rid = selectedRoomId;
-  if (!rid) return events || [];
-  return (events || []).filter((e) => String(e?.classroom || e?.roomId || "").trim() === rid);
-}, [events, selectedRoomId]);
-
-const alertsForRoom = useMemo(() => {
-  const rid = selectedRoomId;
-  if (!rid) return alerts || [];
-  return (alerts || []).filter((a) => String(a?.roomId || a?.classroom || "").trim() === rid);
-}, [alerts, selectedRoomId]);
-
-
+  // ✅ MUST be declared before selectedRoomId (avoid TDZ crash in prod build)
   const activeRoomId = useMemo(() => {
     return String(activeRoom?.id || activeRoom?.name || "").trim();
   }, [activeRoom]);
+
+  // ✅ "selected" room = manual selection (roomId) OR current activeRoomId
+  const selectedRoomId = useMemo(() => {
+    return String(roomId || activeRoomId || "").trim();
+  }, [roomId, activeRoomId]);
+
+  // ✅ Filter transfers/events/alerts by selected room (for lecturer/admin UX)
+  const transfersForRoom = useMemo(() => {
+    const rid = selectedRoomId;
+    if (!rid) return transfers || [];
+    return (transfers || []).filter(
+      (t) =>
+        String(t?.fromClassroom || "").trim() === rid ||
+        String(t?.toClassroom || "").trim() === rid
+    );
+  }, [transfers, selectedRoomId]);
+
+  const eventsForRoom = useMemo(() => {
+    const rid = selectedRoomId;
+    if (!rid) return events || [];
+    return (events || []).filter(
+      (e) => String(e?.classroom || e?.roomId || "").trim() === rid
+    );
+  }, [events, selectedRoomId]);
+
+  const alertsForRoom = useMemo(() => {
+    const rid = selectedRoomId;
+    if (!rid) return alerts || [];
+    return (alerts || []).filter(
+      (a) => String(a?.roomId || a?.classroom || "").trim() === rid
+    );
+  }, [alerts, selectedRoomId]);
 
   const examId = useMemo(() => {
     return exam?.id || exam?._id || null;
@@ -74,25 +82,25 @@ const alertsForRoom = useMemo(() => {
 
   const title = useMemo(() => {
     if (!exam) return "Dashboard";
-    const r = activeRoomId;
+    const r = selectedRoomId || activeRoomId;
     return r ? `Dashboard • ${exam.courseName} • ${r}` : `Dashboard • ${exam.courseName}`;
-  }, [exam, activeRoomId]);
+  }, [exam, selectedRoomId, activeRoomId]);
 
   // ✅ Update global bot context (Dashboard = richest context)
   useEffect(() => {
-    const alertsCount = Array.isArray(alerts) ? alerts.length : 0;
-    const transfersCount = Array.isArray(transfers) ? transfers.length : 0;
+    const alertsCount = Array.isArray(alertsForRoom) ? alertsForRoom.length : 0;
+    const transfersCount = Array.isArray(transfersForRoom) ? transfersForRoom.length : 0;
 
     setChatContext((prev) => ({
       ...prev,
       screen: "dashboard",
       examId,
-      roomId: activeRoomId || null,
+      roomId: selectedRoomId || null,
       stats: stats || null,
       alertsCount,
       transfersCount,
     }));
-  }, [setChatContext, examId, activeRoomId, stats, alerts, transfers]);
+  }, [setChatContext, examId, selectedRoomId, stats, alertsForRoom, transfersForRoom]);
 
   // ✅ Listen to global WS events from AppLayout and refresh dashboard data
   useEffect(() => {
@@ -193,7 +201,7 @@ const alertsForRoom = useMemo(() => {
       {isLecturer ? (
         <RoomTabs
           rooms={rooms}
-          roomId={roomId || activeRoomId || ""}
+          roomId={selectedRoomId || activeRoomId || ""}
           onChangeRoom={(rid) => setRoomId(String(rid || "").trim() || null)}
         />
       ) : null}
@@ -218,7 +226,7 @@ const alertsForRoom = useMemo(() => {
             nowMs={simNowMs || Date.now()}
             forcedRoomId={selectedRoomId}
             forcedAttendance={attendance}
-            forcedTransfers={transfers}
+            forcedTransfers={transfersForRoom}
             allRooms={rooms}
             hideRoomSwitcher={true}
           />
