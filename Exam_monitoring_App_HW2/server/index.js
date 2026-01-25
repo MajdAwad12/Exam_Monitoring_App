@@ -9,7 +9,7 @@ import dotenv from "dotenv";
 import session from "express-session";
 import MongoStore from "connect-mongo";
 
-import WebSocket, { WebSocketServer } from "ws";
+import { WebSocketServer } from "ws";
 
 import authRoutes from "./src/routes/auth.routes.js";
 import { connectDB } from "./src/db/connectDB.js";
@@ -144,19 +144,32 @@ async function start() {
 
     // Attach WebSocket server
     const wss = new WebSocketServer({ server, path: "/ws" });
+    globalThis.__wss = wss;
 
-    wss.on("connection", (ws) => {
-      console.log("🔌 WebSocket client connected");
 
-      ws.on("message", (data) => {
-        // For now – just log
-        console.log("WS message:", data.toString());
-      });
+  wss.on("connection", (ws) => {
+  console.log("🔌 WebSocket client connected");
 
-      ws.on("close", () => {
-        console.log("❌ WebSocket client disconnected");
-      });
-    });
+  // ✅ send welcome message (useful for testing)
+  ws.send(JSON.stringify({ type: "WELCOME", ts: new Date().toISOString() }));
+
+  // ✅ keep-alive ping every 30s
+  const interval = setInterval(() => {
+    if (ws.readyState === ws.OPEN) {
+      ws.ping();
+    }
+  }, 30000);
+
+  ws.on("message", (data) => {
+    console.log("WS message:", data.toString());
+  });
+
+  ws.on("close", () => {
+    clearInterval(interval);
+    console.log("❌ WebSocket client disconnected");
+  });
+});
+
 
     server.listen(port, () =>
       console.log("🚀 Server (HTTP + WS) running on", port)

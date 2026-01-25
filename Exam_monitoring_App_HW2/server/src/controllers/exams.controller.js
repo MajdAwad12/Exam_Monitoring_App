@@ -3,6 +3,20 @@ import Exam from "../models/Exam.js";
 import User from "../models/User.js";
 
 /* =========================
+   WS broadcaster (global)
+   - server/index.js should set: globalThis.__wss = wss
+========================= */
+function wsBroadcast(payload) {
+  const wss = globalThis.__wss;
+  if (!wss) return;
+
+  const msg = JSON.stringify(payload);
+  wss.clients?.forEach((client) => {
+    if (client.readyState === 1) client.send(msg);
+  });
+}
+
+/* =========================
    Helpers
 ========================= */
 
@@ -143,7 +157,6 @@ function isOccupyingStatus(status) {
   const s = String(status || "").toLowerCase();
   return ["present", "temp_out", "moving", "finished"].includes(s);
 }
-
 
 function roomCapacity(exam, roomId) {
   const { rows, cols } = roomDims(exam, roomId);
@@ -505,20 +518,18 @@ export async function updateAttendance(req, res) {
       if (prevStatus !== nextStatus) {
         att.status = nextStatus;
 
-        // ✅ when leaving the room (not occupying) => free the seat
-       // ✅ Do NOT clear seat for absent/not_arrived.
-      // Seats stay reserved, so students don't disappear from the map.
-      if (nextStatus === "not_arrived") {
-        att.arrivedAt = null;       // still not arrived
-        att.outStartedAt = null;    // not in toilet
-      }
+        // ✅ Do NOT clear seat for absent/not_arrived.
+        // Seats stay reserved, so students don't disappear from the map.
+        if (nextStatus === "not_arrived") {
+          att.arrivedAt = null; // still not arrived
+          att.outStartedAt = null; // not in toilet
+        }
 
-      if (nextStatus === "absent") {
-        att.outStartedAt = null;    // not in toilet
-      }
+        if (nextStatus === "absent") {
+          att.outStartedAt = null; // not in toilet
+        }
 
-// (No att.seat clearing here)
-
+        // (No att.seat clearing here)
 
         att.lastStatusAt = now;
 
@@ -672,6 +683,14 @@ export async function updateAttendance(req, res) {
     exam.markModified("report");
     await exam.save();
 
+    // ✅ WS notify
+    wsBroadcast({
+      type: "EXAM_UPDATED",
+      examId: String(exam._id),
+      at: new Date().toISOString(),
+      reason: "attendance_updated",
+    });
+
     return res.json({ ok: true, exam: toOut(exam) });
   } catch (e) {
     return res.status(500).json({ message: e.message || "Failed to update attendance" });
@@ -707,11 +726,10 @@ export async function startExam(req, res) {
 
       if (exam.status !== "running") exam.status = "running";
       for (const c of exam.classrooms || []) {
-      const rid = String(c?.id || c?.name || "").trim();
-      if (rid) ensureSeatsForRoom(exam, rid);
+        const rid = String(c?.id || c?.name || "").trim();
+        if (rid) ensureSeatsForRoom(exam, rid);
       }
       exam.markModified("attendance");
-
 
       pushExamTimeline(exam, {
         kind: "EXAM_STARTED",
@@ -726,6 +744,13 @@ export async function startExam(req, res) {
 
       exam.markModified("report");
       await exam.save();
+
+      // ✅ WS notify
+      wsBroadcast({
+        type: "EXAM_STARTED",
+        examId: String(exam._id),
+        at: new Date().toISOString(),
+      });
 
       return res.json({ ok: true, exam: toOut(exam) });
     }
@@ -747,8 +772,8 @@ export async function startExam(req, res) {
     });
 
     for (const c of exam.classrooms || []) {
-    const rid = String(c?.id || c?.name || "").trim();
-    if (rid) ensureSeatsForRoom(exam, rid);
+      const rid = String(c?.id || c?.name || "").trim();
+      if (rid) ensureSeatsForRoom(exam, rid);
     }
     exam.markModified("attendance");
 
@@ -756,6 +781,13 @@ export async function startExam(req, res) {
 
     exam.markModified("report");
     await exam.save();
+
+    // ✅ WS notify
+    wsBroadcast({
+      type: "EXAM_STARTED",
+      examId: String(exam._id),
+      at: new Date().toISOString(),
+    });
 
     return res.json({ ok: true, exam: toOut(exam) });
   } catch (e) {
@@ -787,7 +819,6 @@ export async function endExam(req, res) {
     exam.status = "ended";
     exam.markModified("status");
 
-
     pushExamTimeline(exam, {
       kind: "EXAM_ENDED",
       at: now,
@@ -801,6 +832,13 @@ export async function endExam(req, res) {
 
     exam.markModified("report");
     await exam.save();
+
+    // ✅ WS notify
+    wsBroadcast({
+      type: "EXAM_ENDED",
+      examId: String(exam._id),
+      at: new Date().toISOString(),
+    });
 
     return res.json({ ok: true, exam: toOut(exam) });
   } catch (e) {
@@ -824,7 +862,8 @@ export async function createExam(req, res) {
     const endAt = new Date(body.endAt || 0);
 
     if (!courseName) return res.status(400).json({ message: "Course name is required." });
-    if (Number.isNaN(startAt.getTime())) return res.status(400).json({ message: "Invalid startAt." });
+    if (Number.isNaN(startAt.getTime()))
+      return res.status(400).json({ message: "Invalid startAt." });
     if (Number.isNaN(endAt.getTime())) return res.status(400).json({ message: "Invalid endAt." });
     if (endAt.getTime() <= startAt.getTime()) {
       return res.status(400).json({ message: "End time must be after Start time." });
