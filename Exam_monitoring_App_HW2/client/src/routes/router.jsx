@@ -1,5 +1,5 @@
 // client/src/routes/router.jsx
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, useOutletContext } from "react-router-dom";
 
 import AppLayout from "../components/layout/AppLayout.jsx";
 
@@ -14,7 +14,7 @@ import ManageExamsPage from "../pages/admin/ManageExamsPage.jsx";
 import StudentMyExamReportPage from "../pages/student/StudentMyExamReportPage.jsx";
 
 import RoleGate from "./RoleGate.jsx";
-import { useOutletContext } from "react-router-dom";
+import RouteError from "./RouteError.jsx";
 
 /** ✅ Smart fallback inside /app */
 function AppFallback() {
@@ -38,6 +38,7 @@ const router = createBrowserRouter([
   {
     path: "/app",
     element: <AppLayout />,
+    errorElement: <RouteError />,
     children: [
       // ✅ default landing inside /app
       { index: true, element: <AppFallback /> },
