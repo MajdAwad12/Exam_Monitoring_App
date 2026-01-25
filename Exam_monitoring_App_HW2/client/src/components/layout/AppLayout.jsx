@@ -15,12 +15,19 @@ function routeToScreen(pathname) {
   return "other";
 }
 
+// ✅ Prefer env, fallback to Render URL
+const WS_URL =
+  import.meta.env.VITE_WS_URL || "wss://exam-monitoring-server.onrender.com/ws";
+
 export default function AppLayout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
   const [me, setMe] = useState(null);
   const [loadingMe, setLoadingMe] = useState(true);
+
+  // ✅ Optional: you can show status somewhere if you want
+  // const [wsStatus, setWsStatus] = useState("disconnected");
 
   // ✅ Global chat context (will be updated by pages)
   const [chatContext, setChatContext] = useState({
@@ -40,6 +47,7 @@ export default function AppLayout() {
     }));
   }, [pathname]);
 
+  // ✅ Fetch current user (session)
   useEffect(() => {
     let alive = true;
 
@@ -59,6 +67,79 @@ export default function AppLayout() {
       alive = false;
     };
   }, [navigate]);
+
+  // ✅ GLOBAL WebSocket: one connection for the whole app
+  useEffect(() => {
+    let ws = null;
+    let retryTimer = null;
+    let pingTimer = null;
+    let alive = true;
+
+    let attempts = 0;
+
+    const connect = () => {
+      if (!alive) return;
+
+      try {
+        ws = new WebSocket(WS_URL);
+        // setWsStatus("connecting");
+
+        ws.onopen = () => {
+          attempts = 0;
+          // setWsStatus("connected");
+
+          // keep-alive ping (helps proxies / idle timeouts)
+          clearInterval(pingTimer);
+          pingTimer = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "PING", ts: Date.now() }));
+            }
+          }, 25000);
+        };
+
+        ws.onmessage = (e) => {
+          let msg = null;
+          try {
+            msg = JSON.parse(e.data);
+          } catch {
+            return;
+          }
+
+          // ✅ Broadcast to the app (any page/hook can listen)
+          window.dispatchEvent(new CustomEvent("ws:event", { detail: msg }));
+        };
+
+        ws.onerror = () => {
+          // onclose usually fires after
+        };
+
+        ws.onclose = () => {
+          // setWsStatus("disconnected");
+          clearInterval(pingTimer);
+
+          if (!alive) return;
+
+          // ✅ reconnect with backoff
+          attempts += 1;
+          const delay = Math.min(10000, 500 * attempts); // up to 10s
+
+          clearTimeout(retryTimer);
+          retryTimer = setTimeout(connect, delay);
+        };
+      } catch {
+        // setWsStatus("disconnected");
+      }
+    };
+
+    connect();
+
+    return () => {
+      alive = false;
+      clearTimeout(retryTimer);
+      clearInterval(pingTimer);
+      if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+    };
+  }, []);
 
   async function onLogout() {
     try {

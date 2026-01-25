@@ -12,7 +12,6 @@ import TransfersPanel from "../../components/dashboard/TransfersPanel";
 import ClassroomMap from "../../components/classroom/ClassroomMap";
 
 export default function DashboardPage() {
-  // ✅ grab setter for global chat context
   const { setChatContext } = useOutletContext();
 
   // ✅ Only lecturer/admin uses this to switch rooms manually.
@@ -20,6 +19,7 @@ export default function DashboardPage() {
 
   const { simNow, simNowMs } = useSimClock();
 
+  // ✅ Turn polling OFF because WS will trigger refetch()
   const {
     me,
     exam,
@@ -34,7 +34,7 @@ export default function DashboardPage() {
     transfers,
     alerts,
     inbox,
-  } = useDashboardLive({ roomId, pollMs: 1000 });
+  } = useDashboardLive({ roomId, pollMs: 0 });
 
   const meRole = String(me?.role || "").toLowerCase();
   const isLecturer = meRole === "lecturer" || meRole === "admin";
@@ -69,9 +69,45 @@ export default function DashboardPage() {
     }));
   }, [setChatContext, examId, activeRoomId, stats, alerts, transfers]);
 
-if (loading) {
-  return <RocketLoader />;
-}
+  // ✅ Listen to global WS events from AppLayout and refresh dashboard data
+  useEffect(() => {
+    let debounceTimer = null;
+
+    const scheduleRefetch = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        refetch();
+      }, 150); // debounce small bursts
+    };
+
+    const onWs = (ev) => {
+      const msg = ev?.detail;
+      if (!msg || typeof msg !== "object") return;
+
+      // If you want to filter only your current exam:
+      // if (examId && msg.examId && String(msg.examId) !== String(examId)) return;
+
+      if (msg.type === "EXAM_UPDATED") {
+        scheduleRefetch();
+        return;
+      }
+
+      if (msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED") {
+        scheduleRefetch();
+        return;
+      }
+    };
+
+    window.addEventListener("ws:event", onWs);
+    return () => {
+      window.removeEventListener("ws:event", onWs);
+      clearTimeout(debounceTimer);
+    };
+  }, [refetch /*, examId */]);
+
+  if (loading) {
+    return <RocketLoader />;
+  }
 
   if (error) {
     return (
@@ -113,7 +149,9 @@ if (loading) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-extrabold text-slate-900 truncate">{title}</h1>
-          <p className="text-slate-600 text-sm">Live monitoring • attendance • incidents • transfers</p>
+          <p className="text-slate-600 text-sm">
+            Live monitoring • attendance • incidents • transfers
+          </p>
         </div>
 
         <div className="hidden md:flex items-center gap-2">
@@ -137,7 +175,14 @@ if (loading) {
 
       <div className="grid grid-cols-12 gap-5">
         <div className="col-span-12">
-          <ExamOverviewCard me={me} exam={exam} stats={stats} inbox={inbox} simNow={simNow} loading={false} />
+          <ExamOverviewCard
+            me={me}
+            exam={exam}
+            stats={stats}
+            inbox={inbox}
+            simNow={simNow}
+            loading={false}
+          />
         </div>
 
         <div className="col-span-12">
@@ -156,7 +201,13 @@ if (loading) {
 
         <div className="col-span-12 grid grid-cols-12 gap-5">
           <div className="col-span-12 lg:col-span-6">
-            <TransfersPanel me={me} items={transfers} loading={false} error={""} onChanged={refetch} />
+            <TransfersPanel
+              me={me}
+              items={transfers}
+              loading={false}
+              error={""}
+              onChanged={refetch}
+            />
           </div>
 
           <div className="col-span-12 lg:col-span-6">
