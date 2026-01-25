@@ -162,13 +162,9 @@ export default function DashboardAddDeleteStudentsCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-lg font-extrabold text-slate-900">Manage Students</div>
-          <div className="text-sm text-slate-600">
-            Add a new demo student to a room, or delete by Student ID.
-          </div>
+       
         </div>
-        <div className="text-xs text-slate-500 font-semibold">
-          Exam: <span className="font-mono">{examId || "running"}</span>
-        </div>
+
       </div>
 
       <div className="mt-5 grid grid-cols-12 gap-4">
@@ -205,7 +201,7 @@ export default function DashboardAddDeleteStudentsCard({
                 value={studentIdAdd}
                 onChange={(e) => setStudentIdAdd(e.target.value)}
                 className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
-                placeholder="209999999"
+                placeholder="00000000"
               />
             </div>
 
@@ -252,7 +248,7 @@ export default function DashboardAddDeleteStudentsCard({
               value={studentIdDel}
               onChange={(e) => setStudentIdDel(e.target.value)}
               className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
-              placeholder="209999999"
+              placeholder="00000000"
             />
           </div>
 
@@ -264,9 +260,6 @@ export default function DashboardAddDeleteStudentsCard({
             {delBusy ? "Working..." : "Delete Student"}
           </button>
 
-          <div className="mt-2 text-xs text-slate-500">
-            * Deletes from exam attendance + removes student user (server logic).
-          </div>
         </div>
       </div>
     </div>
