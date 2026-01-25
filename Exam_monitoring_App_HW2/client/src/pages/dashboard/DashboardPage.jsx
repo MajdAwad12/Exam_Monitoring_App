@@ -7,6 +7,7 @@ import RocketLoader from "../../components/loading/RocketLoader.jsx";
 
 import RoomTabs from "../../components/dashboard/RoomTabs";
 import ExamOverviewCard from "../../components/dashboard/ExamOverviewCard";
+import DashboardAddDeleteStudentsCard from "../../components/dashboard/DashboardAddDeleteStudentsCard.jsx";
 import EventsFeed from "../../components/dashboard/EventsFeed";
 import TransfersPanel from "../../components/dashboard/TransfersPanel";
 import ClassroomMap from "../../components/classroom/ClassroomMap";
@@ -37,6 +38,7 @@ export default function DashboardPage() {
   } = useDashboardLive({ roomId, pollMs: 0 });
 
   const meRole = String(me?.role || "").toLowerCase();
+  // ✅ Lecturer OR Admin (both can manage students)
   const isLecturer = meRole === "lecturer" || meRole === "admin";
 
   // ✅ MUST be declared before selectedRoomId (avoid TDZ crash in prod build)
@@ -217,6 +219,13 @@ export default function DashboardPage() {
             loading={false}
           />
         </div>
+
+        {/* ✅ Admin + Lecturer: Add/Delete Students */}
+        {isLecturer ? (
+          <div className="col-span-12">
+            <DashboardAddDeleteStudentsCard rooms={rooms} onChanged={refetch} />
+          </div>
+        ) : null}
 
         <div className="col-span-12">
           <ClassroomMap
