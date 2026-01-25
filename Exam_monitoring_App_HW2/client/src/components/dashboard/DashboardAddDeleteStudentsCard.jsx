@@ -170,7 +170,7 @@ export default function DashboardAddDeleteStudentsCard({
       <div className="mt-5 grid grid-cols-12 gap-4">
         {/* -------- Add -------- */}
         <div className="col-span-12 lg:col-span-7 rounded-3xl border border-slate-200 p-4">
-          <div className="font-extrabold text-slate-900">Add Student</div>
+          <div className="font-extrabold text-slate-600">Add Student</div>
 
           <MsgBox msg={addMsg} />
 

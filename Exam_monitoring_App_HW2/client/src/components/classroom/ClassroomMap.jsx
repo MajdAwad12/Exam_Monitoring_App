@@ -598,7 +598,6 @@ export default function ClassroomMap({
           {/* ✅ Header (no 21/25 block anymore) */}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="text-xs text-slate-500">Live classroom</div>
               <div className="text-2xl font-extrabold text-slate-900">Classroom (5×5) • Room {activeRoom || "-"}</div>
               <div className="mt-1 text-sm text-slate-600">Click a seat for actions • Use QR / ID to mark present</div>
 
@@ -666,10 +665,7 @@ export default function ClassroomMap({
                 Mark Not Arrived
               </button>
             </div>
-
-            {isLecturer || isAdmin ? (
-              <div className="ml-auto text-[12px] text-slate-500 font-bold">Room is controlled from the Dashboard header.</div>
-            ) : null}
+            
           </div>
 
           {cameraOpen ? (
