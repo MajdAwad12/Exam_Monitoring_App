@@ -201,7 +201,7 @@ export default function DashboardAddDeleteStudentsCard({
                 value={studentIdAdd}
                 onChange={(e) => setStudentIdAdd(e.target.value)}
                 className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
-                placeholder="00000000"
+                placeholder="000000000"
               />
             </div>
 
@@ -248,7 +248,7 @@ export default function DashboardAddDeleteStudentsCard({
               value={studentIdDel}
               onChange={(e) => setStudentIdDel(e.target.value)}
               className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
-              placeholder="00000000"
+              placeholder="000000000"
             />
           </div>
 
