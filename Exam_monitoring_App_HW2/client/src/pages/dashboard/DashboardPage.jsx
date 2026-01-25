@@ -38,8 +38,10 @@ export default function DashboardPage() {
   } = useDashboardLive({ roomId, pollMs: 0 });
 
   const meRole = String(me?.role || "").toLowerCase();
-  // ✅ Lecturer OR Admin (both can manage students)
-  const isLecturer = meRole === "lecturer" || meRole === "admin";
+
+  // ✅ Lecturer OR Admin can switch rooms + manage students
+  const canLecturerUX = meRole === "lecturer" || meRole === "admin";
+  const canManageStudents = meRole === "lecturer" || meRole === "admin";
 
   // ✅ MUST be declared before selectedRoomId (avoid TDZ crash in prod build)
   const activeRoomId = useMemo(() => {
@@ -119,9 +121,6 @@ export default function DashboardPage() {
       const msg = ev?.detail;
       if (!msg || typeof msg !== "object") return;
 
-      // If you want to filter only your current exam:
-      // if (examId && msg.examId && String(msg.examId) !== String(examId)) return;
-
       if (msg.type === "EXAM_UPDATED") {
         scheduleRefetch();
         return;
@@ -138,11 +137,9 @@ export default function DashboardPage() {
       window.removeEventListener("ws:event", onWs);
       clearTimeout(debounceTimer);
     };
-  }, [refetch /*, examId */]);
+  }, [refetch]);
 
-  if (loading) {
-    return <RocketLoader />;
-  }
+  if (loading) return <RocketLoader />;
 
   if (error) {
     return (
@@ -184,9 +181,7 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-extrabold text-slate-900 truncate">{title}</h1>
-          <p className="text-slate-600 text-sm">
-            Live monitoring • attendance • incidents • transfers
-          </p>
+          <p className="text-slate-600 text-sm">Live monitoring • attendance • incidents • transfers</p>
         </div>
 
         <div className="hidden md:flex items-center gap-2">
@@ -200,7 +195,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ✅ Only lecturer/admin can switch rooms */}
-      {isLecturer ? (
+      {canLecturerUX ? (
         <RoomTabs
           rooms={rooms}
           roomId={selectedRoomId || activeRoomId || ""}
@@ -210,18 +205,11 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-12 gap-5">
         <div className="col-span-12">
-          <ExamOverviewCard
-            me={me}
-            exam={exam}
-            stats={stats}
-            inbox={inbox}
-            simNow={simNow}
-            loading={false}
-          />
+          <ExamOverviewCard me={me} exam={exam} stats={stats} inbox={inbox} simNow={simNow} loading={false} />
         </div>
 
         {/* ✅ Admin + Lecturer: Add/Delete Students */}
-        {isLecturer ? (
+        {canManageStudents ? (
           <div className="col-span-12">
             <DashboardAddDeleteStudentsCard rooms={rooms} onChanged={refetch} />
           </div>
@@ -243,13 +231,7 @@ export default function DashboardPage() {
 
         <div className="col-span-12 grid grid-cols-12 gap-5">
           <div className="col-span-12 lg:col-span-6">
-            <TransfersPanel
-              me={me}
-              items={transfersForRoom}
-              loading={false}
-              error={""}
-              onChanged={refetch}
-            />
+            <TransfersPanel me={me} items={transfersForRoom} loading={false} error={""} onChanged={refetch} />
           </div>
 
           <div className="col-span-12 lg:col-span-6">

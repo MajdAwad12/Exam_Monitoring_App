@@ -104,7 +104,7 @@ export default function DashboardAddDeleteStudentsCard({ rooms = [], onChanged }
         <div className="min-w-0">
           <div className="text-lg font-extrabold text-slate-900">Students Control</div>
           <div className="text-sm text-slate-600 mt-0.5">
-            Admin can add / delete students for the running exam
+            Admin/Lecturer can add / delete students for the running exam
           </div>
         </div>
       </div>
