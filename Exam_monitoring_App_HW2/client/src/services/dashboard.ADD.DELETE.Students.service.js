@@ -1,20 +1,43 @@
 // client/src/services/dashboard.ADD.DELETE.Students.service.js
-// Service layer for Admin Add/Delete Student (short, clean).
-// Depends on: client/src/api/dashboardStudents.api.js
+// Service layer for Admin/Lecturer Add/Delete Student (Dashboard endpoints)
 
-import { addStudent, deleteStudent } from "../api/dashboardStudents.api.js";
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
+/* ---------------- helpers ---------------- */
 const norm = (v) => String(v ?? "").trim().replace(/\s+/g, " ");
-
-const normId = (v) =>
-  String(v ?? "")
-    .trim()
-    .replace(/\s+/g, ""); // keep as-is except spaces (IDs often have no spaces)
-
+const normId = (v) => String(v ?? "").trim().replace(/\s+/g, "");
 const normRoom = (v) => String(v ?? "").trim();
+const normExam = (v) => String(v ?? "").trim();
 
-/** Admin fills: firstName, lastName, studentId, optional roomId */
-export async function ADD_STUDENT({ firstName, lastName, studentId, roomId } = {}) {
+async function request(url, { method = "GET", body } = {}) {
+  const res = await fetch(`${API_BASE}${url}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  // ✅ don’t crash if server returns empty/non-json
+  let data = {};
+  try {
+    data = await res.json();
+  } catch (_) {
+    data = {};
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.message || `Request failed (${res.status})`);
+  }
+  return data;
+}
+
+/* ---------------- API ---------------- */
+
+/**
+ * Add student to exam (running OR by examId if controller supports it)
+ */
+export async function addStudentToExam({ examId, firstName, lastName, studentId, roomId } = {}) {
+  const eid = normExam(examId);
   const fn = norm(firstName);
   const ln = norm(lastName);
   const sid = normId(studentId);
@@ -23,24 +46,43 @@ export async function ADD_STUDENT({ firstName, lastName, studentId, roomId } = {
   if (!fn) throw new Error("First name is required");
   if (!ln) throw new Error("Last name is required");
   if (!sid) throw new Error("Student ID is required");
+  if (!rid) throw new Error("Room is required");
 
-  return addStudent({
+  const payload = {
     firstName: fn,
     lastName: ln,
     studentId: sid,
-    roomId: rid || undefined,
+    roomId: rid,
+  };
+
+  // ✅ only send examId if provided
+  if (eid) payload.examId = eid;
+
+  return request(`/api/dashboard/students/add`, {
+    method: "POST",
+    body: payload,
   });
 }
 
-/** Admin fills: studentId, optional roomId */
-export async function DELETE_STUDENT({ studentId, roomId } = {}) {
+/**
+ * Delete student from exam (running OR by examId if supported)
+ * Default uses POST (more compatible). Optionally can use DELETE.
+ */
+export async function deleteStudentFromExam({ examId, studentId, useDelete = false } = {}) {
+  const eid = normExam(examId);
   const sid = normId(studentId);
-  const rid = normRoom(roomId);
 
   if (!sid) throw new Error("Student ID is required");
 
-  return deleteStudent({
-    studentId: sid,
-    roomId: rid || undefined,
+  const payload = { studentId: sid };
+  if (eid) payload.examId = eid;
+
+  return request(`/api/dashboard/students/delete`, {
+    method: useDelete ? "DELETE" : "POST",
+    body: payload,
   });
 }
+
+/* Backward compatibility */
+export const ADD_STUDENT = addStudentToExam;
+export const DELETE_STUDENT = deleteStudentFromExam;

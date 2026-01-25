@@ -38,22 +38,17 @@ export default function DashboardPage() {
   } = useDashboardLive({ roomId, pollMs: 0 });
 
   const meRole = String(me?.role || "").toLowerCase();
-
-  // ✅ Lecturer OR Admin can switch rooms + manage students
   const canLecturerUX = meRole === "lecturer" || meRole === "admin";
-  const canManageStudents = meRole === "lecturer" || meRole === "admin";
+  const canManageStudents = canLecturerUX;
 
-  // ✅ MUST be declared before selectedRoomId (avoid TDZ crash in prod build)
   const activeRoomId = useMemo(() => {
     return String(activeRoom?.id || activeRoom?.name || "").trim();
   }, [activeRoom]);
 
-  // ✅ "selected" room = manual selection (roomId) OR current activeRoomId
   const selectedRoomId = useMemo(() => {
     return String(roomId || activeRoomId || "").trim();
   }, [roomId, activeRoomId]);
 
-  // ✅ Filter transfers/events/alerts by selected room (for lecturer/admin UX)
   const transfersForRoom = useMemo(() => {
     const rid = selectedRoomId;
     if (!rid) return transfers || [];
@@ -114,21 +109,15 @@ export default function DashboardPage() {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         refetch();
-      }, 150); // debounce small bursts
+      }, 150);
     };
 
     const onWs = (ev) => {
       const msg = ev?.detail;
       if (!msg || typeof msg !== "object") return;
 
-      if (msg.type === "EXAM_UPDATED") {
+      if (msg.type === "EXAM_UPDATED" || msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED") {
         scheduleRefetch();
-        return;
-      }
-
-      if (msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED") {
-        scheduleRefetch();
-        return;
       }
     };
 
@@ -211,7 +200,12 @@ export default function DashboardPage() {
         {/* ✅ Admin + Lecturer: Add/Delete Students */}
         {canManageStudents ? (
           <div className="col-span-12">
-            <DashboardAddDeleteStudentsCard rooms={rooms} onChanged={refetch} />
+            <DashboardAddDeleteStudentsCard
+              examId={examId}
+              currentRoomId={selectedRoomId || activeRoomId || ""}
+              rooms={rooms}
+              onChanged={refetch}
+            />
           </div>
         ) : null}
 

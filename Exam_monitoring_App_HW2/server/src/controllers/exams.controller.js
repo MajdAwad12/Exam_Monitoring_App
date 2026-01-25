@@ -1,4 +1,5 @@
 // ===== file: server/src/controllers/exams.controller.js =====
+import mongoose from "mongoose";
 import Exam from "../models/Exam.js";
 import User from "../models/User.js";
 
@@ -122,9 +123,11 @@ function findAttendance(exam, studentIdOrNumber) {
 
   const list = exam.attendance || [];
 
+  // match by ObjectId string
   let att = list.find((x) => String(x.studentId) === key);
   if (att) return att;
 
+  // match by studentNumber
   att = list.find((x) => String(x.studentNumber || "") === key);
   if (att) return att;
 
@@ -132,7 +135,7 @@ function findAttendance(exam, studentIdOrNumber) {
 }
 
 /* =========================
-   NEW: seating/capacity helpers
+   Seating / capacity helpers
 ========================= */
 function normalizeRoomId(v) {
   return String(v || "").trim();
@@ -155,7 +158,7 @@ function seatLabel(r, c) {
 
 function isOccupyingStatus(status) {
   const s = String(status || "").toLowerCase();
-  return ["present", "temp_out", "moving", "finished"].includes(s);
+  return ["not_arrived", "present", "temp_out", "moving", "finished"].includes(s);
 }
 
 function roomCapacity(exam, roomId) {
@@ -257,7 +260,7 @@ function isSeatTaken(exam, roomId, seat) {
 }
 
 /* =========================
-   NEW: exam window helpers (for Start/End)
+   Exam window helpers
 ========================= */
 function getExamWindowMs(exam) {
   const startMs = new Date(exam?.startAt || exam?.examDate || 0).getTime();
@@ -287,12 +290,11 @@ function examWindowState(exam) {
 }
 
 /* =========================
-   NEW: create helpers (save names to DB)
+   Create helpers (names)
 ========================= */
-
 async function buildLecturerObject(lecturerId) {
   const lid = String(lecturerId || "").trim();
-  if (!lid) return null;
+  if (!lid) throw new Error("lecturerId is required");
 
   const lec = await User.findById(lid).select("fullName role").lean();
   if (!lec) throw new Error("Lecturer not found");
@@ -327,6 +329,37 @@ async function buildSupervisorsFromClassrooms(classrooms) {
     name: byId.get(String(p.supId))?.fullName || p.supNameHint || "",
     roomId: p.roomId,
   }));
+}
+
+/* =========================
+   ✅ NEW: resolve student user (ObjectId required in schema)
+========================= */
+async function resolveStudentUser(studentIdOrNumber) {
+  const raw = String(studentIdOrNumber || "").trim();
+  const sid = raw.replace(/\s+/g, "");
+  if (!sid) return { user: null, studentNumber: "" };
+
+  // If it's an ObjectId -> findById
+  if (mongoose.Types.ObjectId.isValid(sid) && sid.length === 24) {
+    const u = await User.findById(sid).select("_id fullName role studentId username").lean();
+
+    // ✅ studentNumber must be a REAL readable id (studentId/username), not the ObjectId
+    return {
+      user: u || null,
+      studentNumber: u?.studentId || u?.username || "",
+    };
+  }
+
+  // Otherwise: treat as "studentId/username" and search common fields
+  const u =
+    (await User.findOne({ studentId: sid })
+      .select("_id fullName role studentId username")
+      .lean()) ||
+    (await User.findOne({ username: sid })
+      .select("_id fullName role studentId username")
+      .lean());
+
+  return { user: u || null, studentNumber: sid };
 }
 
 /* =========================
@@ -400,7 +433,7 @@ export async function updateAttendance(req, res) {
     const sf = getStudentFile(exam, realStudentKey);
     const sSnap = studentSnapshot(att);
 
-    /* ============ OPTIONAL: seat/classroom patch validation (safe, won't break existing) ============ */
+    /* ============ OPTIONAL: seat/classroom patch validation ============ */
     const wantsMove =
       patch.classroom !== undefined || patch.roomId !== undefined || patch.seat !== undefined;
 
@@ -411,7 +444,6 @@ export async function updateAttendance(req, res) {
       const targetSeatRaw = patch.seat !== undefined ? String(patch.seat) : String(att.seat || "");
       const targetSeat = normalizeSeat(targetSeatRaw) || "AUTO";
 
-      // fix broken seats in target room before validating
       ensureSeatsForRoom(exam, targetRoom);
 
       if (
@@ -518,22 +550,17 @@ export async function updateAttendance(req, res) {
       if (prevStatus !== nextStatus) {
         att.status = nextStatus;
 
-        // ✅ Do NOT clear seat for absent/not_arrived.
-        // Seats stay reserved, so students don't disappear from the map.
         if (nextStatus === "not_arrived") {
-          att.arrivedAt = null; // still not arrived
-          att.outStartedAt = null; // not in toilet
+          att.arrivedAt = null;
+          att.outStartedAt = null;
         }
 
         if (nextStatus === "absent") {
-          att.outStartedAt = null; // not in toilet
+          att.outStartedAt = null;
         }
-
-        // (No att.seat clearing here)
 
         att.lastStatusAt = now;
 
-        // ✅ if student becomes occupying and has no seat -> assign now (prevents phantom seating)
         if (isOccupyingStatus(nextStatus)) {
           const rid = normalizeRoomId(att.classroom || att.roomId);
           ensureSeatsForRoom(exam, rid);
@@ -683,7 +710,6 @@ export async function updateAttendance(req, res) {
     exam.markModified("report");
     await exam.save();
 
-    // ✅ WS notify
     wsBroadcast({
       type: "EXAM_UPDATED",
       examId: String(exam._id),
@@ -697,12 +723,216 @@ export async function updateAttendance(req, res) {
   }
 }
 
+/* =========================
+   ✅ NEW: Add/Delete Students
+========================= */
+
+// ✅ POST /api/exams/:examId/students
+export async function addStudentToExam(req, res) {
+  try {
+    const me = req.user || {};
+    const role = String(me.role || "");
+    if (role !== "admin" && role !== "lecturer") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const { examId } = req.params;
+    const body = req.body || {};
+
+    const firstName = String(body.firstName || "").trim();
+    const lastName = String(body.lastName || "").trim();
+    const studentIdInput = String(body.studentId || "").trim(); // from client (number/id)
+    const roomId = String(body.roomId || "").trim();
+
+    if (!firstName || !lastName || !studentIdInput || !roomId) {
+      return res.status(400).json({ message: "Missing fields." });
+    }
+
+    const exam = await Exam.findById(examId);
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+
+    // validate room exists
+    const roomExists = (exam.classrooms || []).some(
+      (r) => String(r?.id || r?.name || "").trim() === roomId
+    );
+    if (!roomExists) return res.status(400).json({ message: "Invalid roomId" });
+
+    // resolve student user (schema requires ObjectId)
+    const { user: studentUser, studentNumber } = await resolveStudentUser(studentIdInput);
+    if (!studentUser?._id) {
+      return res.status(404).json({
+        message: "Student user not found (check studentId/studentNumber in DB)",
+      });
+    }
+
+    // already exists?
+    const exists =
+      (exam.attendance || []).some((a) => String(a.studentId) === String(studentUser._id)) ||
+      (exam.attendance || []).some((a) => String(a.studentNumber || "") === String(studentNumber));
+    if (exists) {
+      return res.status(409).json({ message: "Student already exists in this exam" });
+    }
+
+    ensureSeatsForRoom(exam, roomId);
+    if (!hasFreeSeat(exam, roomId)) return res.status(409).json({ message: "ROOM_FULL" });
+
+    const seat = findFirstFreeSeat(exam, roomId);
+    if (!seat) return res.status(409).json({ message: "ROOM_FULL" });
+
+    const now = new Date();
+    const actor = actorFromReq(req);
+
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    exam.attendance = exam.attendance || [];
+    exam.attendance.push({
+      studentId: studentUser._id, // ✅ ObjectId required
+      name: fullName,
+      studentNumber: studentNumber, // ✅ string used by UI
+      classroom: roomId,
+      roomId: roomId,
+      seat,
+      status: "not_arrived",
+      arrivedAt: null,
+      outStartedAt: null,
+      finishedAt: null,
+      lastStatusAt: now,
+      violations: 0,
+    });
+
+    ensureReport(exam);
+    getStudentFile(exam, String(studentUser._id)); // key is ObjectId string
+
+    pushStudentTimeline(exam, String(studentUser._id), {
+      at: now,
+      kind: "STUDENT_ADDED",
+      note: `Student added to exam (${roomId} ${seat})`,
+      severity: "low",
+      classroom: roomId,
+      seat,
+      meta: { by: actor },
+    });
+
+    pushExamTimeline(exam, {
+      kind: "STUDENT_ADDED",
+      at: now,
+      roomId,
+      actor,
+      student: {
+        id: studentUser._id,
+        name: fullName,
+        code: studentNumber,
+        classroom: roomId,
+        seat,
+      },
+      details: { roomId, seat },
+    });
+
+    recalcSummary(exam);
+
+    exam.markModified("attendance");
+    exam.markModified("report");
+    await exam.save();
+
+    wsBroadcast({
+      type: "EXAM_UPDATED",
+      examId: String(exam._id),
+      at: new Date().toISOString(),
+      reason: "student_added",
+    });
+
+    return res.json({ ok: true, message: "Student added.", studentNumber });
+  } catch (e) {
+    return res.status(500).json({ message: e.message || "Failed to add student" });
+  }
+}
+
+// ✅ DELETE /api/exams/:examId/students/:studentId
+export async function deleteStudentFromExam(req, res) {
+  try {
+    const me = req.user || {};
+    const role = String(me.role || "");
+    if (role !== "admin" && role !== "lecturer") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const { examId, studentId } = req.params;
+    const input = String(studentId || "").trim();
+    const sid = input.replace(/\s+/g, "");
+    if (!sid) return res.status(400).json({ message: "Student ID is required" });
+
+    const exam = await Exam.findById(examId);
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+
+    // resolve optional user (for ObjectId deletion)
+    const { user: studentUser, studentNumber } = await resolveStudentUser(sid);
+    const userIdStr = studentUser?._id ? String(studentUser._id) : null;
+    const numberKey = String(studentNumber || sid);
+
+    const before = (exam.attendance || []).length;
+
+    const removed = (exam.attendance || []).find((a) => {
+      if (userIdStr && String(a.studentId) === userIdStr) return true;
+      if (String(a.studentNumber || "") === numberKey) return true;
+      return false;
+    });
+
+    exam.attendance = (exam.attendance || []).filter((a) => {
+      if (userIdStr && String(a.studentId) === userIdStr) return false;
+      if (String(a.studentNumber || "") === numberKey) return false;
+      return true;
+    });
+
+    if (exam.attendance.length === before) {
+      return res.status(404).json({ message: "Student not found in this exam" });
+    }
+
+    const now = new Date();
+    const actor = actorFromReq(req);
+
+    ensureReport(exam);
+
+    // remove report file (key is ObjectId string if we have it)
+    const reportKey = userIdStr || (removed ? String(removed.studentId) : null);
+    if (reportKey && exam.report?.studentFiles?.delete) {
+      exam.report.studentFiles.delete(String(reportKey));
+    }
+
+    pushExamTimeline(exam, {
+      kind: "STUDENT_DELETED",
+      at: now,
+      roomId: removed?.classroom || removed?.roomId || null,
+      actor,
+      student: removed
+        ? studentSnapshot(removed)
+        : { id: reportKey || null, name: "", code: numberKey, classroom: "", seat: "" },
+      details: {},
+    });
+
+    recalcSummary(exam);
+
+    exam.markModified("attendance");
+    exam.markModified("report");
+    await exam.save();
+
+    wsBroadcast({
+      type: "EXAM_UPDATED",
+      examId: String(exam._id),
+      at: new Date().toISOString(),
+      reason: "student_deleted",
+    });
+
+    return res.json({ ok: true, message: "Student deleted.", studentNumber: numberKey });
+  } catch (e) {
+    return res.status(500).json({ message: e.message || "Failed to delete student" });
+  }
+}
+
 /* ---- START / END EXAM ---- */
 export async function startExam(req, res) {
   try {
     const { examId } = req.params;
 
-    // supports: ?force=1  OR body { force:true }
     const force = String(req.query.force || "") === "1" || Boolean(req.body?.force);
 
     const exam = await Exam.findById(examId);
@@ -713,7 +943,6 @@ export async function startExam(req, res) {
     const now = new Date();
     const actor = actorFromReq(req);
 
-    // ✅ Normal start: ONLY within the real time window
     if (!force) {
       const ws = examWindowState(exam);
       if (!ws.ok) return res.status(400).json({ message: "Invalid exam time window" });
@@ -745,7 +974,6 @@ export async function startExam(req, res) {
       exam.markModified("report");
       await exam.save();
 
-      // ✅ WS notify
       wsBroadcast({
         type: "EXAM_STARTED",
         examId: String(exam._id),
@@ -755,7 +983,6 @@ export async function startExam(req, res) {
       return res.json({ ok: true, exam: toOut(exam) });
     }
 
-    // ✅ Force start (demo): reset schedule to now + 3 hours
     const threeHoursMs = 3 * 60 * 60 * 1000;
 
     exam.startAt = now;
@@ -782,7 +1009,6 @@ export async function startExam(req, res) {
     exam.markModified("report");
     await exam.save();
 
-    // ✅ WS notify
     wsBroadcast({
       type: "EXAM_STARTED",
       examId: String(exam._id),
@@ -833,7 +1059,6 @@ export async function endExam(req, res) {
     exam.markModified("report");
     await exam.save();
 
-    // ✅ WS notify
     wsBroadcast({
       type: "EXAM_ENDED",
       examId: String(exam._id),
@@ -862,14 +1087,12 @@ export async function createExam(req, res) {
     const endAt = new Date(body.endAt || 0);
 
     if (!courseName) return res.status(400).json({ message: "Course name is required." });
-    if (Number.isNaN(startAt.getTime()))
-      return res.status(400).json({ message: "Invalid startAt." });
+    if (Number.isNaN(startAt.getTime())) return res.status(400).json({ message: "Invalid startAt." });
     if (Number.isNaN(endAt.getTime())) return res.status(400).json({ message: "Invalid endAt." });
     if (endAt.getTime() <= startAt.getTime()) {
       return res.status(400).json({ message: "End time must be after Start time." });
     }
 
-    // classrooms normalization
     const classrooms = Array.isArray(body.classrooms) ? body.classrooms : [];
     const cleanRooms = classrooms
       .map((r) => ({
@@ -882,22 +1105,18 @@ export async function createExam(req, res) {
       }))
       .filter((r) => r.id);
 
-    // lecturer + supervisors
-    const lecturerId = body.lecturerId ? String(body.lecturerId) : null;
+    const lecturerId = body.lecturerId ? String(body.lecturerId) : "";
+    if (!lecturerId) return res.status(400).json({ message: "lecturerId is required" });
 
-    // ✅ Build objects with NAMES (save real names to DB)
-    let lecturerObj = undefined;
-    if (lecturerId) {
-      try {
-        lecturerObj = await buildLecturerObject(lecturerId);
-      } catch (err) {
-        return res.status(400).json({ message: err.message || "Invalid lecturerId" });
-      }
+    let lecturerObj;
+    try {
+      lecturerObj = await buildLecturerObject(lecturerId);
+    } catch (err) {
+      return res.status(400).json({ message: err.message || "Invalid lecturerId" });
     }
 
     const supervisorsObj = await buildSupervisorsFromClassrooms(cleanRooms);
 
-    // ✅ Optional: coLecturers (if modal sends coLecturers from draft)
     let coLecturersObj = [];
     if (Array.isArray(body.coLecturers)) {
       const ids = body.coLecturers.map((x) => String(x?.id || x)).filter(Boolean);
@@ -924,14 +1143,13 @@ export async function createExam(req, res) {
       endAt,
       status: "scheduled",
 
-      // ✅ Save names to DB
       lecturer: lecturerObj,
       coLecturers: coLecturersObj,
 
       supervisors: supervisorsObj,
       classrooms: cleanRooms,
 
-      attendance: [], // demo: can be generated later
+      attendance: [],
       events: [],
       messages: [],
       note: "",

@@ -5,277 +5,223 @@ import {
   deleteStudentFromExam,
 } from "../../services/dashboard.ADD.DELETE.Students.service.js";
 
-export default function DashboardAddDeleteStudentsCard({ rooms = [], onChanged }) {
-  const [tab, setTab] = useState("add"); // "add" | "delete"
-
-  // ---- Add form state ----
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [studentId, setStudentId] = useState("");
-  const [roomId, setRoomId] = useState("");
-
-  // ---- Delete form state ----
-  const [deleteStudentId, setDeleteStudentId] = useState("");
-
-  // ---- UX state ----
-  const [loading, setLoading] = useState(false);
-  const [okMsg, setOkMsg] = useState("");
-  const [errMsg, setErrMsg] = useState("");
-
+export default function DashboardAddDeleteStudentsCard({
+  examId = null,
+  currentRoomId = "",
+  rooms = [],
+  onChanged,
+}) {
   const roomOptions = useMemo(() => {
     return (rooms || [])
       .map((r) => ({
         id: String(r?.id || r?.roomId || r?.name || "").trim(),
         label: String(r?.name || r?.id || r?.roomId || "").trim(),
-        capacity: r?.capacity,
       }))
-      .filter((x) => x.id && x.label);
+      .filter((x) => x.id);
   }, [rooms]);
 
-  const clearMsgs = () => {
-    setOkMsg("");
-    setErrMsg("");
-  };
+  const initialRoom = useMemo(() => {
+    const rid = String(currentRoomId || "").trim();
+    if (rid) return rid;
+    return roomOptions[0]?.id || "";
+  }, [currentRoomId, roomOptions]);
 
-  const normalizeId = (v) => String(v || "").trim();
+  // -------- Add form state --------
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [studentIdAdd, setStudentIdAdd] = useState("");
+  const [roomId, setRoomId] = useState(initialRoom);
 
-  async function handleAdd(e) {
-    e.preventDefault();
-    clearMsgs();
+  // -------- Delete form state --------
+  const [studentIdDel, setStudentIdDel] = useState("");
 
-    const payload = {
-      firstName: String(firstName || "").trim(),
-      lastName: String(lastName || "").trim(),
-      studentId: normalizeId(studentId),
-      roomId: normalizeId(roomId),
-    };
+  // -------- UI state --------
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState({ type: "", text: "" });
 
-    if (!payload.firstName || !payload.lastName || !payload.studentId || !payload.roomId) {
-      setErrMsg("Please fill all fields.");
-      return;
-    }
+  function setError(text) {
+    setMsg({ type: "error", text: String(text || "Something went wrong") });
+  }
+  function setSuccess(text) {
+    setMsg({ type: "success", text: String(text || "Done") });
+  }
 
+  async function onAdd() {
     try {
-      setLoading(true);
-      const res = await addStudentToExam(payload);
-      setOkMsg(res?.message || "Student added successfully.");
-      // reset add form
+      setBusy(true);
+      setMsg({ type: "", text: "" });
+
+      const res = await addStudentToExam({
+        examId,
+        firstName,
+        lastName,
+        studentId: studentIdAdd,
+        roomId,
+      });
+
+      setSuccess(
+        `Added: ${res?.student?.fullName || "Student"} (${res?.student?.studentId || studentIdAdd}) • Room ${
+          res?.student?.roomId || roomId
+        } • Seat ${res?.student?.seat || "?"}`
+      );
+
+      // reset fields (keep room)
       setFirstName("");
       setLastName("");
-      setStudentId("");
-      setRoomId("");
+      setStudentIdAdd("");
 
-      // let parent refresh dashboard snapshot
       if (typeof onChanged === "function") onChanged();
-    } catch (err) {
-      setErrMsg(err?.message || "Failed to add student.");
+    } catch (e) {
+      setError(e?.message);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
-  async function handleDelete(e) {
-    e.preventDefault();
-    clearMsgs();
-
-    const sid = normalizeId(deleteStudentId);
-    if (!sid) {
-      setErrMsg("Please enter Student ID.");
-      return;
-    }
-
+  async function onDelete() {
     try {
-      setLoading(true);
-      const res = await deleteStudentFromExam({ studentId: sid });
-      setOkMsg(res?.message || "Student deleted successfully.");
-      setDeleteStudentId("");
+      setBusy(true);
+      setMsg({ type: "", text: "" });
+
+      const res = await deleteStudentFromExam({
+        examId,
+        studentId: studentIdDel,
+      });
+
+      setSuccess(
+        `Deleted: ${res?.removed?.name || ""} (${res?.removed?.studentId || studentIdDel}) from ${
+          res?.removed?.roomId || ""
+        }`
+      );
+
+      setStudentIdDel("");
 
       if (typeof onChanged === "function") onChanged();
-    } catch (err) {
-      setErrMsg(err?.message || "Failed to delete student.");
+    } catch (e) {
+      setError(e?.message);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-lg font-extrabold text-slate-900">Students Control</div>
-          <div className="text-sm text-slate-600 mt-0.5">
-            Admin/Lecturer can add / delete students for the running exam
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-lg font-extrabold text-slate-900">Manage Students</div>
+          <div className="text-sm text-slate-600">
+            Add a new demo student to a room, or delete by Student ID.
           </div>
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="mt-4 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setTab("add");
-            clearMsgs();
-          }}
-          className={[
-            "px-4 py-2 rounded-2xl text-sm font-extrabold border",
-            tab === "add"
-              ? "bg-slate-900 text-white border-slate-900"
-              : "bg-white text-slate-800 border-slate-200 hover:bg-slate-50",
-          ].join(" ")}
-        >
-          Add Student
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setTab("delete");
-            clearMsgs();
-          }}
-          className={[
-            "px-4 py-2 rounded-2xl text-sm font-extrabold border",
-            tab === "delete"
-              ? "bg-slate-900 text-white border-slate-900"
-              : "bg-white text-slate-800 border-slate-200 hover:bg-slate-50",
-          ].join(" ")}
-        >
-          Delete Student
-        </button>
-      </div>
-
-      {/* Messages */}
-      {(okMsg || errMsg) && (
-        <div className="mt-4">
-          {okMsg ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-800 text-sm font-semibold">
-              {okMsg}
-            </div>
-          ) : null}
-          {errMsg ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-red-800 text-sm font-semibold mt-2">
-              {errMsg}
-            </div>
-          ) : null}
+        <div className="text-xs text-slate-500 font-semibold">
+          Exam: <span className="font-mono">{examId || "running"}</span>
         </div>
-      )}
+      </div>
 
-      {/* Content */}
-      <div className="mt-4">
-        {tab === "add" ? (
-          <form onSubmit={handleAdd} className="grid grid-cols-12 gap-3">
-            <div className="col-span-12 md:col-span-6">
-              <label className="text-xs font-bold text-slate-700">First Name</label>
+      {msg.text ? (
+        <div
+          className={`mt-4 rounded-2xl border p-3 text-sm font-bold ${
+            msg.type === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {msg.text}
+        </div>
+      ) : null}
+
+      <div className="mt-5 grid grid-cols-12 gap-4">
+        {/* -------- Add -------- */}
+        <div className="col-span-12 lg:col-span-7 rounded-3xl border border-slate-200 p-4">
+          <div className="font-extrabold text-slate-900">Add Student</div>
+
+          <div className="mt-3 grid grid-cols-12 gap-3">
+            <div className="col-span-12 md:col-span-4">
+              <label className="text-xs font-extrabold text-slate-600">First name</label>
               <input
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
-                placeholder="e.g., Olivia"
-                disabled={loading}
+                className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Olivia"
               />
             </div>
 
-            <div className="col-span-12 md:col-span-6">
-              <label className="text-xs font-bold text-slate-700">Last Name</label>
+            <div className="col-span-12 md:col-span-4">
+              <label className="text-xs font-extrabold text-slate-600">Last name</label>
               <input
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
-                placeholder="e.g., Martin"
-                disabled={loading}
+                className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Martin"
               />
             </div>
 
-            <div className="col-span-12 md:col-span-6">
-              <label className="text-xs font-bold text-slate-700">Student ID</label>
+            <div className="col-span-12 md:col-span-4">
+              <label className="text-xs font-extrabold text-slate-600">Student ID</label>
               <input
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
-                placeholder="e.g., 322001234"
-                disabled={loading}
+                value={studentIdAdd}
+                onChange={(e) => setStudentIdAdd(e.target.value)}
+                className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
+                placeholder="209999999"
               />
             </div>
 
             <div className="col-span-12 md:col-span-6">
-              <label className="text-xs font-bold text-slate-700">Room</label>
+              <label className="text-xs font-extrabold text-slate-600">Room</label>
               <select
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
-                disabled={loading}
+                className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm bg-white"
               >
-                <option value="">Select room...</option>
-                {roomOptions.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.label}
-                    {Number.isFinite(r.capacity) ? ` (cap: ${r.capacity})` : ""}
-                  </option>
-                ))}
+                {roomOptions.length ? (
+                  roomOptions.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.label}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No rooms</option>
+                )}
               </select>
             </div>
 
-            <div className="col-span-12 flex items-center justify-end gap-2 pt-1">
+            <div className="col-span-12 md:col-span-6 flex items-end">
               <button
-                type="button"
-                onClick={() => {
-                  setFirstName("");
-                  setLastName("");
-                  setStudentId("");
-                  setRoomId("");
-                  clearMsgs();
-                }}
-                className="px-4 py-2 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-extrabold"
-                disabled={loading}
+                disabled={busy}
+                onClick={onAdd}
+                className="w-full rounded-2xl bg-slate-900 text-white px-4 py-2 text-sm font-extrabold hover:bg-slate-800 disabled:opacity-60"
               >
-                Clear
-              </button>
-
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-2xl bg-slate-900 text-white hover:bg-black text-sm font-extrabold disabled:opacity-60"
-                disabled={loading}
-              >
-                {loading ? "Adding..." : "Add Student"}
+                {busy ? "Working..." : "Add Student"}
               </button>
             </div>
-          </form>
-        ) : (
-          <form onSubmit={handleDelete} className="grid grid-cols-12 gap-3">
-            <div className="col-span-12 md:col-span-8">
-              <label className="text-xs font-bold text-slate-700">Student ID</label>
-              <input
-                value={deleteStudentId}
-                onChange={(e) => setDeleteStudentId(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
-                placeholder="e.g., 322001234"
-                disabled={loading}
-              />
-            </div>
+          </div>
+        </div>
 
-            <div className="col-span-12 md:col-span-4 flex items-end justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setDeleteStudentId("");
-                  clearMsgs();
-                }}
-                className="px-4 py-2 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-extrabold"
-                disabled={loading}
-              >
-                Clear
-              </button>
+        {/* -------- Delete -------- */}
+        <div className="col-span-12 lg:col-span-5 rounded-3xl border border-slate-200 p-4">
+          <div className="font-extrabold text-slate-900">Delete Student</div>
+          <div className="mt-3">
+            <label className="text-xs font-extrabold text-slate-600">Student ID</label>
+            <input
+              value={studentIdDel}
+              onChange={(e) => setStudentIdDel(e.target.value)}
+              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
+              placeholder="209999999"
+            />
+          </div>
 
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-2xl bg-red-600 text-white hover:bg-red-700 text-sm font-extrabold disabled:opacity-60"
-                disabled={loading}
-              >
-                {loading ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </form>
-        )}
+          <button
+            disabled={busy}
+            onClick={onDelete}
+            className="mt-3 w-full rounded-2xl border border-red-200 bg-red-50 text-red-700 px-4 py-2 text-sm font-extrabold hover:bg-red-100 disabled:opacity-60"
+          >
+            {busy ? "Working..." : "Delete Student"}
+          </button>
+
+          <div className="mt-2 text-xs text-slate-500">
+            * Deletes from exam attendance + removes student user (server logic).
+          </div>
+        </div>
       </div>
     </div>
   );
