@@ -39,6 +39,31 @@ export default function DashboardPage() {
   const meRole = String(me?.role || "").toLowerCase();
   const isLecturer = meRole === "lecturer" || meRole === "admin";
 
+  const selectedRoomId = useMemo(() => {
+  return String(roomId || activeRoomId || "").trim();
+}, [roomId, activeRoomId]);
+
+const transfersForRoom = useMemo(() => {
+  const rid = selectedRoomId;
+  if (!rid) return transfers || [];
+  return (transfers || []).filter(
+    (t) => String(t?.fromClassroom || "").trim() === rid || String(t?.toClassroom || "").trim() === rid
+  );
+}, [transfers, selectedRoomId]);
+
+const eventsForRoom = useMemo(() => {
+  const rid = selectedRoomId;
+  if (!rid) return events || [];
+  return (events || []).filter((e) => String(e?.classroom || e?.roomId || "").trim() === rid);
+}, [events, selectedRoomId]);
+
+const alertsForRoom = useMemo(() => {
+  const rid = selectedRoomId;
+  if (!rid) return alerts || [];
+  return (alerts || []).filter((a) => String(a?.roomId || a?.classroom || "").trim() === rid);
+}, [alerts, selectedRoomId]);
+
+
   const activeRoomId = useMemo(() => {
     return String(activeRoom?.id || activeRoom?.name || "").trim();
   }, [activeRoom]);
@@ -191,7 +216,7 @@ export default function DashboardPage() {
             me={me}
             refreshNow={refetch}
             nowMs={simNowMs || Date.now()}
-            forcedRoomId={activeRoomId}
+            forcedRoomId={selectedRoomId}
             forcedAttendance={attendance}
             forcedTransfers={transfers}
             allRooms={rooms}
@@ -203,7 +228,7 @@ export default function DashboardPage() {
           <div className="col-span-12 lg:col-span-6">
             <TransfersPanel
               me={me}
-              items={transfers}
+              items={transfersForRoom}
               loading={false}
               error={""}
               onChanged={refetch}
@@ -212,10 +237,10 @@ export default function DashboardPage() {
 
           <div className="col-span-12 lg:col-span-6">
             <EventsFeed
-              events={events}
-              alerts={alerts}
+              events={eventsForRoom}
+              alerts={alertsForRoom}
               simNowMs={simNowMs}
-              activeRoomId={activeRoomId}
+              activeRoomId={selectedRoomId}
               maxItems={14}
             />
           </div>

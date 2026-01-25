@@ -171,7 +171,7 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
       .filter((r) => r.id);
 
     const firstRoomId = normalizeRoomId(rooms?.[0]?.id || rooms?.[0]?.name || "");
-    const requestedRoomId = normalizeRoomId(roomIdRef.current);
+    const requestedRoomId = normalizeRoomId(roomId);
 
     const effectiveRoomId =
       requestedRoomId || normalizeRoomId(me?.assignedRoomId) || firstRoomId || "";
@@ -194,7 +194,7 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
       inbox: raw?.inbox || { unread: 0, recent: [] },
       events: raw?.events || [],
     };
-  }, [raw]);
+    }, [raw, roomId]);
 
   // ✅ manual refetch (instant + reset backoff)
   const refetch = useCallback(async () => {
