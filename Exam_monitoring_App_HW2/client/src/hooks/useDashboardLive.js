@@ -37,6 +37,9 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
   const backoffRef = useRef(1); // 1x, 2x, 4x...
   const MAX_BACKOFF = 6; // up to 6x
 
+  // we keep a stable "tick" ref so scheduleNext can call it
+  const tickRef = useRef(null);
+
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -52,8 +55,14 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
   const scheduleNext = useCallback(
     (multiplier = 1) => {
       clearTimer();
-      const base = Number(pollMsRef.current) || 6000;
+
+      const base = Number(pollMsRef.current);
+
+      // ✅ Polling disabled if pollMs <= 0 (or invalid)
+      if (!Number.isFinite(base) || base <= 0) return;
+
       const wait = clamp(base * multiplier, 1500, 60000);
+
       timerRef.current = setTimeout(() => {
         tickRef.current?.();
       }, wait);
@@ -61,43 +70,43 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
     [clearTimer]
   );
 
-  const fetchOnce = useCallback(async (opts = { force: false }) => {
-    if (!aliveRef.current) return;
-    if (shouldPause() && !opts.force) return;
-    if (inFlightRef.current) return;
-
-    inFlightRef.current = true;
-    const myReqId = ++reqIdRef.current;
-
-    try {
-      setError("");
-
-      const snap = await getDashboardSnapshot(); // server decides visibility by role
-
+  const fetchOnce = useCallback(
+    async (opts = { force: false }) => {
       if (!aliveRef.current) return;
-      if (myReqId !== reqIdRef.current) return;
+      if (shouldPause() && !opts.force) return;
+      if (inFlightRef.current) return;
 
-      setRaw(snap);
-      setLoading(false);
+      inFlightRef.current = true;
+      const myReqId = ++reqIdRef.current;
 
-      // ✅ success => reset backoff
-      backoffRef.current = 1;
-    } catch (e) {
-      if (!aliveRef.current) return;
-      if (myReqId !== reqIdRef.current) return;
+      try {
+        setError("");
 
-      setError(e?.message || "Failed to load dashboard");
-      setLoading(false);
+        const snap = await getDashboardSnapshot(); // server decides visibility by role
 
-      // ✅ error => increase backoff (up to MAX_BACKOFF)
-      backoffRef.current = clamp(backoffRef.current * 2, 1, MAX_BACKOFF);
-    } finally {
-      inFlightRef.current = false;
-    }
-  }, [shouldPause]);
+        if (!aliveRef.current) return;
+        if (myReqId !== reqIdRef.current) return;
 
-  // we keep a stable "tick" ref so scheduleNext can call it
-  const tickRef = useRef(null);
+        setRaw(snap);
+        setLoading(false);
+
+        // ✅ success => reset backoff
+        backoffRef.current = 1;
+      } catch (e) {
+        if (!aliveRef.current) return;
+        if (myReqId !== reqIdRef.current) return;
+
+        setError(e?.message || "Failed to load dashboard");
+        setLoading(false);
+
+        // ✅ error => increase backoff (up to MAX_BACKOFF)
+        backoffRef.current = clamp(backoffRef.current * 2, 1, MAX_BACKOFF);
+      } finally {
+        inFlightRef.current = false;
+      }
+    },
+    [shouldPause]
+  );
 
   useEffect(() => {
     aliveRef.current = true;
@@ -118,13 +127,13 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
       await fetchOnce();
       if (cancelled || !aliveRef.current) return;
 
-      // schedule using current backoff
+      // schedule using current backoff (may do nothing if pollMs <= 0)
       scheduleNext(backoffRef.current);
     };
 
     tickRef.current = tick;
 
-    // start immediately
+    // start immediately (one initial snapshot)
     tick();
 
     // also: when tab becomes visible, fetch immediately
@@ -165,10 +174,7 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
     const requestedRoomId = normalizeRoomId(roomIdRef.current);
 
     const effectiveRoomId =
-      requestedRoomId ||
-      normalizeRoomId(me?.assignedRoomId) ||
-      firstRoomId ||
-      "";
+      requestedRoomId || normalizeRoomId(me?.assignedRoomId) || firstRoomId || "";
 
     const activeRoom = effectiveRoomId
       ? rooms.find((r) => normalizeRoomId(r.id) === normalizeRoomId(effectiveRoomId)) || null
