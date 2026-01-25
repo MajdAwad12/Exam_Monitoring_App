@@ -91,41 +91,51 @@ function getRoomCapacity(classroom) {
   return 0; // unknown -> treat as "no capacity info"
 }
 
+/** ✅ normalize seat ids so R1C1 == R1-C1 */
+function normalizeSeat(v) {
+  return String(v || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/-/g, ""); // R1-C1 -> R1C1
+}
+
 function buildSeatCandidates(classroom) {
   // 1) explicit seats array
   if (Array.isArray(classroom?.seats) && classroom.seats.length) {
     return classroom.seats.map((s) => String(s));
   }
 
-  // 2) rows/cols -> create seat ids: R1C1...
+  // 2) rows/cols -> create seat ids: R1-C1 (✅ consistent with the rest of system)
   const rows = Number(classroom?.rows);
   const cols = Number(classroom?.cols);
   if (Number.isFinite(rows) && Number.isFinite(cols) && rows > 0 && cols > 0) {
     const seats = [];
     for (let r = 1; r <= rows; r++) {
-      for (let c = 1; c <= cols; c++) seats.push(`R${r}C${c}`);
+      for (let c = 1; c <= cols; c++) seats.push(`R${r}-C${c}`);
     }
     return seats;
   }
 
-  // 3) fallback generic seats (will still allow "capacity check" if capacity exists)
+  // 3) no candidates => we treat as "no seat map"
   return [];
 }
 
 function firstFreeSeat({ classroom, attendanceInRoom }) {
   const used = new Set(
     (attendanceInRoom || [])
-      .map((a) => String(a?.seat || "").trim())
+      .map((a) => normalizeSeat(a?.seat))
       .filter(Boolean)
   );
+
   const candidates = buildSeatCandidates(classroom);
+
   for (const s of candidates) {
-    if (!used.has(s)) return s;
+    if (!used.has(normalizeSeat(s))) return s;
   }
 
-  // fallback seat label if we don't have candidates
-  const n = (attendanceInRoom || []).length + 1;
-  return `S${n}`;
+  // ✅ IMPORTANT: no fallback "S{n}" to avoid collisions/overwrites
+  return "";
 }
 
 async function makeUniqueUsername(base) {
@@ -310,7 +320,8 @@ export async function getDashboardSnapshot(req, res) {
       .filter((m) => isRecipient(m, user) || String(m.from?.id) === String(user._id))
       .slice(-30);
 
-    const unread = msgItems.filter((m) => !(m.readBy || []).map(String).includes(String(user._id))).length;
+    const unread = msgItems.filter((m) => !(m.readBy || []).map(String).includes(String(user._id)))
+      .length;
     const recentMessages = msgItems.slice(-10).reverse();
 
     for (const m of msgItems.slice(-20)) {
@@ -548,7 +559,7 @@ export async function addStudentToRunningExam(req, res) {
     const attendanceInRoom = attendance.filter((a) => attRoom(a) === normalizeRoomId(roomId));
     const cap = getRoomCapacity(classroom);
 
-    // if cap is unknown (0) -> do not block
+    // if cap is unknown (0) -> do not block by count, but seat-map may still block later
     if (cap > 0 && attendanceInRoom.length >= cap) {
       return res.status(409).json({
         message: "ROOM_FULL",
@@ -578,6 +589,16 @@ export async function addStudentToRunningExam(req, res) {
     });
 
     const seat = firstFreeSeat({ classroom, attendanceInRoom });
+
+    // ✅ if no free seat (or no seat map) -> treat as ROOM_FULL and rollback created user
+    if (!seat) {
+      await User.deleteOne({ _id: createdUser._id });
+      return res.status(409).json({
+        message: "ROOM_FULL",
+        roomId,
+        note: "No free seats available (seat map missing or full)",
+      });
+    }
 
     // ensure report maps exist
     if (!exam.report) exam.report = {};

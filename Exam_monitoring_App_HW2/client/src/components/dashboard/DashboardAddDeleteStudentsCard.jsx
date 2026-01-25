@@ -1,9 +1,13 @@
 // client/src/components/dashboard/DashboardAddDeleteStudentsCard.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addStudentToExam,
   deleteStudentFromExam,
 } from "../../services/dashboard.ADD.DELETE.Students.service.js";
+
+function normalizeRoomId(v) {
+  return String(v ?? "").trim();
+}
 
 export default function DashboardAddDeleteStudentsCard({
   examId = null,
@@ -21,7 +25,7 @@ export default function DashboardAddDeleteStudentsCard({
   }, [rooms]);
 
   const initialRoom = useMemo(() => {
-    const rid = String(currentRoomId || "").trim();
+    const rid = normalizeRoomId(currentRoomId);
     if (rid) return rid;
     return roomOptions[0]?.id || "";
   }, [currentRoomId, roomOptions]);
@@ -32,24 +36,55 @@ export default function DashboardAddDeleteStudentsCard({
   const [studentIdAdd, setStudentIdAdd] = useState("");
   const [roomId, setRoomId] = useState(initialRoom);
 
+  // keep roomId synced if rooms/currentRoomId change
+  useEffect(() => {
+    if (!roomId && initialRoom) setRoomId(initialRoom);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialRoom]);
+
   // -------- Delete form state --------
   const [studentIdDel, setStudentIdDel] = useState("");
 
-  // -------- UI state --------
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState({ type: "", text: "" });
+  // -------- UI state (separate per tab) --------
+  const [addBusy, setAddBusy] = useState(false);
+  const [delBusy, setDelBusy] = useState(false);
 
-  function setError(text) {
-    setMsg({ type: "error", text: String(text || "Something went wrong") });
+  const [addMsg, setAddMsg] = useState({ type: "", text: "" });
+  const [delMsg, setDelMsg] = useState({ type: "", text: "" });
+
+  const addTimerRef = useRef(null);
+  const delTimerRef = useRef(null);
+
+  // auto-dismiss helper (per tab)
+  function showAddMsg(type, text) {
+    if (addTimerRef.current) clearTimeout(addTimerRef.current);
+    setAddMsg({ type, text: String(text || "") });
+    addTimerRef.current = setTimeout(() => {
+      setAddMsg({ type: "", text: "" });
+      addTimerRef.current = null;
+    }, 1600);
   }
-  function setSuccess(text) {
-    setMsg({ type: "success", text: String(text || "Done") });
+
+  function showDelMsg(type, text) {
+    if (delTimerRef.current) clearTimeout(delTimerRef.current);
+    setDelMsg({ type, text: String(text || "") });
+    delTimerRef.current = setTimeout(() => {
+      setDelMsg({ type: "", text: "" });
+      delTimerRef.current = null;
+    }, 1600);
   }
+
+  useEffect(() => {
+    return () => {
+      if (addTimerRef.current) clearTimeout(addTimerRef.current);
+      if (delTimerRef.current) clearTimeout(delTimerRef.current);
+    };
+  }, []);
 
   async function onAdd() {
     try {
-      setBusy(true);
-      setMsg({ type: "", text: "" });
+      setAddBusy(true);
+      setAddMsg({ type: "", text: "" });
 
       const res = await addStudentToExam({
         examId,
@@ -59,10 +94,11 @@ export default function DashboardAddDeleteStudentsCard({
         roomId,
       });
 
-      setSuccess(
-        `Added: ${res?.student?.fullName || "Student"} (${res?.student?.studentId || studentIdAdd}) • Room ${
-          res?.student?.roomId || roomId
-        } • Seat ${res?.student?.seat || "?"}`
+      showAddMsg(
+        "success",
+        `Added: ${res?.student?.fullName || "Student"} (${
+          res?.student?.studentId || studentIdAdd
+        }) • Room ${res?.student?.roomId || roomId} • Seat ${res?.student?.seat || "?"}`
       );
 
       // reset fields (keep room)
@@ -72,23 +108,24 @@ export default function DashboardAddDeleteStudentsCard({
 
       if (typeof onChanged === "function") onChanged();
     } catch (e) {
-      setError(e?.message);
+      showAddMsg("error", e?.message || "Something went wrong");
     } finally {
-      setBusy(false);
+      setAddBusy(false);
     }
   }
 
   async function onDelete() {
     try {
-      setBusy(true);
-      setMsg({ type: "", text: "" });
+      setDelBusy(true);
+      setDelMsg({ type: "", text: "" });
 
       const res = await deleteStudentFromExam({
         examId,
         studentId: studentIdDel,
       });
 
-      setSuccess(
+      showDelMsg(
+        "success",
         `Deleted: ${res?.removed?.name || ""} (${res?.removed?.studentId || studentIdDel}) from ${
           res?.removed?.roomId || ""
         }`
@@ -98,11 +135,27 @@ export default function DashboardAddDeleteStudentsCard({
 
       if (typeof onChanged === "function") onChanged();
     } catch (e) {
-      setError(e?.message);
+      showDelMsg("error", e?.message || "Something went wrong");
     } finally {
-      setBusy(false);
+      setDelBusy(false);
     }
   }
+
+  const MsgBox = ({ msg }) => {
+    if (!msg?.text) return null;
+    const ok = msg.type === "success";
+    return (
+      <div
+        className={`mt-3 rounded-2xl border p-3 text-sm font-bold ${
+          ok
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-red-200 bg-red-50 text-red-700"
+        }`}
+      >
+        {msg.text}
+      </div>
+    );
+  };
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -118,22 +171,12 @@ export default function DashboardAddDeleteStudentsCard({
         </div>
       </div>
 
-      {msg.text ? (
-        <div
-          className={`mt-4 rounded-2xl border p-3 text-sm font-bold ${
-            msg.type === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-              : "border-red-200 bg-red-50 text-red-700"
-          }`}
-        >
-          {msg.text}
-        </div>
-      ) : null}
-
       <div className="mt-5 grid grid-cols-12 gap-4">
         {/* -------- Add -------- */}
         <div className="col-span-12 lg:col-span-7 rounded-3xl border border-slate-200 p-4">
           <div className="font-extrabold text-slate-900">Add Student</div>
+
+          <MsgBox msg={addMsg} />
 
           <div className="mt-3 grid grid-cols-12 gap-3">
             <div className="col-span-12 md:col-span-4">
@@ -187,11 +230,11 @@ export default function DashboardAddDeleteStudentsCard({
 
             <div className="col-span-12 md:col-span-6 flex items-end">
               <button
-                disabled={busy}
+                disabled={addBusy}
                 onClick={onAdd}
                 className="w-full rounded-2xl bg-slate-900 text-white px-4 py-2 text-sm font-extrabold hover:bg-slate-800 disabled:opacity-60"
               >
-                {busy ? "Working..." : "Add Student"}
+                {addBusy ? "Working..." : "Add Student"}
               </button>
             </div>
           </div>
@@ -200,6 +243,9 @@ export default function DashboardAddDeleteStudentsCard({
         {/* -------- Delete -------- */}
         <div className="col-span-12 lg:col-span-5 rounded-3xl border border-slate-200 p-4">
           <div className="font-extrabold text-slate-900">Delete Student</div>
+
+          <MsgBox msg={delMsg} />
+
           <div className="mt-3">
             <label className="text-xs font-extrabold text-slate-600">Student ID</label>
             <input
@@ -211,11 +257,11 @@ export default function DashboardAddDeleteStudentsCard({
           </div>
 
           <button
-            disabled={busy}
+            disabled={delBusy}
             onClick={onDelete}
             className="mt-3 w-full rounded-2xl border border-red-200 bg-red-50 text-red-700 px-4 py-2 text-sm font-extrabold hover:bg-red-100 disabled:opacity-60"
           >
-            {busy ? "Working..." : "Delete Student"}
+            {delBusy ? "Working..." : "Delete Student"}
           </button>
 
           <div className="mt-2 text-xs text-slate-500">
