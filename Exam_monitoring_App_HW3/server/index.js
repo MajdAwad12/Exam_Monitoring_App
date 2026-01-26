@@ -52,6 +52,17 @@ expressApp.get("/health", (req, res) => {
 });
 expressApp.head("/health", (req, res) => res.sendStatus(200));
 
+
+
+expressApp.get("/api/health", (req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: "exam-monitoring-server",
+    ts: new Date().toISOString(),
+  });
+});
+expressApp.head("/api/health", (req, res) => res.sendStatus(200));
+
 /* =========================
    CORS
 ========================= */
