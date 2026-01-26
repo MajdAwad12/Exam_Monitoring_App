@@ -1,9 +1,14 @@
-//
 // client/src/services/auth.service.js
+//
+// ✅ Production-safe for Vercel + Render:
+// Always call same-origin "/api/..." so Vercel rewrites/proxy handles it.
+// This avoids iPad/Safari cross-site cookie/session issues.
+//
+// IMPORTANT:
+// - Keep `credentials: "include"` for session cookies.
+// - Do NOT use VITE_API_BASE in production for this project.
 
-// ✅ If VITE_API_BASE is not defined (Render same-domain),
-// this falls back to "" → requests go to /api/...
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const API_BASE = "/api";
 
 async function handle(res) {
   let data = {};
@@ -22,7 +27,7 @@ async function handle(res) {
 }
 
 export async function loginUser({ username, password }) {
-  const res = await fetch(`${API_BASE}/api/auth/login`, {
+  const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -32,7 +37,7 @@ export async function loginUser({ username, password }) {
 }
 
 export async function getMe() {
-  const res = await fetch(`${API_BASE}/api/auth/me`, {
+  const res = await fetch(`${API_BASE}/auth/me`, {
     method: "GET",
     credentials: "include",
   });
@@ -40,7 +45,7 @@ export async function getMe() {
 }
 
 export async function logout() {
-  const res = await fetch(`${API_BASE}/api/auth/logout`, {
+  const res = await fetch(`${API_BASE}/auth/logout`, {
     method: "POST",
     credentials: "include",
   });
@@ -48,7 +53,7 @@ export async function logout() {
 }
 
 export async function registerUser(payload) {
-  const res = await fetch(`${API_BASE}/api/auth/register`, {
+  const res = await fetch(`${API_BASE}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -64,13 +69,10 @@ export async function checkUsername(username) {
   const params = new URLSearchParams();
   params.set("username", u);
 
-  const res = await fetch(
-    `${API_BASE}/api/auth/check-username?${params.toString()}`,
-    {
-      method: "GET",
-      credentials: "include",
-    }
-  );
+  const res = await fetch(`${API_BASE}/auth/check-username?${params.toString()}`, {
+    method: "GET",
+    credentials: "include",
+  });
 
   const data = await handle(res);
 
@@ -89,6 +91,7 @@ export async function isUsernameTaken(username) {
 }
 
 export async function isEmailTaken(_email) {
+  // not used in your project
   return false;
 }
 
@@ -97,13 +100,10 @@ export async function existsUser({ username, email }) {
   if (username) params.set("username", username);
   if (email) params.set("email", email);
 
-  const res = await fetch(
-    `${API_BASE}/api/auth/exists?${params.toString()}`,
-    {
-      method: "GET",
-      credentials: "include",
-    }
-  );
+  const res = await fetch(`${API_BASE}/auth/exists?${params.toString()}`, {
+    method: "GET",
+    credentials: "include",
+  });
 
   const data = await handle(res);
 
