@@ -1,17 +1,45 @@
-# dependencies
+# =====================
+# Dependencies
+# =====================
 node_modules/
-server/node_modules/
-client/node_modules/
+**/node_modules/
 
-# env files
+# =====================
+# Env files (secrets)
+# =====================
 .env
-server/.env
-client/.env
+**/.env
 
-# build outputs
+# =====================
+# Build outputs
+# =====================
 dist/
-server/dist/
-client/dist/
+**/dist/
+dist-ssr/
+**/dist-ssr/
 
-# system
+# =====================
+# Logs
+# =====================
+logs/
+**/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# =====================
+# Local / OS / Editor
+# =====================
+*.local
 .DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
