@@ -25,32 +25,32 @@ import studentRoutes from "./src/routes/student.routes.js";
 
 dotenv.config();
 
-const app = express();
+const expressApp = express();
 const isProd = process.env.NODE_ENV === "production";
 
 /* =========================
    Trust proxy (Render / HTTPS cookies)
 ========================= */
 if (isProd) {
-  app.set("trust proxy", 1);
+  expressApp.set("trust proxy", 1);
 }
 
 /* =========================
    Body parser
 ========================= */
-app.use(express.json());
+expressApp.use(express.json());
 
 // =========================
 // Health check
 // =========================
-app.get("/health", (req, res) => {
+expressApp.get("/health", (req, res) => {
   res.status(200).json({
     ok: true,
     service: "exam-monitoring-server",
     ts: new Date().toISOString(),
   });
 });
-app.head("/health", (req, res) => res.sendStatus(200));
+expressApp.head("/health", (req, res) => res.sendStatus(200));
 
 /* =========================
    CORS
@@ -63,7 +63,7 @@ const fromEnv = (process.env.CLIENT_ORIGIN || "")
 const DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"];
 const ALLOWED_ORIGINS = new Set([...fromEnv, ...DEV_ORIGINS]);
 
-app.use(
+expressApp.use(
   cors({
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
@@ -82,7 +82,7 @@ if (!process.env.MONGO_URI) {
   console.warn("⚠️ MONGO_URI is missing.");
 }
 
-app.use(
+expressApp.use(
   session({
     name: "sid",
     secret: process.env.SESSION_SECRET || "dev_secret",
@@ -105,16 +105,16 @@ app.use(
 /* =========================
    API Routes
 ========================= */
-app.use("/api/auth", authRoutes);
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/transfers", transferRoutes);
-app.use("/api/exams", examsRoutes);
-app.use("/api/messages", messagesRoutes);
-app.use("/api/incidents", incidentsRoutes);
-app.use("/api/admin", adminRoutes);
-app.use("/api/chat", chatRoutes);
-app.use("/api/reports", reportsRoutes);
-app.use("/api/student", studentRoutes);
+expressApp.use("/api/auth", authRoutes);
+expressApp.use("/api/dashboard", dashboardRoutes);
+expressApp.use("/api/transfers", transferRoutes);
+expressApp.use("/api/exams", examsRoutes);
+expressApp.use("/api/messages", messagesRoutes);
+expressApp.use("/api/incidents", incidentsRoutes);
+expressApp.use("/api/admin", adminRoutes);
+expressApp.use("/api/chat", chatRoutes);
+expressApp.use("/api/reports", reportsRoutes);
+expressApp.use("/api/student", studentRoutes);
 
 /* =========================
    Serve React build (OPTIONAL)
@@ -124,9 +124,9 @@ if (isProd && process.env.SERVE_CLIENT === "true") {
   const __dirname = path.dirname(__filename);
 
   const distPath = path.join(__dirname, "..", "client", "dist");
-  app.use(express.static(distPath));
+  expressApp.use(express.static(distPath));
 
-  app.get(/^\/(?!api\/|assets\/).*/, (req, res) => {
+  expressApp.get(/^\/(?!api\/|assets\/).*/, (req, res) => {
     res.sendFile(path.join(distPath, "index.html"));
   });
 }
@@ -140,36 +140,38 @@ async function start() {
     const port = process.env.PORT || 5000;
 
     // Create HTTP server
-    const server = http.createServer(app);
+    const httpServer = http.createServer(expressApp);
 
     // Attach WebSocket server
-    const wss = new WebSocketServer({ server, path: "/ws" });
-    globalThis.__wss = wss;
+    const wsServer = new WebSocketServer({ server: httpServer, path: "/ws" });
+    globalThis.__wss = wsServer;
 
-    wss.on("connection", (ws) => {
+    wsServer.on("connection", (socket) => {
       console.log("🔌 WebSocket client connected");
 
       // ✅ send welcome message (useful for testing)
-      ws.send(JSON.stringify({ type: "WELCOME", ts: new Date().toISOString() }));
+      socket.send(JSON.stringify({ type: "WELCOME", ts: new Date().toISOString() }));
 
       // ✅ keep-alive ping every 30s
       const interval = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.ping();
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.ping();
         }
       }, 30000);
 
-      ws.on("message", (data) => {
+      socket.on("message", (data) => {
         console.log("WS message:", data.toString());
       });
 
-      ws.on("close", () => {
+      socket.on("close", () => {
         clearInterval(interval);
         console.log("❌ WebSocket client disconnected");
       });
     });
 
-    server.listen(port, () => console.log("🚀 Server (HTTP + WS) running on", port));
+    httpServer.listen(port, () =>
+      console.log("🚀 Server (HTTP + WS) running on", port)
+    );
   } catch (e) {
     console.log("❌ Server failed:", e.message);
     process.exit(1);
