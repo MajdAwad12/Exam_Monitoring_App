@@ -1,5 +1,5 @@
 // client/src/services/student.service.js
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+
 
 async function handle(res) {
   let data = {};
@@ -16,7 +16,7 @@ async function handle(res) {
 }
 
 export async function listMyEndedExams() {
-  const res = await fetch(`${API_BASE}/api/student/exams`, {
+  const res = await fetch(`/api/student/exams`, {
     method: "GET",
     credentials: "include",
   });
@@ -24,9 +24,12 @@ export async function listMyEndedExams() {
 }
 
 export async function getMyExamReport(examId) {
-  const res = await fetch(`${API_BASE}/api/student/exams/${encodeURIComponent(examId)}/me`, {
-    method: "GET",
-    credentials: "include",
-  });
+  const res = await fetch(
+    `/api/student/exams/${encodeURIComponent(examId)}/me`,
+    {
+      method: "GET",
+      credentials: "include",
+    }
+  );
   return handle(res);
 }

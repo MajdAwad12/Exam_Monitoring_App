@@ -1,16 +1,14 @@
 // client/src/services/dashboard.ADD.DELETE.Students.service.js
-// Service layer for Admin/Lecturer Add/Delete Student (Dashboard endpoints)
-
-const API_BASE = import.meta.env.VITE_API_BASE || "";
-
-/* ---------------- helpers ---------------- */
+//
+// ---------------- helpers ----------------
+//
 const norm = (v) => String(v ?? "").trim().replace(/\s+/g, " ");
 const normId = (v) => String(v ?? "").trim().replace(/\s+/g, "");
 const normRoom = (v) => String(v ?? "").trim();
 const normExam = (v) => String(v ?? "").trim();
 
 async function request(url, { method = "GET", body } = {}) {
-  const res = await fetch(`${API_BASE}${url}`, {
+  const res = await fetch(url, {
     method,
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -21,7 +19,7 @@ async function request(url, { method = "GET", body } = {}) {
   let data = {};
   try {
     data = await res.json();
-  } catch (_) {
+  } catch {
     data = {};
   }
 
@@ -31,12 +29,20 @@ async function request(url, { method = "GET", body } = {}) {
   return data;
 }
 
-/* ---------------- API ---------------- */
+//
+// ---------------- API ----------------
+//
 
 /**
  * Add student to exam (running OR by examId if controller supports it)
  */
-export async function addStudentToExam({ examId, firstName, lastName, studentId, roomId } = {}) {
+export async function addStudentToExam({
+  examId,
+  firstName,
+  lastName,
+  studentId,
+  roomId,
+} = {}) {
   const eid = normExam(examId);
   const fn = norm(firstName);
   const ln = norm(lastName);
@@ -58,7 +64,7 @@ export async function addStudentToExam({ examId, firstName, lastName, studentId,
   // ✅ only send examId if provided
   if (eid) payload.examId = eid;
 
-  return request(`/api/dashboard/students/add`, {
+  return request("/api/dashboard/students/add", {
     method: "POST",
     body: payload,
   });
@@ -68,7 +74,11 @@ export async function addStudentToExam({ examId, firstName, lastName, studentId,
  * Delete student from exam (running OR by examId if supported)
  * Default uses POST (more compatible). Optionally can use DELETE.
  */
-export async function deleteStudentFromExam({ examId, studentId, useDelete = false } = {}) {
+export async function deleteStudentFromExam({
+  examId,
+  studentId,
+  useDelete = false,
+} = {}) {
   const eid = normExam(examId);
   const sid = normId(studentId);
 
@@ -77,7 +87,7 @@ export async function deleteStudentFromExam({ examId, studentId, useDelete = fal
   const payload = { studentId: sid };
   if (eid) payload.examId = eid;
 
-  return request(`/api/dashboard/students/delete`, {
+  return request("/api/dashboard/students/delete", {
     method: useDelete ? "DELETE" : "POST",
     body: payload,
   });

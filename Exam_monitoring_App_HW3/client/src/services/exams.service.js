@@ -1,5 +1,5 @@
 // client/src/services/exams.service.js
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+
 async function handle(res) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -14,7 +14,7 @@ async function handle(res) {
 // =========================
 
 export async function getExams() {
-  const res = await fetch(`${API_BASE}/api/exams`, {
+  const res = await fetch(`/api/exams`, {
     method: "GET",
     credentials: "include",
   });
@@ -22,7 +22,7 @@ export async function getExams() {
 }
 
 export async function createExam(payload) {
-  const res = await fetch(`${API_BASE}/api/exams`, {
+  const res = await fetch(`/api/exams`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -38,7 +38,7 @@ export async function createExam(payload) {
  */
 export async function startExam(examId, { force = false } = {}) {
   const qs = force ? "?force=1" : "";
-  const res = await fetch(`${API_BASE}/api/exams/${examId}/start${qs}`, {
+  const res = await fetch(`/api/exams/${examId}/start${qs}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" }, // ✅ so server can read body too
     credentials: "include",
@@ -53,7 +53,7 @@ export async function startExam(examId, { force = false } = {}) {
  * Server now allows end ONLY if exam is ACTIVE in real time window.
  */
 export async function endExam(examId) {
-  const res = await fetch(`${API_BASE}/api/exams/${examId}/end`, {
+  const res = await fetch(`/api/exams/${examId}/end`, {
     method: "POST",
     credentials: "include",
   });
@@ -62,7 +62,7 @@ export async function endExam(examId) {
 
 // ✅ Admin Update/Delete
 export async function updateExamAdmin(examId, payload) {
-  const res = await fetch(`${API_BASE}/api/admin/exams/${examId}`, {
+  const res = await fetch(`/api/admin/exams/${examId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -72,7 +72,7 @@ export async function updateExamAdmin(examId, payload) {
 }
 
 export async function deleteExamAdmin(examId) {
-  const res = await fetch(`${API_BASE}/api/admin/exams/${examId}`, {
+  const res = await fetch(`/api/admin/exams/${examId}`, {
     method: "DELETE",
     credentials: "include",
   });
@@ -80,7 +80,7 @@ export async function deleteExamAdmin(examId) {
 }
 
 export async function getMyReport(examId) {
-  const res = await fetch(`${API_BASE}/api/exams/${examId}/my-report`, {
+  const res = await fetch(`/api/exams/${examId}/my-report`, {
     method: "GET",
     credentials: "include",
   });
@@ -92,7 +92,7 @@ export async function getMyReport(examId) {
 // =========================
 
 export async function updateAttendance({ examId, studentId, patch }) {
-  const res = await fetch(`${API_BASE}/api/exams/${examId}/attendance/${studentId}`, {
+  const res = await fetch(`/api/exams/${examId}/attendance/${studentId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -110,7 +110,7 @@ export async function getAdminExams(params = {}) {
   if (params.to) usp.set("to", params.to);
 
   const qs = usp.toString() ? `?${usp.toString()}` : "";
-  const res = await fetch(`${API_BASE}/api/admin/exams${qs}`, {
+  const res = await fetch(`/api/admin/exams${qs}`, {
     method: "GET",
     credentials: "include",
   });

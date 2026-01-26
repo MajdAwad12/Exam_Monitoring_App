@@ -1,5 +1,5 @@
 // client/src/services/admin.service.js
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+
 
 async function handle(res) {
   const data = await res.json().catch(() => ({}));
@@ -9,7 +9,7 @@ async function handle(res) {
 
 export async function listUsers(role) {
   const q = role ? `?role=${encodeURIComponent(role)}` : "";
-  const res = await fetch(`${API_BASE}/api/admin/users${q}`, {
+  const res = await fetch(`/api/admin/users${q}`, {
     method: "GET",
     credentials: "include",
   });
@@ -17,7 +17,7 @@ export async function listUsers(role) {
 }
 
 export async function updateExamAdmin(examId, payload) {
-  const res = await fetch(`${API_BASE}/api/admin/exams/${examId}`, {
+  const res = await fetch(`/api/admin/exams/${examId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -27,7 +27,7 @@ export async function updateExamAdmin(examId, payload) {
 }
 
 export async function deleteExamAdmin(examId) {
-  const res = await fetch(`${API_BASE}/api/admin/exams/${examId}`, {
+  const res = await fetch(`/api/admin/exams/${examId}`, {
     method: "DELETE",
     credentials: "include",
   });
@@ -36,7 +36,7 @@ export async function deleteExamAdmin(examId) {
 
 // ✅ Keep: Auto Assign (SERVER-SIDE apply on existing exam)
 export async function autoAssignExam(examId) {
-  const res = await fetch(`${API_BASE}/api/admin/exams/${examId}/auto-assign`, {
+  const res = await fetch(`/api/admin/exams/${examId}/auto-assign`, {
     method: "POST",
     credentials: "include",
   });
@@ -52,7 +52,7 @@ export async function autoAssignExam(examId) {
  * requestedRooms = 0 => AUTO (allow grow/shrink by students)
  */
 export async function autoAssignDraft(payload) {
-  const res = await fetch(`${API_BASE}/api/admin/exams/auto-assign-draft`, {
+  const res = await fetch(`/api/admin/exams/auto-assign-draft`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",

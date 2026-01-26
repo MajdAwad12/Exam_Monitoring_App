@@ -1,5 +1,5 @@
 // client/src/services/reports.service.js
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+
 
 async function handle(res) {
   let data = {};
@@ -13,7 +13,7 @@ async function handle(res) {
 }
 
 export async function getReportsList() {
-  const res = await fetch(`${API_BASE}/api/reports`, {
+  const res = await fetch(`/api/reports`, {
     method: "GET",
     credentials: "include",
   });
@@ -21,7 +21,7 @@ export async function getReportsList() {
 }
 
 export async function getReportsAnalytics() {
-  const res = await fetch(`${API_BASE}/api/reports/analytics`, {
+  const res = await fetch(`/api/reports/analytics`, {
     method: "GET",
     credentials: "include",
   });
@@ -29,16 +29,17 @@ export async function getReportsAnalytics() {
 }
 
 export async function getReportDetails(examId) {
-  const res = await fetch(`${API_BASE}/api/reports/${examId}`, {
+  const res = await fetch(`/api/reports/${examId}`, {
     method: "GET",
     credentials: "include",
   });
   return handle(res);
 }
 
-// download helpers
+// ---------------- download helpers ----------------
+
 export async function downloadReportPdf(examId, filename = "report.pdf") {
-  const res = await fetch(`${API_BASE}/api/reports/${examId}/pdf`, {
+  const res = await fetch(`/api/reports/${examId}/pdf`, {
     method: "GET",
     credentials: "include",
   });
@@ -56,7 +57,7 @@ export async function downloadReportPdf(examId, filename = "report.pdf") {
 }
 
 export async function downloadReportCsv(examId, filename = "report.csv") {
-  const res = await fetch(`${API_BASE}/api/reports/${examId}/csv`, {
+  const res = await fetch(`/api/reports/${examId}/csv`, {
     method: "GET",
     credentials: "include",
   });

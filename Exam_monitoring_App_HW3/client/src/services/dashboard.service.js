@@ -1,5 +1,5 @@
 // ===== file: client/src/services/dashboard.service.js =====
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+
 async function handle(res) {
   if (res.status === 204) return null;
 
@@ -15,11 +15,11 @@ async function handle(res) {
 
   if (!res.ok) {
     const msg =
-      (isJson && data && typeof data === "object" && data.message)
+      isJson && data && typeof data === "object" && data.message
         ? data.message
-        : (typeof data === "string" && data.trim())
-          ? data
-          : `HTTP ${res.status}`;
+        : typeof data === "string" && data.trim()
+        ? data
+        : `HTTP ${res.status}`;
     throw new Error(msg);
   }
 
@@ -33,7 +33,7 @@ async function http(url, options = {}) {
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_BASE}${url}`, {
+  const res = await fetch(url, {
     ...options,
     headers,
     credentials: "include",

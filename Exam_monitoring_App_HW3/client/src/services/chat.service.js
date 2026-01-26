@@ -1,5 +1,6 @@
 // ===== file: client/src/services/chat.service.js =====
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+
 async function handle(res) {
   let data = {};
   try {
@@ -7,10 +8,12 @@ async function handle(res) {
   } catch {
     data = {};
   }
+
   if (!res.ok) {
     const msg = data?.message || `HTTP ${res.status}`;
     throw new Error(msg);
   }
+
   return data;
 }
 
@@ -21,7 +24,7 @@ async function handle(res) {
  * - Gemini if needed (and quota available)
  */
 export async function chatWithAI({ message }) {
-  const res = await fetch(`${API_BASE}/api/chat`, {
+  const res = await fetch(`/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",

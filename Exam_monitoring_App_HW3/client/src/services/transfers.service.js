@@ -1,5 +1,6 @@
 // ===== file: client/src/services/transfers.service.js =====
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+
 async function handle(res) {
   if (res.status === 204) return null;
 
@@ -30,7 +31,7 @@ async function handle(res) {
 }
 
 export async function listTransfers(examId) {
-  const res = await fetch(`${API_BASE}/api/transfers?examId=${encodeURIComponent(examId)}`, {
+  const res = await fetch(`/api/transfers?examId=${encodeURIComponent(examId)}`, {
     method: "GET",
     credentials: "include",
   });
@@ -38,8 +39,14 @@ export async function listTransfers(examId) {
   return payload?.items || [];
 }
 
-export async function createTransfer({ examId, studentId, toClassroom, toSeat = "AUTO", note }) {
-  const res = await fetch(`${API_BASE}/api/transfers`, {
+export async function createTransfer({
+  examId,
+  studentId,
+  toClassroom,
+  toSeat = "AUTO",
+  note,
+}) {
+  const res = await fetch(`/api/transfers`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -51,14 +58,18 @@ export async function createTransfer({ examId, studentId, toClassroom, toSeat = 
 
 // ✅ important: do NOT throw on 409 ROOM_FULL; return info
 export async function approveTransfer(id) {
-  const res = await fetch(`${API_BASE}/api/transfers/${encodeURIComponent(id)}/approve`, {
+  const res = await fetch(`/api/transfers/${encodeURIComponent(id)}/approve`, {
     method: "POST",
     credentials: "include",
   });
 
   if (res.status === 409) {
     const payload = await res.json().catch(() => ({}));
-    return { roomFull: true, item: payload?.item || null, message: payload?.message || "ROOM_FULL" };
+    return {
+      roomFull: true,
+      item: payload?.item || null,
+      message: payload?.message || "ROOM_FULL",
+    };
   }
 
   const payload = await handle(res);
@@ -66,7 +77,7 @@ export async function approveTransfer(id) {
 }
 
 export async function rejectTransfer(id) {
-  const res = await fetch(`${API_BASE}/api/transfers/${encodeURIComponent(id)}/reject`, {
+  const res = await fetch(`/api/transfers/${encodeURIComponent(id)}/reject`, {
     method: "POST",
     credentials: "include",
   });
@@ -75,7 +86,7 @@ export async function rejectTransfer(id) {
 }
 
 export async function cancelTransfer(id) {
-  const res = await fetch(`${API_BASE}/api/transfers/${encodeURIComponent(id)}/cancel`, {
+  const res = await fetch(`/api/transfers/${encodeURIComponent(id)}/cancel`, {
     method: "POST",
     credentials: "include",
   });
