@@ -779,10 +779,9 @@ export default function ClassroomMap({
       <div className="rounded-3xl border border-slate-200 bg-white p-4">
         <div className="flex items-center gap-2">
           <span className="px-3 py-1.5 rounded-2xl border border-slate-200 bg-white text-slate-800 text-xs font-extrabold">
-            💡 Map Guide
+             Actions Guide in the Map  
           </span>
 
-          <span className="text-xs text-slate-500 font-bold">Room {activeRoom || "-"}</span>
         </div>
 
           <div className="mt-3 grid gap-2 text-xs text-slate-700">
