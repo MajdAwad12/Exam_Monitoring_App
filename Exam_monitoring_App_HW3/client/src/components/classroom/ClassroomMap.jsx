@@ -103,6 +103,8 @@ export default function ClassroomMap({
 
   // local shadow copies for transfers (only when we inject missing student)
   const [localTransferShadow, setLocalTransferShadow] = useState(() => new Map());
+  const [optimisticPendingTransfers, setOptimisticPendingTransfers] = useState(() => new Map());
+
 
   // QR scanner state
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -209,26 +211,42 @@ export default function ClassroomMap({
   /**
    * pendingByStudent: sid -> { transferId, fromClassroom, toClassroom, fromSeat }
    */
-  const pendingTransfersByStudent = useMemo(() => {
-    const map = new Map();
-    const list = Array.isArray(transfersSrc) ? transfersSrc : [];
+ const pendingTransfersByStudent = useMemo(() => {
+  const map = new Map();
+  const list = Array.isArray(transfersSrc) ? transfersSrc : [];
 
-    for (const t of list) {
-      const st = normStatus(t?.status);
-      if (st !== "pending") continue;
+  // 1) real pending transfers from server
+  for (const t of list) {
+    const st = normStatus(t?.status);
+    if (st !== "pending") continue;
 
-      const sid = t?.studentId != null ? String(t.studentId) : "";
-      if (!sid) continue;
+    const sid = t?.studentId != null ? String(t.studentId) : "";
+    if (!sid) continue;
 
-      map.set(sid, {
-        transferId: String(t?._id || t?.id || ""),
-        fromClassroom: normRoom(t?.fromClassroom),
-        toClassroom: normRoom(t?.toClassroom),
-        fromSeat: String(t?.fromSeat || t?.seat || "").trim(),
-      });
-    }
-    return map;
-  }, [transfersSrc]);
+    map.set(sid, {
+      transferId: String(t?._id || t?.id || ""),
+      fromClassroom: normRoom(t?.fromClassroom),
+      toClassroom: normRoom(t?.toClassroom),
+      fromSeat: String(t?.fromSeat || t?.seat || "").trim(),
+    });
+  }
+
+  // 2) optimistic pending (only if server doesn't already have it)
+  for (const [sid, opt] of optimisticPendingTransfers.entries()) {
+    const key = String(sid || "").trim();
+    if (!key) continue;
+    if (map.has(key)) continue;
+
+    map.set(key, {
+      transferId: "__optimistic__",
+      fromClassroom: normRoom(opt?.fromClassroom),
+      toClassroom: normRoom(opt?.toClassroom),
+      fromSeat: String(opt?.fromSeat || "").trim(),
+    });
+  }
+
+  return map;
+}, [transfersSrc, optimisticPendingTransfers]);
 
   // clean local shadow when transfer no longer pending
   useEffect(() => {
@@ -478,83 +496,135 @@ export default function ClassroomMap({
   }
 
   async function requestTransfer(seat, toRoom) {
-    if (!exam?.id || !seat) return;
-    setLocalError("");
+  if (!exam?.id || !seat) return;
+  setLocalError("");
 
-    const sid = String(seat.studentId || "").trim();
-    if (!sid) {
-      setLocalError("Cannot request transfer: missing studentId.");
-      return;
-    }
+  const sid = String(seat.studentId || "").trim();
+  if (!sid) {
+    setLocalError("Cannot request transfer: missing studentId.");
+    return;
+  }
 
-    // save shadow
-    setLocalTransferShadow((prev) => {
+  // ✅ optimistic purple immediately
+  setOptimisticPendingTransfers((prev) => {
+    const next = new Map(prev);
+    next.set(sid, {
+      fromClassroom: getRoomKey(seat) || activeRoom,
+      fromSeat: String(seat?.seat || "").trim(),
+      toClassroom: String(toRoom || "").trim(),
+    });
+    return next;
+  });
+
+  // save shadow (so student can be injected in FROM room if missing)
+  setLocalTransferShadow((prev) => {
+    const next = new Map(prev);
+    next.set(sid, {
+      fromClassroom: getRoomKey(seat) || activeRoom,
+      fromSeat: String(seat?.seat || "").trim(),
+      name: seat?.name || "",
+      studentNumber: seat?.studentNumber || seat?.studentId || "",
+      status: seat?.status || "present",
+    });
+    return next;
+  });
+
+  try {
+    setSaving(true);
+
+    await createTransfer({
+      examId: exam.id,
+      studentId: sid,
+      toClassroom: toRoom,
+      toSeat: "AUTO",
+      note: `Requested by ${me?.fullName || me?.username} (from ${activeRoom})`,
+    });
+
+    showToast(`Transfer request sent to ${toRoom}`, "ok");
+    refreshNow?.();
+
+    // ✅ cleanup optimistic (server will now send the real pending transfer anyway)
+    setOptimisticPendingTransfers((prev) => {
       const next = new Map(prev);
-      next.set(sid, {
-        fromClassroom: getRoomKey(seat) || activeRoom,
-        fromSeat: String(seat?.seat || "").trim(),
-        name: seat?.name || "",
-        studentNumber: seat?.studentNumber || seat?.studentId || "",
-        status: seat?.status || "present",
-      });
+      next.delete(sid);
       return next;
     });
 
-    try {
-      setSaving(true);
-      await createTransfer({
-        examId: exam.id,
-        studentId: sid,
-        toClassroom: toRoom,
-        toSeat: "AUTO",
-        note: `Requested by ${me?.fullName || me?.username} (from ${activeRoom})`,
-      });
+    setSelectedStudentId(null);
+  } catch (e) {
+    // rollback optimistic purple if failed
+    setOptimisticPendingTransfers((prev) => {
+      const next = new Map(prev);
+      next.delete(sid);
+      return next;
+    });
 
-      showToast(`Transfer request sent to ${toRoom}`, "ok");
-      refreshNow?.();
-      setSelectedStudentId(null);
-    } catch (e) {
-      setLocalTransferShadow((prev) => {
-        const next = new Map(prev);
-        next.delete(sid);
-        return next;
-      });
-      setLocalError(e?.message || String(e));
-    } finally {
-      setSaving(false);
-    }
+    // rollback shadow if failed
+    setLocalTransferShadow((prev) => {
+      const next = new Map(prev);
+      next.delete(sid);
+      return next;
+    });
+
+    setLocalError(e?.message || String(e));
+  } finally {
+    setSaving(false);
   }
+}
+
 
   async function cancelPendingTransfer(seat) {
-    if (!exam?.id || !seat) return;
-    setLocalError("");
+  if (!exam?.id || !seat) return;
+  setLocalError("");
 
-    const sid = String(seat.studentId || "").trim();
-    if (!sid) return setLocalError("Cannot cancel transfer: missing studentId.");
-
-    const pending = pendingTransfersByStudent.get(sid);
-    const transferId = String(pending?.transferId || "").trim();
-    if (!transferId) return setLocalError("Cannot cancel: no pending transfer found for this student.");
-
-    try {
-      setSaving(true);
-      await apiCancelTransfer(transferId);
-
-      setLocalTransferShadow((prev) => {
-        const next = new Map(prev);
-        next.delete(sid);
-        return next;
-      });
-
-      showToast("Transfer cancelled.", "ok");
-      refreshNow?.();
-      setSelectedStudentId(null);
-    } catch (e) {
-      setLocalError(e?.message || String(e));
-    } finally {
-      setSaving(false);
-    }
+  const sid = String(seat.studentId || "").trim();
+  if (!sid) {
+    setLocalError("Cannot cancel transfer: missing studentId.");
+    return;
   }
+
+  // ✅ remove purple immediately (instant UI)
+  setOptimisticPendingTransfers((prev) => {
+    const next = new Map(prev);
+    next.delete(sid);
+    return next;
+  });
+
+  const pending = pendingTransfersByStudent.get(sid);
+  const transferId = String(pending?.transferId || "").trim();
+
+  // if it's only optimistic and server hasn't returned transfer yet, just refresh
+  if (!transferId || transferId === "__optimistic__") {
+    showToast("Cancelling…", "ok");
+    refreshNow?.();
+    setSelectedStudentId(null);
+    return;
+  }
+
+  try {
+    setSaving(true);
+
+    await apiCancelTransfer(transferId);
+
+    // remove shadow
+    setLocalTransferShadow((prev) => {
+      const next = new Map(prev);
+      next.delete(sid);
+      return next;
+    });
+
+    showToast("Transfer cancelled.", "ok");
+    refreshNow?.();
+    setSelectedStudentId(null);
+  } catch (e) {
+    // if cancel failed, let server be source of truth again
+    setLocalError(e?.message || String(e));
+    refreshNow?.();
+  } finally {
+    setSaving(false);
+  }
+}
+
 
   async function submitCheatNote(seat, text) {
     if (!exam?.id || !seat || !text) return;
