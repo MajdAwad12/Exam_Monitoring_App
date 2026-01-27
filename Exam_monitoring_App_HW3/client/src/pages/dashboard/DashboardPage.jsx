@@ -12,50 +12,8 @@ import EventsFeed from "../../components/dashboard/EventsFeed";
 import TransfersPanel from "../../components/dashboard/TransfersPanel";
 import ClassroomMap from "../../components/classroom/ClassroomMap";
 
-import Toast from "../../components/dashboard/Toast.jsx";
-
 function normRoom(x) {
   return String(x || "").trim();
-}
-
-function titleOf(item) {
-  const t = String(item?.type || item?.kind || "").toUpperCase();
-
-  if (t === "EXAM_30_MIN_LEFT") return "⏰ 30 Minutes Left";
-  if (t === "EXAM_15_MIN_LEFT") return "⏰ 15 Minutes Left";
-  if (t === "EXAM_5_MIN_LEFT") return "⏰ 5 Minutes Left";
-
-  if (t === "CALL_LECTURER") return "🗣️ Lecturer Called";
-  if (t === "CHEAT_NOTE") return "🧾 Cheat / Incident Note";
-  if (t === "TRANSFER_REQUEST") return "🟣 Transfer Requested";
-  if (t === "TRANSFER_APPROVED") return "✅ Transfer Approved";
-  if (t === "TRANSFER_REJECTED") return "❌ Transfer Rejected";
-
-  return t.replaceAll("_", " ");
-}
-
-function msgOf(item) {
-  // try common fields without breaking anything
-  const note = String(item?.note || item?.message || item?.text || "").trim();
-  if (note) return note;
-
-  const who = String(item?.by || item?.createdByName || item?.meta?.by || "").trim();
-  const room = String(item?.roomId || item?.classroom || item?.meta?.room || "").trim();
-  if (who && room) return `${who} • Room ${room}`;
-  if (room) return `Room ${room}`;
-  return "New update";
-}
-
-function keyOf(item) {
-  // stable unique key for "seen"
-  const id = String(item?.id || item?._id || "").trim();
-  if (id) return id;
-
-  const ts = String(item?.ts || item?.createdAt || item?.at || "").trim();
-  const kind = String(item?.type || item?.kind || "").trim();
-  const room = String(item?.roomId || item?.classroom || item?.room || "").trim();
-  const note = String(item?.note || item?.message || "").trim();
-  return `${kind}__${room}__${ts}__${note}`.slice(0, 220);
 }
 
 export default function DashboardPage() {
@@ -99,26 +57,20 @@ export default function DashboardPage() {
     const rid = selectedRoomId;
     if (!rid) return transfers || [];
     return (transfers || []).filter(
-      (t) =>
-        normRoom(t?.fromClassroom) === rid ||
-        normRoom(t?.toClassroom) === rid
+      (t) => normRoom(t?.fromClassroom) === rid || normRoom(t?.toClassroom) === rid
     );
   }, [transfers, selectedRoomId]);
 
   const eventsForRoom = useMemo(() => {
     const rid = selectedRoomId;
     if (!rid) return events || [];
-    return (events || []).filter(
-      (e) => normRoom(e?.classroom || e?.roomId || e?.room) === rid
-    );
+    return (events || []).filter((e) => normRoom(e?.classroom || e?.roomId || e?.room) === rid);
   }, [events, selectedRoomId]);
 
   const alertsForRoom = useMemo(() => {
     const rid = selectedRoomId;
     if (!rid) return alerts || [];
-    return (alerts || []).filter(
-      (a) => normRoom(a?.roomId || a?.classroom || a?.room) === rid
-    );
+    return (alerts || []).filter((a) => normRoom(a?.roomId || a?.classroom || a?.room) === rid);
   }, [alerts, selectedRoomId]);
 
   const examId = useMemo(() => {
@@ -131,20 +83,29 @@ export default function DashboardPage() {
     return r ? `Dashboard • ${exam.courseName} • ${r}` : `Dashboard • ${exam.courseName}`;
   }, [exam, selectedRoomId, activeRoomId]);
 
-  // ✅ Toast floating notification
-  const [toast, setToast] = useState(null);
+  // ✅ Side bubble (NOT inside Events panel)
+  const [nudge, setNudge] = useState(null);
+  const nudgeTimerRef = useRef(null);
 
-  // keep track of seen items so toast triggers only on NEW ones
-  const seenRef = useRef(new Set());
+  const showNudge = () => {
+    if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
 
-  const pushToast = (item, type = "info") => {
-    setToast({
-      type,
-      title: titleOf(item),
-      message: msgOf(item),
-      durationMs: 2600,
+    setNudge({
+      title: "New event 😊",
+      message: "A new update was received. Check Events panel.",
     });
+
+    nudgeTimerRef.current = setTimeout(() => {
+      setNudge(null);
+      nudgeTimerRef.current = null;
+    }, 2600);
   };
+
+  useEffect(() => {
+    return () => {
+      if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
+    };
+  }, []);
 
   // ✅ Update global bot context (Dashboard = richest context)
   useEffect(() => {
@@ -183,7 +144,8 @@ export default function DashboardPage() {
       }
 
       // also refetch on anything that smells like new activity
-      if (String(msg.type || "").includes("INCIDENT") || String(msg.type || "").includes("ALERT") || String(msg.type || "").includes("TRANSFER")) {
+      const t = String(msg.type || "");
+      if (t.includes("INCIDENT") || t.includes("ALERT") || t.includes("TRANSFER")) {
         scheduleRefetch();
       }
     };
@@ -194,38 +156,6 @@ export default function DashboardPage() {
       clearTimeout(debounceTimer);
     };
   }, [refetch]);
-
-  // ✅ Trigger toast when NEW alert/event appears (after refetch updates arrays)
-  useEffect(() => {
-    const listA = Array.isArray(alertsForRoom) ? alertsForRoom : [];
-    const listE = Array.isArray(eventsForRoom) ? eventsForRoom : [];
-
-    // mark initial snapshot as seen (prevents toast spam on first load)
-    if (seenRef.current.size === 0) {
-      for (const a of listA) seenRef.current.add(keyOf(a));
-      for (const e of listE) seenRef.current.add(keyOf(e));
-      return;
-    }
-
-    // find newest unseen (prefer alerts)
-    for (const a of listA) {
-      const k = keyOf(a);
-      if (!seenRef.current.has(k)) {
-        seenRef.current.add(k);
-        pushToast(a, "warning");
-        return;
-      }
-    }
-
-    for (const e of listE) {
-      const k = keyOf(e);
-      if (!seenRef.current.has(k)) {
-        seenRef.current.add(k);
-        pushToast(e, "info");
-        return;
-      }
-    }
-  }, [alertsForRoom, eventsForRoom]);
 
   if (loading) return <RocketLoader />;
 
@@ -265,8 +195,27 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* ✅ Floating toast cloud */}
-      <Toast toast={toast} onClose={() => setToast(null)} />
+      {/* ✅ Side floating bubble */}
+      {nudge ? (
+        <div className="fixed top-5 right-5 z-[9999]">
+          <div className="max-w-sm rounded-3xl border border-slate-200 bg-white shadow-lg px-4 py-3">
+            <div className="flex items-start gap-3">
+              <div className="text-xl">😊</div>
+              <div className="min-w-0">
+                <div className="text-sm font-extrabold text-slate-900">{nudge.title}</div>
+                <div className="mt-0.5 text-xs text-slate-600">{nudge.message}</div>
+              </div>
+              <button
+                className="ml-2 text-slate-400 hover:text-slate-700 font-extrabold"
+                onClick={() => setNudge(null)}
+                aria-label="close"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="p-6 space-y-5">
         {/* Header */}
@@ -335,9 +284,8 @@ export default function DashboardPage() {
               <EventsFeed
                 events={eventsForRoom}
                 alerts={alertsForRoom}
-                simNowMs={simNowMs}
                 activeRoomId={selectedRoomId}
-                maxItems={14}
+                onNewEvent={() => showNudge()}
               />
             </div>
           </div>

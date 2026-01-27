@@ -66,13 +66,8 @@ export default function SeatActionsModal({
   const seatLabel = seat?.seat || "-";
   const rawStatus = String(seat?.status || "").toLowerCase();
 
-  // ✅ be robust if your backend uses another shape
-  const isTransferPending = Boolean(
-    seat?.transferPending || String(seat?.transferStatus || "").toLowerCase() === "pending"
-  );
-
-  const isMoving =
-    rawStatus === "moving" || String(seat?.transferStatus || "").toLowerCase() === "moving";
+  const isTransferPending = Boolean(seat?.transferPending);
+  const isMoving = rawStatus === "moving";
 
   // Locked means: cannot change status / cannot start new transfer
   // but Cancel Transfer should still be possible
@@ -110,15 +105,11 @@ export default function SeatActionsModal({
 
   if (!open || !seat) return null;
 
-  const studentIdForApi = seat?.studentId || seat?.studentNumber || seat?._id || null;
-
   async function setStatus(status) {
     if (!canChangeStatus) return;
-    if (!studentIdForApi) return;
-
     setLocalErr("");
     try {
-      await onSetStatus?.(studentIdForApi, { status });
+      await onSetStatus?.(seat.studentId, { status });
       onClose?.(); // close only on success
     } catch (e) {
       setLocalErr(e?.message || String(e));
@@ -130,7 +121,6 @@ export default function SeatActionsModal({
     if (saving) return;
     const text = String(note || "").trim();
     if (!text) return;
-
     setLocalErr("");
     try {
       await onCheatNote?.(seat, text);
@@ -144,7 +134,6 @@ export default function SeatActionsModal({
     if (!canTransfer) return;
     const target = String(toRoom || "").trim();
     if (!target) return;
-
     setLocalErr("");
     try {
       await onRequestTransfer?.(seat, target);
@@ -248,43 +237,66 @@ export default function SeatActionsModal({
         {/* body */}
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
           {/* Quick actions */}
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm font-extrabold text-slate-900">Quick actions</div>
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-extrabold text-slate-900">Quick actions</div>
 
-            <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
-              <ActionBtn
-                disabled={!canChangeStatus}
-                onClick={() => setStatus("present")}
-                label="✅ Present"
-              />
-              <ActionBtn disabled={!canOut} onClick={() => setStatus("temp_out")} label="🚻 Out" />
-              <ActionBtn
-                disabled={!canChangeStatus || !isPresentNow}
-                onClick={() => setStatus("finished")}
-                label="🏁 Finished"
-              />
-              <ActionBtn disabled={!canChangeStatus} onClick={() => setStatus("absent")} label="⛔ Absent" />
-              <ActionBtn
-                disabled={!canChangeStatus}
-                onClick={() => setStatus("not_arrived")}
-                label="🕒 Not arrived"
-              />
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {/* ✅ Present / Back to room */}
+                <ActionBtn
+                  disabled={!canChangeStatus}
+                  onClick={() => setStatus("present")}
+                  label={isTempOutNow ? "⬅️ Back to room" : "✅ Present"}
+                />
+
+                {/* 🚻 Out — ONLY when present */}
+                <ActionBtn
+                  disabled={!canOut}
+                  onClick={() => setStatus("temp_out")}
+                  label="🚻 Out"
+                />
+
+                {/* 🏁 Finished — ONLY when present */}
+                <ActionBtn
+                  disabled={!canChangeStatus || !isPresentNow}
+                  onClick={() => setStatus("finished")}
+                  label="🏁 Finished"
+                />
+
+                {/* ⛔ Absent — enabled also when temp_out */}
+                <ActionBtn
+                  disabled={!canChangeStatus}
+                  onClick={() => setStatus("absent")}
+                  label="⛔ Absent"
+                  tone="danger"
+                />
+
+                {/* 🕒 Not arrived — disabled when temp_out */}
+                <ActionBtn
+                  disabled={!canChangeStatus || isTempOutNow}
+                  onClick={() => setStatus("not_arrived")}
+                  label="🕒 Not arrived"
+                />
+              </div>
+
+              {!canEditAttendance ? (
+                <div className="mt-2 text-xs text-slate-500">
+                  View-only: you don’t have permission to change attendance.
+                </div>
+              ) : lockedActions ? (
+                <div className="mt-2 text-xs text-slate-500">
+                  🔒 Locked due to transfer. (Cancel is still possible below)
+                </div>
+              ) : isTempOutNow ? (
+                <div className="mt-2 text-xs text-slate-500">
+                  🚻 Student is currently <b>out</b>. You can mark them as <b>Back to room</b> or <b>Absent</b>.
+                </div>
+              ) : !isPresentNow ? (
+                <div className="mt-2 text-xs text-slate-500">
+                  🚫 Transfer/Toilet are enabled only when the student is <b>present</b>.
+                </div>
+              ) : null}
             </div>
 
-            {!canEditAttendance ? (
-              <div className="mt-2 text-xs text-slate-500">
-                View-only: you don’t have permission to change attendance.
-              </div>
-            ) : lockedActions ? (
-              <div className="mt-2 text-xs text-slate-500">
-                🔒 Locked due to transfer. (Cancel is still possible below)
-              </div>
-            ) : !isPresentNow ? (
-              <div className="mt-2 text-xs text-slate-500">
-                🚫 Transfer/Toilet are enabled only when the student is <b>present</b>.
-              </div>
-            ) : null}
-          </div>
 
           {/* Transfer */}
           <div className="rounded-3xl border border-slate-200 bg-white p-4">

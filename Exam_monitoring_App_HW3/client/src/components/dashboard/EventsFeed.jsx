@@ -1,5 +1,5 @@
 // client/src/components/dashboard/EventsFeed.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function fmtTime(d) {
   const dt = new Date(d || Date.now());
@@ -35,9 +35,7 @@ function titleOf(item) {
   return t.replaceAll("_", " ");
 }
 
-
 function pickText(item) {
-  // Try many common shapes to ensure alert content is displayed
   const candidates = [
     item?.text,
     item?.note,
@@ -79,7 +77,29 @@ function normalize(item, source) {
   return { source, at, severity, roomId, seat, text, studentCode, name, raw: item };
 }
 
-export default function EventsFeed({ events = [], alerts = [], activeRoomId = "" }) {
+// 🔥 helper: build a stable "signature" for newest item
+function sigOf(it) {
+  if (!it) return "";
+  const type = String(it?.raw?.type || it?.raw?.kind || it?.raw?.eventType || "");
+  return [
+    it.source,
+    String(it.at),
+    type,
+    String(it.severity || ""),
+    String(it.roomId || ""),
+    String(it.seat || ""),
+    String(it.studentCode || ""),
+    String(it.name || ""),
+    String(it.text || ""),
+  ].join("|");
+}
+
+export default function EventsFeed({
+  events = [],
+  alerts = [],
+  activeRoomId = "",
+  onNewEvent, // ✅ NEW: callback when a new newest item arrives
+}) {
   const [q, setQ] = useState("");
   const [onlyThisRoom, setOnlyThisRoom] = useState(false);
 
@@ -90,6 +110,31 @@ export default function EventsFeed({ events = [], alerts = [], activeRoomId = ""
     all.sort((x, y) => new Date(y.at).getTime() - new Date(x.at).getTime());
     return all.slice(0, 30);
   }, [alerts, events]);
+
+  // ✅ Detect new event (newest item changed)
+  const lastSigRef = useRef("");
+  const didMountRef = useRef(false);
+
+  useEffect(() => {
+    const newest = merged[0];
+    const sig = sigOf(newest);
+    if (!sig) return;
+
+    if (!didMountRef.current) {
+      // First render: store but don't notify
+      didMountRef.current = true;
+      lastSigRef.current = sig;
+      return;
+    }
+
+    if (sig !== lastSigRef.current) {
+      lastSigRef.current = sig;
+      if (typeof onNewEvent === "function") {
+        // notify parent (DashboardPage) to show side bubble
+        onNewEvent(newest);
+      }
+    }
+  }, [merged, onNewEvent]);
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -112,9 +157,7 @@ export default function EventsFeed({ events = [], alerts = [], activeRoomId = ""
           <div>
             <div className="text-xs text-slate-500">Live monitoring</div>
             <div className="text-lg font-extrabold text-slate-900">Alerts & Events</div>
-            <div className="mt-1 text-xs text-slate-500">
-              Alerts highlighted • Search + room filter
-            </div>
+            <div className="mt-1 text-xs text-slate-500">Alerts highlighted • Search + room filter</div>
           </div>
           <div className="text-xs text-slate-500 font-bold">
             Showing <span className="text-slate-900">{filtered.length}</span>
@@ -158,15 +201,12 @@ export default function EventsFeed({ events = [], alerts = [], activeRoomId = ""
 
               const shownText = it.text?.trim()
                 ? it.text
-                : (it.source === "alert"
-                    ? "Alert received (no details provided)."
-                    : "—");
+                : it.source === "alert"
+                  ? "Alert received (no details provided)."
+                  : "—";
 
               return (
-                <div
-                  key={`${idx}-${String(it.at)}`}
-                  className={`rounded-3xl border p-4 shadow-sm ${sev.row}`}
-                >
+                <div key={`${idx}-${String(it.at)}`} className={`rounded-3xl border p-4 shadow-sm ${sev.row}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -193,16 +233,12 @@ export default function EventsFeed({ events = [], alerts = [], activeRoomId = ""
                         ) : null}
                       </div>
 
-                      <div className="mt-2 text-sm font-bold text-slate-900 break-words">
-                        {shownText}
-                      </div>
+                      <div className="mt-2 text-sm font-bold text-slate-900 break-words">{shownText}</div>
                     </div>
 
                     <div className="shrink-0 text-right">
                       <div className="text-xs font-extrabold text-slate-700">{fmtTime(it.at)}</div>
-                      <div className="mt-1 text-[10px] text-slate-500 uppercase font-extrabold">
-                        {it.source}
-                      </div>
+                      <div className="mt-1 text-[10px] text-slate-500 uppercase font-extrabold">{it.source}</div>
                     </div>
                   </div>
                 </div>
