@@ -8,7 +8,7 @@ function badge(status) {
   if (s === "present") return "bg-emerald-50 border-emerald-200 text-emerald-800";
   if (s === "temp_out") return "bg-amber-50 border-amber-200 text-amber-800";
   if (s === "moving") return "bg-purple-50 border-purple-200 text-purple-800";
-  if (s === "finished") return "bg-rose-50 border-rose-200 text-rose-800";
+  if (s === "finished") return "bg-rose-50 border-rose-50 text-rose-800";
   if (s === "absent") return "bg-slate-100 border-slate-200 text-slate-700";
   return "bg-slate-50 border-slate-200 text-slate-700";
 }
@@ -38,7 +38,7 @@ export default function SeatActionsModal({
   seat,
   studentFile = null,
   elapsedMs = 0,
-  saving = false,
+  saving = false, // kept for Note textarea only (we don't block status/transfer buttons with it)
 
   // roles / permissions
   isSupervisor = false,
@@ -57,6 +57,9 @@ export default function SeatActionsModal({
 
   // transfer target rooms list
   rooms = [],
+
+  // optional global error handler (parent toast/snackbar)
+  onActionError,
 }) {
   const [note, setNote] = useState("");
   const [toRoom, setToRoom] = useState("");
@@ -76,15 +79,13 @@ export default function SeatActionsModal({
   const isPresentNow = rawStatus === "present";
   const isTempOutNow = rawStatus === "temp_out";
 
-  // ✅ status edits depend on canEditAttendance
-  const canChangeStatus = canEditAttendance && !saving && !lockedActions;
-  const canOut = canEditAttendance && isPresentNow && !saving && !lockedActions;
-
-  // transfer rules remain: only when present + permitted role
-  const canTransfer = canRequestTransfer && isPresentNow && !saving && !lockedActions;
-
-  // cancel allowed even if locked (as long as transfer is pending)
-  const canCancelTransfer = (isSupervisor || canRequestTransfer) && isTransferPending && !saving;
+  // ✅ IMPORTANT CHANGE:
+  // Do NOT disable buttons while waiting for server.
+  // saving is NOT part of these permissions anymore.
+  const canChangeStatus = canEditAttendance && !lockedActions;
+  const canOut = canEditAttendance && isPresentNow && !lockedActions;
+  const canTransfer = canRequestTransfer && isPresentNow && !lockedActions;
+  const canCancelTransfer = (isSupervisor || canRequestTransfer) && isTransferPending;
 
   const studentKeyForReset = String(seat?.studentId || seat?.studentNumber || seat?._id || "");
 
@@ -105,60 +106,74 @@ export default function SeatActionsModal({
 
   if (!open || !seat) return null;
 
-
-async function setStatus(status) {
-  if (!canChangeStatus) return;
-
-  // ✅ close immediately (fast UX)
-  onClose?.();
-
-  try {
-    await onSetStatus?.(seat.studentId, { status });
-    // success -> nothing else to do (Map will refresh)
-  } catch (e) {
-    // ✅ bubble error to parent (big message)
-    const msg = e?.message || String(e);
-    onActionError?.(msg);
+  // Helpers: fire-and-forget + close immediately
+  function fireAndForget(promiseLike, fallbackErrMsg = "Request failed") {
+    Promise.resolve(promiseLike).catch((e) => {
+      const msg = e?.message || fallbackErrMsg || String(e);
+      // If the modal already closed, localErr won't show; prefer parent toast when possible
+      if (typeof onActionError === "function") onActionError(msg);
+      else setLocalErr(msg);
+    });
   }
-}
 
+  function setStatus(status, extra = {}) {
+    if (!canChangeStatus) return;
 
-  // ✅ Notes allowed for everyone (as requested)
+    onClose?.(); // ✅ close immediately
+
+    fireAndForget(
+      onSetStatus?.(seat.studentId, { status, ...extra }),
+      `Failed to set status: ${status}`
+    );
+  }
+
+  function setPresentOrBackToRoom() {
+    if (!canEditAttendance || lockedActions) return;
+
+    onClose?.(); // ✅ close immediately
+
+    const payload = isTempOutNow
+      ? { status: "present", outStartedAt: null }
+      : { status: "present" };
+
+    fireAndForget(onSetStatus?.(seat.studentId, payload), "Failed to set Present");
+  }
+
+  // Notes allowed for everyone (as requested)
   async function submitNote() {
+    // keeping saving lock for textarea submit only (optional)
     if (saving) return;
+
     const text = String(note || "").trim();
     if (!text) return;
+
     setLocalErr("");
-    try {
-      await onCheatNote?.(seat, text);
-      onClose?.();
-    } catch (e) {
-      setLocalErr(e?.message || String(e));
-    }
+
+    // You may choose to close immediately here as well. We'll keep it immediate for fast UX.
+    onClose?.();
+
+    fireAndForget(onCheatNote?.(seat, text), "Failed to save note");
   }
 
-  async function submitTransfer() {
+  function submitTransfer() {
     if (!canTransfer) return;
+
     const target = String(toRoom || "").trim();
     if (!target) return;
+
     setLocalErr("");
-    try {
-      await onRequestTransfer?.(seat, target);
-      onClose?.();
-    } catch (e) {
-      setLocalErr(e?.message || String(e));
-    }
+    onClose?.(); // ✅ close immediately
+
+    fireAndForget(onRequestTransfer?.(seat, target), "Failed to request transfer");
   }
 
-  async function cancelTransfer() {
+  function cancelTransfer() {
     if (!canCancelTransfer) return;
+
     setLocalErr("");
-    try {
-      await onCancelTransfer?.(seat);
-      onClose?.();
-    } catch (e) {
-      setLocalErr(e?.message || String(e));
-    }
+    onClose?.(); // ✅ close immediately
+
+    fireAndForget(onCancelTransfer?.(seat), "Failed to cancel transfer");
   }
 
   const toiletCount = Number(studentFile?.toiletCount || 0);
@@ -226,6 +241,8 @@ async function setStatus(status) {
               </div>
             ) : null}
 
+            {/* NOTE: localErr won't show if modal closes immediately.
+                It is kept only as a fallback when parent doesn't provide onActionError. */}
             {localErr ? (
               <div className="mt-2 text-xs text-rose-900 bg-rose-50 border border-rose-200 rounded-2xl px-3 py-2">
                 {localErr}
@@ -244,94 +261,79 @@ async function setStatus(status) {
         {/* body */}
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
           {/* Quick actions */}
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-extrabold text-slate-900">Quick actions</div>
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-extrabold text-slate-900">Quick actions</div>
 
-              {(() => {
-                // current status flags
-                const st = String(seat?.status || "").toLowerCase();
-                const isOutNow = st === "temp_out";
-                const isPresentNowLocal = st === "present";
+            {(() => {
+              const st = String(seat?.status || "").toLowerCase();
+              const isOutNow = st === "temp_out";
+              const isPresentNowLocal = st === "present";
 
-                // base rules
-                const canChange = canChangeStatus; // already includes canEditAttendance && !saving && !lockedActions
+              const canChange = canChangeStatus; // includes canEditAttendance && !lockedActions
 
-                // ✅ When OUT: ONLY "Back to room" + "Absent" enabled
-                const enableBack = canChange && isOutNow;
-                const enableAbsent = canChange && (isOutNow || !lockedActions); // absent allowed generally, but you asked it to be enabled during out too
-                // Disable everything else during out
-                const enableOut = canOut && !isOutNow;
-                const enableFinished = canChange && isPresentNowLocal && !isOutNow;
-                const enableNotArrived = canChange && !isOutNow;
+              // ✅ When OUT: ONLY "Back to room" + "Absent" enabled
+              const enableBack = canChange && isOutNow;
+              const enableAbsent = canChange && (isOutNow || !lockedActions);
 
-                return (
-                  <>
-                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
-                      {/* ✅ Present becomes Back to room when temp_out */}
-                      <ActionBtn
-                        disabled={isOutNow ? !enableBack : !canChange}
-                        onClick={() => {
-                          if (!canChange) return;
+              const enableOut = canOut && !isOutNow;
+              const enableFinished = canChange && isPresentNowLocal && !isOutNow;
+              const enableNotArrived = canChange && !isOutNow;
 
-                          if (isOutNow) {
-                            // Back to room
-                            onSetStatus?.(seat.studentId, { status: "present", outStartedAt: null });
-                          } else {
-                            // Normal present
-                            onSetStatus?.(seat.studentId, { status: "present" });
-                          }
-                          onClose?.(); // close only when no error thrown (your onSetStatus is async in parent; here it's sync call)
-                        }}
-                        label={isOutNow ? "↩️ Back to room" : "✅ Present"}
-                      />
+              return (
+                <>
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    <ActionBtn
+                      disabled={isOutNow ? !enableBack : !canChange}
+                      onClick={setPresentOrBackToRoom}
+                      label={isOutNow ? "↩️ Back to room" : "✅ Present"}
+                    />
 
-                      {/* Out button disabled when already out */}
-                      <ActionBtn
-                        disabled={!enableOut}
-                        onClick={() => setStatus("temp_out")}
-                        label="🚻 Out"
-                      />
+                    <ActionBtn
+                      disabled={!enableOut}
+                      onClick={() => setStatus("temp_out")}
+                      label="🚻 Out"
+                    />
 
-                      {/* Finished disabled during out */}
-                      <ActionBtn
-                        disabled={!enableFinished}
-                        onClick={() => setStatus("finished")}
-                        label="🏁 Finished"
-                      />
+                    <ActionBtn
+                      disabled={!enableFinished}
+                      onClick={() => setStatus("finished")}
+                      label="🏁 Finished"
+                    />
 
-                      {/* ✅ Only Absent stays enabled during out */}
-                      <ActionBtn
-                        disabled={!enableAbsent}
-                        onClick={() => setStatus("absent")}
-                        label="⛔ Absent"
-                      />
+                    <ActionBtn
+                      disabled={!enableAbsent}
+                      onClick={() => setStatus("absent")}
+                      label="⛔ Absent"
+                    />
 
-                      {/* Not arrived disabled during out */}
-                      <ActionBtn
-                        disabled={!enableNotArrived}
-                        onClick={() => setStatus("not_arrived")}
-                        label="🕒 Not arrived"
-                      />
+                    <ActionBtn
+                      disabled={!enableNotArrived}
+                      onClick={() => setStatus("not_arrived")}
+                      label="🕒 Not arrived"
+                    />
+                  </div>
+
+                  {!canEditAttendance ? (
+                    <div className="mt-2 text-xs text-slate-500">
+                      View-only: you don’t have permission to change attendance.
                     </div>
-
-                    {!canEditAttendance ? (
-                      <div className="mt-2 text-xs text-slate-500">View-only: you don’t have permission to change attendance.</div>
-                    ) : lockedActions ? (
-                      <div className="mt-2 text-xs text-slate-500">🔒 Locked due to transfer. (Cancel is still possible below)</div>
-                    ) : isOutNow ? (
-                      <div className="mt-2 text-xs text-slate-500">
-                        Student is <b>Out</b>: only <b>Back to room</b> and <b>Absent</b> are allowed.
-                      </div>
-                    ) : !isPresentNow ? (
-                      <div className="mt-2 text-xs text-slate-500">
-                        🚫 Transfer/Toilet are enabled only when the student is <b>present</b>.
-                      </div>
-                    ) : null}
-                  </>
-                );
-              })()}
-            </div>
-
+                  ) : lockedActions ? (
+                    <div className="mt-2 text-xs text-slate-500">
+                      🔒 Locked due to transfer. (Cancel is still possible below)
+                    </div>
+                  ) : isOutNow ? (
+                    <div className="mt-2 text-xs text-slate-500">
+                      Student is <b>Out</b>: only <b>Back to room</b> and <b>Absent</b> are allowed.
+                    </div>
+                  ) : !isPresentNow ? (
+                    <div className="mt-2 text-xs text-slate-500">
+                      🚫 Transfer/Toilet are enabled only when the student is <b>present</b>.
+                    </div>
+                  ) : null}
+                </>
+              );
+            })()}
+          </div>
 
           {/* Transfer */}
           <div className="rounded-3xl border border-slate-200 bg-white p-4">
@@ -339,7 +341,8 @@ async function setStatus(status) {
               <div>
                 <div className="text-sm font-extrabold text-slate-900">Transfer student</div>
                 <div className="mt-1 text-xs text-slate-600">
-                  Student becomes <b className="text-purple-700">purple</b> until the target supervisor approves/rejects.
+                  Student becomes <b className="text-purple-700">purple</b> until the target supervisor
+                  approves/rejects.
                 </div>
               </div>
 
