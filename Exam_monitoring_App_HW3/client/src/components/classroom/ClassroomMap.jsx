@@ -90,8 +90,6 @@ export default function ClassroomMap({
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState("");
   const [toast, setToast] = useState(null);
-
-  // ✅ Map guide (Step 1)
   const [mapGuideOpen, setMapGuideOpen] = useState(false);
 
   // roster UI
@@ -323,10 +321,12 @@ export default function ClassroomMap({
   const visibleRoster = showAllStudents ? rosterFiltered : rosterFiltered.slice(0, maxPreview);
   const moreCount = Math.max(0, rosterFiltered.length - visibleRoster.length);
 
-  useEffect(() => {
-    setShowAllStudents(false);
-    setRosterFilter("all");
-  }, [activeRoom]);
+ useEffect(() => {
+  setShowAllStudents(false);
+  setRosterFilter("all");
+  setMapGuideOpen(false); // ✅ close guide when switching rooms
+}, [activeRoom]);
+
 
   const spec = useMemo(() => getRoomSpec5x5(), []);
 
@@ -668,6 +668,7 @@ export default function ClassroomMap({
                 Mark Not Arrived
               </button>
             </div>
+            
           </div>
 
           {cameraOpen ? (
@@ -695,28 +696,12 @@ export default function ClassroomMap({
 
               <div className="flex flex-wrap gap-2">
                 <FilterChip label="All" active={rosterFilter === "all"} onClick={() => setRosterFilter("all")} />
-                <FilterChip
-                  label="Not arrived"
-                  active={rosterFilter === "not_arrived"}
-                  onClick={() => setRosterFilter("not_arrived")}
-                />
+                <FilterChip label="Not arrived" active={rosterFilter === "not_arrived"} onClick={() => setRosterFilter("not_arrived")} />
                 <FilterChip label="Absent" active={rosterFilter === "absent"} onClick={() => setRosterFilter("absent")} />
-                <FilterChip
-                  label="Finished"
-                  active={rosterFilter === "finished"}
-                  onClick={() => setRosterFilter("finished")}
-                />
-                <FilterChip
-                  label="Present"
-                  active={rosterFilter === "present"}
-                  onClick={() => setRosterFilter("present")}
-                />
+                <FilterChip label="Finished" active={rosterFilter === "finished"} onClick={() => setRosterFilter("finished")} />
+                <FilterChip label="Present" active={rosterFilter === "present"} onClick={() => setRosterFilter("present")} />
                 <FilterChip label="Out" active={rosterFilter === "temp_out"} onClick={() => setRosterFilter("temp_out")} />
-                <FilterChip
-                  label="Transfer"
-                  active={rosterFilter === "transfer"}
-                  onClick={() => setRosterFilter("transfer")}
-                />
+                <FilterChip label="Transfer" active={rosterFilter === "transfer"} onClick={() => setRosterFilter("transfer")} />
 
                 <div className="ml-auto flex items-center gap-2">
                   {moreCount > 0 ? (
@@ -774,112 +759,63 @@ export default function ClassroomMap({
 
         {/* Map */}
         <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          {/* ✅ Map header + guide button */}
-          <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-            <div className="text-sm font-extrabold text-slate-900">Classroom Map</div>
+          <div className="border-b border-slate-200">
+  {/* Header row */}
+  <div className="px-4 py-3 flex items-center justify-between">
+    <div className="text-sm font-extrabold text-slate-900">Classroom Map</div>
 
-            <button
-              type="button"
-              onClick={() => setMapGuideOpen((v) => !v)}
-              className={`px-3 py-1.5 rounded-2xl text-xs font-extrabold border transition ${
-                mapGuideOpen
-                  ? "border-sky-200 bg-sky-50 text-sky-900"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-              title="How to use the map"
-            >
-              💡 Map Guide
-            </button>
+    <button
+      type="button"
+      onClick={() => setMapGuideOpen((v) => !v)}
+      className="px-3 py-1.5 rounded-2xl text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+    >
+      💡 Map Guide
+    </button>
+  </div>
+
+  {/* Guide (below header) */}
+  {mapGuideOpen && (
+    <div className="px-4 pb-4 bg-slate-50">
+      <div className="rounded-3xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1.5 rounded-2xl border border-slate-200 bg-white text-slate-800 text-xs font-extrabold">
+            💡 Map Guide
+          </span>
+
+          <span className="text-xs text-slate-500 font-bold">Room {activeRoom || "-"}</span>
+        </div>
+
+          <div className="mt-3 grid gap-2 text-xs text-slate-700">
+          <div className="flex items-start gap-2">
+            <span>🪑</span>
+            <span>
+              Click any <b>seat</b> to manage the student (Present / Out / Finished / Notes / Transfer).
+            </span>
           </div>
 
-          {/* ✅ Guide panel (non-blocking) */}
-            {mapGuideOpen ? (
-              <div className="px-4 py-4 border-b border-slate-200 bg-slate-50">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1.5 rounded-2xl border border-sky-200 bg-sky-50 text-sky-900 text-xs font-extrabold">
-                        💡 Map Guide
-                      </span>
-                      <span className="text-xs text-slate-500 font-bold">
-                        Room <span className="text-slate-900">{activeRoom || "-"}</span>
-                      </span>
-                    </div>
+          <div className="flex items-start gap-2">
+            <span>🆔</span>
+            <span>
+              Use <b>Scan / Enter Student ID</b> to quickly mark attendance.
+            </span>
+          </div>
 
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {/* Actions */}
-                      <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                        <div className="text-sm font-extrabold text-slate-900">How to use</div>
-                        <div className="mt-2 space-y-2 text-xs text-slate-700">
-                          <div className="flex items-start gap-2">
-                            <span className="mt-0.5">🪑</span>
-                            <span>
-                              Click any <b>seat</b> to open <b>Actions</b> (Present / Out / Finished / Notes / Transfer).
-                            </span>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <span className="mt-0.5">🆔</span>
-                            <span>
-                              Use <b>Scan / Enter Student ID</b> for fast check-in.
-                            </span>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <span className="mt-0.5">🟣</span>
-                            <span>
-                              <b>PENDING</b> means a transfer request is waiting for the target room supervisor.
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+          <div className="flex items-start gap-2">
+            <span>🟣</span>
+            <span>
+              <b>PENDING</b> means a transfer request is waiting for approval.
+            </span>
+          </div>
+        </div>
 
-                      {/* Status legend */}
-                      <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                        <div className="text-sm font-extrabold text-slate-900">Status colors</div>
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                            <span className="w-3 h-3 rounded-full bg-slate-300" />
-                            <span className="font-bold text-slate-700">Not arrived</span>
-                          </div>
-                          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-emerald-50 px-3 py-2">
-                            <span className="w-3 h-3 rounded-full bg-emerald-500" />
-                            <span className="font-bold text-emerald-900">Present</span>
-                          </div>
-                          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-amber-50 px-3 py-2">
-                            <span className="w-3 h-3 rounded-full bg-amber-500" />
-                            <span className="font-bold text-amber-900">Out</span>
-                          </div>
-                          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-purple-50 px-3 py-2">
-                            <span className="w-3 h-3 rounded-full bg-purple-500" />
-                            <span className="font-bold text-purple-900">Transfer</span>
-                          </div>
-                          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-rose-50 px-3 py-2">
-                            <span className="w-3 h-3 rounded-full bg-rose-500" />
-                            <span className="font-bold text-rose-900">Finished</span>
-                          </div>
-                          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2">
-                            <span className="w-3 h-3 rounded-full bg-slate-500" />
-                            <span className="font-bold text-slate-800">Absent</span>
-                          </div>
-                        </div>
+        <div className="mt-4 text-[11px] text-slate-500 font-semibold">
+          Status colors are shown below the map.
+        </div>
+      </div>
+    </div>
+  )}
+</div>
 
-                        <div className="mt-3 text-[11px] text-slate-500 font-semibold">
-                          Tip: Use the legend below the map as well (same colors).
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setMapGuideOpen(false)}
-                    className="shrink-0 px-3 py-1.5 rounded-2xl text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
-                    title="Close"
-                  >
-                    ✕ Close
-                  </button>
-                </div>
-              </div>
-            ) : null}
 
 
           <div className="relative w-full h-[620px] md:h-[680px] bg-gradient-to-b from-slate-50 to-white">
