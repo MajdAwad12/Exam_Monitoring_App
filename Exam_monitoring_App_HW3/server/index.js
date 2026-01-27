@@ -129,6 +129,7 @@ async function start() {
      ⏱️ EXAM TIME ALERT TIMER
   ========================= */
   setInterval(async () => {
+  try {
     const now = Date.now();
     const exams = await Exam.find({ status: "running" });
 
@@ -138,9 +139,13 @@ async function start() {
       const remainingMs = new Date(exam.endAt).getTime() - now;
       if (remainingMs <= 0) continue;
 
+      // ✅ make sure nested structures exist
       exam.report = exam.report || {};
       exam.report.summary = exam.report.summary || {};
-      exam.report.summary.timeAlerts ||= {};
+      exam.report.summary.timeAlerts = exam.report.summary.timeAlerts || {};
+      exam.report.timeline = Array.isArray(exam.report.timeline) ? exam.report.timeline : [];
+
+      exam.events = Array.isArray(exam.events) ? exam.events : [];
 
       const alerts = [
         { min: 30, key: "m30", type: "EXAM_30_MIN_LEFT" },
@@ -149,10 +154,7 @@ async function start() {
       ];
 
       for (const a of alerts) {
-        if (
-          remainingMs <= a.min * 60 * 1000 &&
-          !exam.report.summary.timeAlerts[a.key]
-        ) {
+        if (remainingMs <= a.min * 60 * 1000 && !exam.report.summary.timeAlerts[a.key]) {
           exam.report.timeline.push({
             kind: a.type,
             at: new Date(),
@@ -168,7 +170,7 @@ async function start() {
 
           exam.report.summary.timeAlerts[a.key] = true;
 
-          globalThis.__wss?.clients.forEach((c) => {
+          globalThis.__wss?.clients?.forEach((c) => {
             if (c.readyState === WebSocket.OPEN) {
               c.send(JSON.stringify({ type: "EXAM_UPDATED" }));
             }
@@ -180,7 +182,11 @@ async function start() {
       exam.markModified("events");
       await exam.save();
     }
-  }, 30000); // כל 30 שניות
+  } catch (err) {
+    console.error("⛔ Exam timer failed:", err?.message || err);
+  }
+}, 30000);
+
 
   httpServer.listen(port, () =>
     console.log("🚀 Server running on", port)
