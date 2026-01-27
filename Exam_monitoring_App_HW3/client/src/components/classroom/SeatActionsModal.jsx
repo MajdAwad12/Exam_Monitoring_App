@@ -237,66 +237,31 @@ export default function SeatActionsModal({
         {/* body */}
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
           {/* Quick actions */}
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-extrabold text-slate-900">Quick actions</div>
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-extrabold text-slate-900">Quick actions</div>
 
-              <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
-                {/* ✅ Present / Back to room */}
-                <ActionBtn
-                  disabled={!canChangeStatus}
-                  onClick={() => setStatus("present")}
-                  label={isTempOutNow ? "⬅️ Back to room" : "✅ Present"}
-                />
-
-                {/* 🚻 Out — ONLY when present */}
-                <ActionBtn
-                  disabled={!canOut}
-                  onClick={() => setStatus("temp_out")}
-                  label="🚻 Out"
-                />
-
-                {/* 🏁 Finished — ONLY when present */}
-                <ActionBtn
-                  disabled={!canChangeStatus || !isPresentNow}
-                  onClick={() => setStatus("finished")}
-                  label="🏁 Finished"
-                />
-
-                {/* ⛔ Absent — enabled also when temp_out */}
-                <ActionBtn
-                  disabled={!canChangeStatus}
-                  onClick={() => setStatus("absent")}
-                  label="⛔ Absent"
-                  tone="danger"
-                />
-
-                {/* 🕒 Not arrived — disabled when temp_out */}
-                <ActionBtn
-                  disabled={!canChangeStatus || isTempOutNow}
-                  onClick={() => setStatus("not_arrived")}
-                  label="🕒 Not arrived"
-                />
-              </div>
-
-              {!canEditAttendance ? (
-                <div className="mt-2 text-xs text-slate-500">
-                  View-only: you don’t have permission to change attendance.
-                </div>
-              ) : lockedActions ? (
-                <div className="mt-2 text-xs text-slate-500">
-                  🔒 Locked due to transfer. (Cancel is still possible below)
-                </div>
-              ) : isTempOutNow ? (
-                <div className="mt-2 text-xs text-slate-500">
-                  🚻 Student is currently <b>out</b>. You can mark them as <b>Back to room</b> or <b>Absent</b>.
-                </div>
-              ) : !isPresentNow ? (
-                <div className="mt-2 text-xs text-slate-500">
-                  🚫 Transfer/Toilet are enabled only when the student is <b>present</b>.
-                </div>
-              ) : null}
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <ActionBtn disabled={!canChangeStatus} onClick={() => setStatus("present")} label="✅ Present" />
+              <ActionBtn disabled={!canOut} onClick={() => setStatus("temp_out")} label="🚻 Out" />
+              <ActionBtn
+                disabled={!canChangeStatus || !isPresentNow}
+                onClick={() => setStatus("finished")}
+                label="🏁 Finished"
+              />
+              <ActionBtn disabled={!canChangeStatus} onClick={() => setStatus("absent")} label="⛔ Absent" />
+              <ActionBtn disabled={!canChangeStatus} onClick={() => setStatus("not_arrived")} label="🕒 Not arrived" />
             </div>
 
+            {!canEditAttendance ? (
+              <div className="mt-2 text-xs text-slate-500">View-only: you don’t have permission to change attendance.</div>
+            ) : lockedActions ? (
+              <div className="mt-2 text-xs text-slate-500">🔒 Locked due to transfer. (Cancel is still possible below)</div>
+            ) : !isPresentNow ? (
+              <div className="mt-2 text-xs text-slate-500">
+                🚫 Transfer/Toilet are enabled only when the student is <b>present</b>.
+              </div>
+            ) : null}
+          </div>
 
           {/* Transfer */}
           <div className="rounded-3xl border border-slate-200 bg-white p-4">
