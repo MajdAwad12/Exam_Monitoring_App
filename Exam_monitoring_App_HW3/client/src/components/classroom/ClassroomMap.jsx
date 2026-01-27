@@ -780,7 +780,7 @@ export default function ClassroomMap({
       {/* Title */}
       <div className="flex items-center gap-2">
         <span className="px-4 py-2 rounded-2xl border border-slate-200 bg-white text-slate-900 text-sm font-extrabold">
-          Actions Guide in the Map
+          Actions Guide in the Map :
         </span>
       </div>
 
