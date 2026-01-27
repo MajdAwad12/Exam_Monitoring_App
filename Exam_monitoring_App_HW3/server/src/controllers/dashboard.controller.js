@@ -15,6 +15,15 @@ function isRecipient(msg, user) {
   return false;
 }
 
+function hasExamEvent(exam, type) {
+  const t = String(type || "").toUpperCase();
+  return (exam?.events || []).some((e) => String(e?.type || "").toUpperCase() === t);
+}
+
+function pushExamEvent(exam, ev) {
+  exam.events = [...(exam.events || []), ev].slice(-200);
+}
+
 async function findRunningExamForUser(user) {
   if (String(user.role).toLowerCase() === "admin") {
     return Exam.findOne({ status: "running" }).sort({ startAt: 1 });
@@ -232,6 +241,77 @@ export async function getDashboardSnapshot(req, res) {
         reportStudentFiles: {},
       });
     }
+    // =========================
+// ✅ Auto "time left" events: 30 / 15 / 5 minutes (with 60s window)
+// =========================
+try {
+  if (String(exam.status || "").toLowerCase() === "running" && exam.startAt && exam.endAt) {
+    const startMs = new Date(exam.startAt).getTime();
+    const endMs = new Date(exam.endAt).getTime();
+    const nowMs = Date.now();
+
+    const ok =
+      Number.isFinite(startMs) &&
+      Number.isFinite(endMs) &&
+      startMs > 0 &&
+      endMs > startMs;
+
+    if (ok) {
+      const msLeft = endMs - nowMs;
+      if (msLeft <= 0) return;
+      let changed = false;
+
+      // "window" of 60 seconds around the exact target
+      const inWindow = (targetMin, windowSec = 90) => {
+        const targetMs = targetMin * 60 * 1000;
+        return msLeft <= targetMs && msLeft > targetMs - windowSec * 1000;
+      };
+
+      if (inWindow(30) && !hasExamEvent(exam, "EXAM_30_MIN_LEFT")) {
+        pushExamEvent(exam, {
+          at: new Date().toISOString(),
+          type: "EXAM_30_MIN_LEFT",
+          title: "30 minutes left",
+          description: "Exam will end in 30 minutes.",
+          classroom: "",
+          by: { id: "system", role: "system", name: "system" },
+        });
+        changed = true;
+      }
+
+      if (inWindow(15) && !hasExamEvent(exam, "EXAM_15_MIN_LEFT")) {
+        pushExamEvent(exam, {
+          at: new Date().toISOString(),
+          type: "EXAM_15_MIN_LEFT",
+          title: "15 minutes left",
+          description: "Exam will end in 15 minutes.",
+          classroom: "",
+          by: { id: "system", role: "system", name: "system" },
+        });
+        changed = true;
+      }
+
+      if (inWindow(5) && !hasExamEvent(exam, "EXAM_5_MIN_LEFT")) {
+        pushExamEvent(exam, {
+          at: new Date().toISOString(),
+          type: "EXAM_5_MIN_LEFT",
+          title: "5 minutes left",
+          description: "Exam will end in 5 minutes.",
+          classroom: "",
+          by: { id: "system", role: "system", name: "system" },
+        });
+        changed = true;
+      }
+
+      if (changed) {
+        exam.markModified("events");
+        await exam.save();
+      }
+    }
+  }
+} catch (e) {
+  console.error("Auto time-left events failed:", e?.message || e);
+}
 
     const role = String(user.role || "").toLowerCase();
     const isSupervisor = role === "supervisor";
