@@ -105,16 +105,23 @@ export default function SeatActionsModal({
 
   if (!open || !seat) return null;
 
-  async function setStatus(status) {
-    if (!canChangeStatus) return;
-    setLocalErr("");
-    try {
-      await onSetStatus?.(seat.studentId, { status });
-      onClose?.(); // close only on success
-    } catch (e) {
-      setLocalErr(e?.message || String(e));
-    }
+
+async function setStatus(status) {
+  if (!canChangeStatus) return;
+
+  // ✅ close immediately (fast UX)
+  onClose?.();
+
+  try {
+    await onSetStatus?.(seat.studentId, { status });
+    // success -> nothing else to do (Map will refresh)
+  } catch (e) {
+    // ✅ bubble error to parent (big message)
+    const msg = e?.message || String(e);
+    onActionError?.(msg);
   }
+}
+
 
   // ✅ Notes allowed for everyone (as requested)
   async function submitNote() {
