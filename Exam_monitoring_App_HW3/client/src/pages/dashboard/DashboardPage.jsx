@@ -1,3 +1,4 @@
+// client/src/pages/dashboard/DashboardPage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useDashboardLive } from "../../hooks/useDashboardLive";
@@ -10,7 +11,52 @@ import DashboardAddDeleteStudentsCard from "../../components/dashboard/Dashboard
 import EventsFeed from "../../components/dashboard/EventsFeed";
 import TransfersPanel from "../../components/dashboard/TransfersPanel";
 import ClassroomMap from "../../components/classroom/ClassroomMap";
-import Toast from "../../components/dashboard/Toast";
+
+import Toast from "../../components/dashboard/Toast.jsx";
+
+function normRoom(x) {
+  return String(x || "").trim();
+}
+
+function titleOf(item) {
+  const t = String(item?.type || item?.kind || "").toUpperCase();
+
+  if (t === "EXAM_30_MIN_LEFT") return "⏰ 30 Minutes Left";
+  if (t === "EXAM_15_MIN_LEFT") return "⏰ 15 Minutes Left";
+  if (t === "EXAM_5_MIN_LEFT") return "⏰ 5 Minutes Left";
+
+  if (t === "CALL_LECTURER") return "🗣️ Lecturer Called";
+  if (t === "CHEAT_NOTE") return "🧾 Cheat / Incident Note";
+  if (t === "TRANSFER_REQUEST") return "🟣 Transfer Requested";
+  if (t === "TRANSFER_APPROVED") return "✅ Transfer Approved";
+  if (t === "TRANSFER_REJECTED") return "❌ Transfer Rejected";
+
+  return t.replaceAll("_", " ");
+}
+
+function msgOf(item) {
+  // try common fields without breaking anything
+  const note = String(item?.note || item?.message || item?.text || "").trim();
+  if (note) return note;
+
+  const who = String(item?.by || item?.createdByName || item?.meta?.by || "").trim();
+  const room = String(item?.roomId || item?.classroom || item?.meta?.room || "").trim();
+  if (who && room) return `${who} • Room ${room}`;
+  if (room) return `Room ${room}`;
+  return "New update";
+}
+
+function keyOf(item) {
+  // stable unique key for "seen"
+  const id = String(item?.id || item?._id || "").trim();
+  if (id) return id;
+
+  const ts = String(item?.ts || item?.createdAt || item?.at || "").trim();
+  const kind = String(item?.type || item?.kind || "").trim();
+  const room = String(item?.roomId || item?.classroom || item?.room || "").trim();
+  const note = String(item?.note || item?.message || "").trim();
+  return `${kind}__${room}__${ts}__${note}`.slice(0, 220);
+}
 
 export default function DashboardPage() {
   const { setChatContext } = useOutletContext();
@@ -19,12 +65,6 @@ export default function DashboardPage() {
   const [roomId, setRoomId] = useState(null);
 
   const { simNow, simNowMs } = useSimClock();
-
-  // 🔔 Toast state
-  const [showToast, setShowToast] = useState(false);
-
-  // keep previous counts to detect "new event"
-  const prevCountsRef = useRef({ events: 0, alerts: 0 });
 
   // ✅ Turn polling OFF because WS will trigger refetch()
   const {
@@ -60,8 +100,8 @@ export default function DashboardPage() {
     if (!rid) return transfers || [];
     return (transfers || []).filter(
       (t) =>
-        String(t?.fromClassroom || "").trim() === rid ||
-        String(t?.toClassroom || "").trim() === rid
+        normRoom(t?.fromClassroom) === rid ||
+        normRoom(t?.toClassroom) === rid
     );
   }, [transfers, selectedRoomId]);
 
@@ -69,7 +109,7 @@ export default function DashboardPage() {
     const rid = selectedRoomId;
     if (!rid) return events || [];
     return (events || []).filter(
-      (e) => String(e?.classroom || e?.roomId || "").trim() === rid
+      (e) => normRoom(e?.classroom || e?.roomId || e?.room) === rid
     );
   }, [events, selectedRoomId]);
 
@@ -77,7 +117,7 @@ export default function DashboardPage() {
     const rid = selectedRoomId;
     if (!rid) return alerts || [];
     return (alerts || []).filter(
-      (a) => String(a?.roomId || a?.classroom || "").trim() === rid
+      (a) => normRoom(a?.roomId || a?.classroom || a?.room) === rid
     );
   }, [alerts, selectedRoomId]);
 
@@ -90,6 +130,21 @@ export default function DashboardPage() {
     const r = selectedRoomId || activeRoomId;
     return r ? `Dashboard • ${exam.courseName} • ${r}` : `Dashboard • ${exam.courseName}`;
   }, [exam, selectedRoomId, activeRoomId]);
+
+  // ✅ Toast floating notification
+  const [toast, setToast] = useState(null);
+
+  // keep track of seen items so toast triggers only on NEW ones
+  const seenRef = useRef(new Set());
+
+  const pushToast = (item, type = "info") => {
+    setToast({
+      type,
+      title: titleOf(item),
+      message: msgOf(item),
+      durationMs: 2600,
+    });
+  };
 
   // ✅ Update global bot context (Dashboard = richest context)
   useEffect(() => {
@@ -107,22 +162,6 @@ export default function DashboardPage() {
     }));
   }, [setChatContext, examId, selectedRoomId, stats, alertsForRoom, transfersForRoom]);
 
-  // 🔔 Detect NEW events / alerts and show toast
-  useEffect(() => {
-    const eCount = Array.isArray(events) ? events.length : 0;
-    const aCount = Array.isArray(alerts) ? alerts.length : 0;
-
-    const prev = prevCountsRef.current;
-
-    if (prev.events > 0 || prev.alerts > 0) {
-      if (eCount > prev.events || aCount > prev.alerts) {
-        setShowToast(true);
-      }
-    }
-
-    prevCountsRef.current = { events: eCount, alerts: aCount };
-  }, [events, alerts]);
-
   // ✅ Listen to global WS events from AppLayout and refresh dashboard data
   useEffect(() => {
     let debounceTimer = null;
@@ -138,7 +177,13 @@ export default function DashboardPage() {
       const msg = ev?.detail;
       if (!msg || typeof msg !== "object") return;
 
+      // keep your behavior
       if (msg.type === "EXAM_UPDATED" || msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED") {
+        scheduleRefetch();
+      }
+
+      // also refetch on anything that smells like new activity
+      if (String(msg.type || "").includes("INCIDENT") || String(msg.type || "").includes("ALERT") || String(msg.type || "").includes("TRANSFER")) {
         scheduleRefetch();
       }
     };
@@ -149,6 +194,38 @@ export default function DashboardPage() {
       clearTimeout(debounceTimer);
     };
   }, [refetch]);
+
+  // ✅ Trigger toast when NEW alert/event appears (after refetch updates arrays)
+  useEffect(() => {
+    const listA = Array.isArray(alertsForRoom) ? alertsForRoom : [];
+    const listE = Array.isArray(eventsForRoom) ? eventsForRoom : [];
+
+    // mark initial snapshot as seen (prevents toast spam on first load)
+    if (seenRef.current.size === 0) {
+      for (const a of listA) seenRef.current.add(keyOf(a));
+      for (const e of listE) seenRef.current.add(keyOf(e));
+      return;
+    }
+
+    // find newest unseen (prefer alerts)
+    for (const a of listA) {
+      const k = keyOf(a);
+      if (!seenRef.current.has(k)) {
+        seenRef.current.add(k);
+        pushToast(a, "warning");
+        return;
+      }
+    }
+
+    for (const e of listE) {
+      const k = keyOf(e);
+      if (!seenRef.current.has(k)) {
+        seenRef.current.add(k);
+        pushToast(e, "info");
+        return;
+      }
+    }
+  }, [alertsForRoom, eventsForRoom]);
 
   if (loading) return <RocketLoader />;
 
@@ -187,94 +264,85 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
-      {/* 🔔 Toast */}
-      <Toast
-        show={showToast}
-        message="New event received – check Events panel"
-        onClose={() => setShowToast(false)}
-      />
+    <>
+      {/* ✅ Floating toast cloud */}
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-extrabold text-slate-900 truncate">{title}</h1>
-          <p className="text-slate-600 text-sm">
-            Live monitoring • attendance • incidents • transfers
-          </p>
-        </div>
-
-        <div className="hidden md:flex items-center gap-2">
-          <button
-            onClick={refetch}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-extrabold hover:bg-slate-50"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* ✅ Only lecturer/admin can switch rooms */}
-      {canLecturerUX ? (
-        <RoomTabs
-          rooms={rooms}
-          roomId={selectedRoomId || activeRoomId || ""}
-          onChangeRoom={(rid) => setRoomId(String(rid || "").trim() || null)}
-        />
-      ) : null}
-
-      <div className="grid grid-cols-12 gap-5">
-        <div className="col-span-12">
-          <ExamOverviewCard me={me} exam={exam} stats={stats} inbox={inbox} simNow={simNow} loading={false} />
-        </div>
-
-        {canManageStudents ? (
-          <div className="col-span-12">
-            <DashboardAddDeleteStudentsCard
-              examId={examId}
-              currentRoomId={selectedRoomId || activeRoomId || ""}
-              rooms={rooms}
-              onChanged={refetch}
-            />
+      <div className="p-6 space-y-5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-extrabold text-slate-900 truncate">{title}</h1>
+            <p className="text-slate-600 text-sm">Live monitoring • attendance • incidents • transfers</p>
           </div>
+
+          <div className="hidden md:flex items-center gap-2">
+            <button
+              onClick={refetch}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-extrabold hover:bg-slate-50"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* ✅ Only lecturer/admin can switch rooms */}
+        {canLecturerUX ? (
+          <RoomTabs
+            rooms={rooms}
+            roomId={selectedRoomId || activeRoomId || ""}
+            onChangeRoom={(rid) => setRoomId(String(rid || "").trim() || null)}
+          />
         ) : null}
 
-        <div className="col-span-12">
-          <ClassroomMap
-            exam={exam}
-            me={me}
-            refreshNow={refetch}
-            nowMs={simNowMs || Date.now()}
-            forcedRoomId={selectedRoomId}
-            forcedAttendance={attendance}
-            forcedTransfers={transfersForRoom}
-            allRooms={rooms}
-            hideRoomSwitcher={true}
-          />
-        </div>
+        <div className="grid grid-cols-12 gap-5">
+          <div className="col-span-12">
+            <ExamOverviewCard me={me} exam={exam} stats={stats} inbox={inbox} simNow={simNow} loading={false} />
+          </div>
 
-        <div className="col-span-12 grid grid-cols-12 gap-5">
-          <div className="col-span-12 lg:col-span-6">
-            <TransfersPanel
+          {/* ✅ Admin + Lecturer: Add/Delete Students */}
+          {canManageStudents ? (
+            <div className="col-span-12">
+              <DashboardAddDeleteStudentsCard
+                examId={examId}
+                currentRoomId={selectedRoomId || activeRoomId || ""}
+                rooms={rooms}
+                onChanged={refetch}
+              />
+            </div>
+          ) : null}
+
+          <div className="col-span-12">
+            <ClassroomMap
+              exam={exam}
               me={me}
-              items={transfersForRoom}
-              loading={false}
-              error={""}
-              onChanged={refetch}
+              refreshNow={refetch}
+              nowMs={simNowMs || Date.now()}
+              forcedRoomId={selectedRoomId}
+              forcedAttendance={attendance}
+              forcedTransfers={transfersForRoom}
+              allRooms={rooms}
+              hideRoomSwitcher={true}
             />
           </div>
 
-          <div className="col-span-12 lg:col-span-6">
-            <EventsFeed
-              events={eventsForRoom}
-              alerts={alertsForRoom}
-              simNowMs={simNowMs}
-              activeRoomId={selectedRoomId}
-              maxItems={14}
-            />
+          <div className="col-span-12 grid grid-cols-12 gap-5">
+            <div className="col-span-12 lg:col-span-6">
+              <TransfersPanel me={me} items={transfersForRoom} loading={false} error={""} onChanged={refetch} />
+            </div>
+
+            <div className="col-span-12 lg:col-span-6">
+              <EventsFeed
+                events={eventsForRoom}
+                alerts={alertsForRoom}
+                simNowMs={simNowMs}
+                activeRoomId={selectedRoomId}
+                maxItems={14}
+              />
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
