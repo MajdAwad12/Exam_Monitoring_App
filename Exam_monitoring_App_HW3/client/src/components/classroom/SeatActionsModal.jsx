@@ -237,31 +237,94 @@ export default function SeatActionsModal({
         {/* body */}
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
           {/* Quick actions */}
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm font-extrabold text-slate-900">Quick actions</div>
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-extrabold text-slate-900">Quick actions</div>
 
-            <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
-              <ActionBtn disabled={!canChangeStatus} onClick={() => setStatus("present")} label="✅ Present" />
-              <ActionBtn disabled={!canOut} onClick={() => setStatus("temp_out")} label="🚻 Out" />
-              <ActionBtn
-                disabled={!canChangeStatus || !isPresentNow}
-                onClick={() => setStatus("finished")}
-                label="🏁 Finished"
-              />
-              <ActionBtn disabled={!canChangeStatus} onClick={() => setStatus("absent")} label="⛔ Absent" />
-              <ActionBtn disabled={!canChangeStatus} onClick={() => setStatus("not_arrived")} label="🕒 Not arrived" />
+              {(() => {
+                // current status flags
+                const st = String(seat?.status || "").toLowerCase();
+                const isOutNow = st === "temp_out";
+                const isPresentNowLocal = st === "present";
+
+                // base rules
+                const canChange = canChangeStatus; // already includes canEditAttendance && !saving && !lockedActions
+
+                // ✅ When OUT: ONLY "Back to room" + "Absent" enabled
+                const enableBack = canChange && isOutNow;
+                const enableAbsent = canChange && (isOutNow || !lockedActions); // absent allowed generally, but you asked it to be enabled during out too
+                // Disable everything else during out
+                const enableOut = canOut && !isOutNow;
+                const enableFinished = canChange && isPresentNowLocal && !isOutNow;
+                const enableNotArrived = canChange && !isOutNow;
+
+                return (
+                  <>
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      {/* ✅ Present becomes Back to room when temp_out */}
+                      <ActionBtn
+                        disabled={isOutNow ? !enableBack : !canChange}
+                        onClick={() => {
+                          if (!canChange) return;
+
+                          if (isOutNow) {
+                            // Back to room
+                            onSetStatus?.(seat.studentId, { status: "present", outStartedAt: null });
+                          } else {
+                            // Normal present
+                            onSetStatus?.(seat.studentId, { status: "present" });
+                          }
+                          onClose?.(); // close only when no error thrown (your onSetStatus is async in parent; here it's sync call)
+                        }}
+                        label={isOutNow ? "↩️ Back to room" : "✅ Present"}
+                      />
+
+                      {/* Out button disabled when already out */}
+                      <ActionBtn
+                        disabled={!enableOut}
+                        onClick={() => setStatus("temp_out")}
+                        label="🚻 Out"
+                      />
+
+                      {/* Finished disabled during out */}
+                      <ActionBtn
+                        disabled={!enableFinished}
+                        onClick={() => setStatus("finished")}
+                        label="🏁 Finished"
+                      />
+
+                      {/* ✅ Only Absent stays enabled during out */}
+                      <ActionBtn
+                        disabled={!enableAbsent}
+                        onClick={() => setStatus("absent")}
+                        label="⛔ Absent"
+                      />
+
+                      {/* Not arrived disabled during out */}
+                      <ActionBtn
+                        disabled={!enableNotArrived}
+                        onClick={() => setStatus("not_arrived")}
+                        label="🕒 Not arrived"
+                      />
+                    </div>
+
+                    {!canEditAttendance ? (
+                      <div className="mt-2 text-xs text-slate-500">View-only: you don’t have permission to change attendance.</div>
+                    ) : lockedActions ? (
+                      <div className="mt-2 text-xs text-slate-500">🔒 Locked due to transfer. (Cancel is still possible below)</div>
+                    ) : isOutNow ? (
+                      <div className="mt-2 text-xs text-slate-500">
+                        Student is <b>Out</b>: only <b>Back to room</b> and <b>Absent</b> are allowed.
+                      </div>
+                    ) : !isPresentNow ? (
+                      <div className="mt-2 text-xs text-slate-500">
+                        🚫 Transfer/Toilet are enabled only when the student is <b>present</b>.
+                      </div>
+                    ) : null}
+                  </>
+                );
+              })()}
             </div>
 
-            {!canEditAttendance ? (
-              <div className="mt-2 text-xs text-slate-500">View-only: you don’t have permission to change attendance.</div>
-            ) : lockedActions ? (
-              <div className="mt-2 text-xs text-slate-500">🔒 Locked due to transfer. (Cancel is still possible below)</div>
-            ) : !isPresentNow ? (
-              <div className="mt-2 text-xs text-slate-500">
-                🚫 Transfer/Toilet are enabled only when the student is <b>present</b>.
-              </div>
-            ) : null}
-          </div>
 
           {/* Transfer */}
           <div className="rounded-3xl border border-slate-200 bg-white p-4">
