@@ -15,13 +15,13 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // ✅ keep latest roomId without restarting polling
+  //  keep latest roomId without restarting polling
   const roomIdRef = useRef(roomId);
   useEffect(() => {
     roomIdRef.current = roomId;
   }, [roomId]);
 
-  // ✅ keep latest pollMs without restarting polling
+  //  keep latest pollMs without restarting polling
   const pollMsRef = useRef(pollMs);
   useEffect(() => {
     pollMsRef.current = pollMs;
