@@ -914,6 +914,8 @@ export default function ClassroomMap({
         onRequestTransfer={(seat, toRoom) => requestTransfer(seat, toRoom)}
         onCancelTransfer={(seat) => cancelPendingTransfer(seat)}
         onCheatNote={(seat, text) => submitCheatNote(seat, text)}
+        onActionError={(msg) => showToast(msg, "err")}
+
       />
     </div>
   );
