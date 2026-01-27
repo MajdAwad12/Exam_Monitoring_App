@@ -39,7 +39,7 @@ export default function SeatCard({ a, elapsedMs = 0, toiletCount = 0, onClick })
   const isMoving = rawStatus === "moving";
   const isPending = Boolean(a?.transferPending);
 
-  // ✅ purple if pending OR moving
+  // purple if pending OR moving
   const meta = isMoving ? transferMeta("moving") : isPending ? transferMeta("pending") : statusMeta(a?.status);
 
   const statusUI = normalizeStatus(a?.status);
@@ -50,32 +50,31 @@ export default function SeatCard({ a, elapsedMs = 0, toiletCount = 0, onClick })
   const showTimer = rawStatus === "temp_out";
   const seatTxt = seatLabel(a?.seat);
 
+  const overToiletLimit = Number(toiletCount) > 3;
+
   return (
     <button
       type="button"
       onClick={onClick}
       title={`${name}${id ? ` (${id})` : ""} • Seat: ${seatTxt}`}
       className={[
-        // ✅ keep card stable when Out timer appears
         "w-full h-full rounded-2xl border shadow-sm text-left px-3 py-2",
         "transition hover:shadow-md active:scale-[0.99]",
-        "overflow-hidden", // ✅ prevent any text from escaping the card
+        "overflow-hidden",
         meta.card,
       ].join(" ")}
     >
-      {/* ✅ Fixed-height inner layout (prevents pushing down / overflow) */}
       <div className="h-full flex flex-col min-h-0">
-        {/* Top row: name + status dot */}
+        {/* Top */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-[12px] font-extrabold text-slate-900 truncate">{name}</div>
             <div className="text-[10px] text-slate-700/80 truncate">{id ? `ID: ${id}` : "—"}</div>
           </div>
-
           <span className={`w-3 h-3 rounded-full ${meta.seat}`} />
         </div>
 
-        {/* Middle: chair + info */}
+        {/* Middle */}
         <div className="mt-2 flex items-center justify-between gap-2 min-h-0">
           <div className="relative -mt-3 w-[56px] h-[44px] shrink-0">
             <ChairIcon className="w-full h-full text-slate-800" />
@@ -86,16 +85,21 @@ export default function SeatCard({ a, elapsedMs = 0, toiletCount = 0, onClick })
             </div>
           </div>
 
-          {/* ✅ right side locked to card width; no wrap; no push */}
           <div className="min-w-0 flex-1 text-right flex flex-col">
-          <div className="text-[10px] font-extrabold text-slate-700 leading-tight whitespace-normal break-words">
-            {meta.label}
-          </div>
+            <div className="text-[10px] font-extrabold text-slate-700 leading-tight break-words">
+              {meta.label}
+            </div>
 
-            {/* bottom badges area: always one line, doesn't resize height */}
             <div className="mt-auto pt-1 flex items-center justify-end gap-2 min-w-0">
               {Number(toiletCount) > 0 ? (
-                <div className="text-[10px] font-extrabold text-amber-900 whitespace-nowrap">🚻 {Number(toiletCount)}</div>
+                <div className="flex items-center gap-1 text-[10px] font-extrabold whitespace-nowrap">
+                  <span className="text-amber-900">🚻 {Number(toiletCount)}</span>
+                  {overToiletLimit ? (
+                    <span className="text-rose-600" title="Too many toilet breaks">
+                      ⚠️
+                    </span>
+                  ) : null}
+                </div>
               ) : null}
 
               {showTimer ? (
@@ -109,7 +113,6 @@ export default function SeatCard({ a, elapsedMs = 0, toiletCount = 0, onClick })
               ) : statusUI === "waiting_transfer" ? (
                 <div className="text-[10px] font-extrabold text-purple-900 whitespace-nowrap">waiting</div>
               ) : (
-                // keep row height stable even when nothing to show
                 <span className="text-[10px] opacity-0 select-none whitespace-nowrap">.</span>
               )}
             </div>

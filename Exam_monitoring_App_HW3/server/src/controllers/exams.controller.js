@@ -618,6 +618,21 @@ export async function updateAttendance(req, res) {
             student: sSnap,
             details: {},
           });
+
+          // 🚨 NEW – alert when toilet exits exceed 3
+          if (sf.toiletCount > 3) {
+            pushExamTimeline(exam, {
+              kind: "TOO_MANY_TOILET_EXITS",
+              at: now,
+              roomId: att.classroom || "",
+              actor,
+              student: sSnap,
+              details: {
+                toiletCount: sf.toiletCount,
+                message: "Student exceeded recommended toilet breaks",
+              },
+            });
+          }
         }
 
         if (prevStatus === "temp_out" && nextStatus === "present") {

@@ -1,5 +1,4 @@
-// client/src/pages/dashboard/DashboardPage.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useDashboardLive } from "../../hooks/useDashboardLive";
 import { useSimClock } from "../../hooks/useSimClock";
@@ -11,6 +10,7 @@ import DashboardAddDeleteStudentsCard from "../../components/dashboard/Dashboard
 import EventsFeed from "../../components/dashboard/EventsFeed";
 import TransfersPanel from "../../components/dashboard/TransfersPanel";
 import ClassroomMap from "../../components/classroom/ClassroomMap";
+import Toast from "../../components/dashboard/Toast";
 
 export default function DashboardPage() {
   const { setChatContext } = useOutletContext();
@@ -19,6 +19,12 @@ export default function DashboardPage() {
   const [roomId, setRoomId] = useState(null);
 
   const { simNow, simNowMs } = useSimClock();
+
+  // 🔔 Toast state
+  const [showToast, setShowToast] = useState(false);
+
+  // keep previous counts to detect "new event"
+  const prevCountsRef = useRef({ events: 0, alerts: 0 });
 
   // ✅ Turn polling OFF because WS will trigger refetch()
   const {
@@ -101,6 +107,22 @@ export default function DashboardPage() {
     }));
   }, [setChatContext, examId, selectedRoomId, stats, alertsForRoom, transfersForRoom]);
 
+  // 🔔 Detect NEW events / alerts and show toast
+  useEffect(() => {
+    const eCount = Array.isArray(events) ? events.length : 0;
+    const aCount = Array.isArray(alerts) ? alerts.length : 0;
+
+    const prev = prevCountsRef.current;
+
+    if (prev.events > 0 || prev.alerts > 0) {
+      if (eCount > prev.events || aCount > prev.alerts) {
+        setShowToast(true);
+      }
+    }
+
+    prevCountsRef.current = { events: eCount, alerts: aCount };
+  }, [events, alerts]);
+
   // ✅ Listen to global WS events from AppLayout and refresh dashboard data
   useEffect(() => {
     let debounceTimer = null;
@@ -166,11 +188,20 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-5">
+      {/* 🔔 Toast */}
+      <Toast
+        show={showToast}
+        message="New event received – check Events panel"
+        onClose={() => setShowToast(false)}
+      />
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-extrabold text-slate-900 truncate">{title}</h1>
-          <p className="text-slate-600 text-sm">Live monitoring • attendance • incidents • transfers</p>
+          <p className="text-slate-600 text-sm">
+            Live monitoring • attendance • incidents • transfers
+          </p>
         </div>
 
         <div className="hidden md:flex items-center gap-2">
@@ -197,7 +228,6 @@ export default function DashboardPage() {
           <ExamOverviewCard me={me} exam={exam} stats={stats} inbox={inbox} simNow={simNow} loading={false} />
         </div>
 
-        {/* ✅ Admin + Lecturer: Add/Delete Students */}
         {canManageStudents ? (
           <div className="col-span-12">
             <DashboardAddDeleteStudentsCard
@@ -225,7 +255,13 @@ export default function DashboardPage() {
 
         <div className="col-span-12 grid grid-cols-12 gap-5">
           <div className="col-span-12 lg:col-span-6">
-            <TransfersPanel me={me} items={transfersForRoom} loading={false} error={""} onChanged={refetch} />
+            <TransfersPanel
+              me={me}
+              items={transfersForRoom}
+              loading={false}
+              error={""}
+              onChanged={refetch}
+            />
           </div>
 
           <div className="col-span-12 lg:col-span-6">

@@ -20,15 +20,21 @@ function sevMeta(sev) {
 
 function titleOf(item) {
   const t = String(item?.type || item?.kind || item?.eventType || "EVENT").toUpperCase();
+
+  if (t === "EXAM_30_MIN_LEFT") return "⏰ 30 Minutes Left";
+  if (t === "EXAM_15_MIN_LEFT") return "⏰ 15 Minutes Left";
+  if (t === "EXAM_5_MIN_LEFT") return "⏰ 5 Minutes Left";
+
   if (t.includes("TOILET_LONG")) return "Toilet too long";
-  if (t.includes("MESSAGE")) return "Message";
   if (t.includes("CALL_LECTURER")) return "Call lecturer";
   if (t.includes("VIOLATION")) return "Violation";
   if (t.includes("CHEAT")) return "Cheating note";
   if (t.includes("TRANSFER")) return "Transfer";
   if (t.includes("ALERT")) return "Alert";
+
   return t.replaceAll("_", " ");
 }
+
 
 function pickText(item) {
   // Try many common shapes to ensure alert content is displayed
