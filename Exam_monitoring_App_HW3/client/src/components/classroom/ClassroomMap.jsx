@@ -774,45 +774,49 @@ export default function ClassroomMap({
   </div>
 
   {/* Guide (below header) */}
-  {mapGuideOpen && (
-    <div className="px-4 pb-4 bg-slate-50">
-      <div className="rounded-3xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center gap-2">
-          <span className="px-3 py-1.5 rounded-2xl border border-slate-200 bg-white text-slate-800 text-xs font-extrabold">
-             Actions Guide in the Map  
+{mapGuideOpen && (
+  <div className="px-4 pb-4 bg-slate-50">
+    <div className="rounded-3xl border border-slate-200 bg-white p-5">
+      {/* Title */}
+      <div className="flex items-center gap-2">
+        <span className="px-4 py-2 rounded-2xl border border-slate-200 bg-white text-slate-900 text-sm font-extrabold">
+          Actions Guide in the Map
+        </span>
+      </div>
+
+      {/* Content */}
+      <div className="mt-4 grid gap-3 text-sm text-slate-700">
+        <div className="flex items-start gap-3">
+          <span className="text-base">🪑</span>
+          <span>
+            Click any <b>seat</b> to manage the student
+            (<b>Present</b> / <b>Out</b> / <b>Finished</b> / <b>Notes</b> / <b>Transfer</b>).
           </span>
-
         </div>
 
-          <div className="mt-3 grid gap-2 text-xs text-slate-700">
-          <div className="flex items-start gap-2">
-            <span>🪑</span>
-            <span>
-              Click any <b>seat</b> to manage the student (Present / Out / Finished / Notes / Transfer).
-            </span>
-          </div>
-
-          <div className="flex items-start gap-2">
-            <span>🆔</span>
-            <span>
-              Use <b>Scan / Enter Student ID</b> to quickly mark attendance.
-            </span>
-          </div>
-
-          <div className="flex items-start gap-2">
-            <span>🟣</span>
-            <span>
-              <b>PENDING</b> means a transfer request is waiting for approval.
-            </span>
-          </div>
+        <div className="flex items-start gap-3">
+          <span className="text-base">🆔</span>
+          <span>
+            Use <b>Scan / Enter Student ID</b> to quickly mark attendance.
+          </span>
         </div>
 
-        <div className="mt-4 text-[11px] text-slate-500 font-semibold">
-          Status colors are shown below the map.
+        <div className="flex items-start gap-3">
+          <span className="text-base">⏳</span>
+          <span>
+            <b>PENDING</b> means a transfer request is waiting for approval.
+          </span>
         </div>
       </div>
+
+      {/* Footer note */}
+      <div className="mt-4 text-xs text-slate-500 font-semibold">
+        Status colors are shown below the map.
+      </div>
     </div>
-  )}
+  </div>
+)}
+
 </div>
 
 
