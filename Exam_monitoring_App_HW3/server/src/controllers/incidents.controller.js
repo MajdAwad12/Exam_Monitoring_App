@@ -64,100 +64,132 @@ function isGlobalKind(kind) {
 }
 
 export async function logIncident(req, res) {
-  const { examId } = req.params;
-  const { studentId = null, kind, severity = "low", note = "", meta = {} } = req.body || {};
+  try {
+    const { examId } = req.params;
+    const body = req.body || {};
 
-  if (!kind) {
-    return res.status(400).json({ message: "kind is required" });
-  }
+    const studentId = body.studentId ?? null;
+    const kind = body.kind;
+    const severity = body.severity || "low";
+    const note = body.note || body.description || "";
+    const meta = body.meta || {};
 
-  // ✅ for global events (CALL_LECTURER) studentId is optional
-  if (!isGlobalKind(kind) && !studentId) {
-    return res.status(400).json({ message: "studentId is required for this incident kind" });
-  }
+    if (!kind) return res.status(400).json({ message: "kind is required" });
 
-  const exam = await Exam.findById(examId);
-  if (!exam) return res.status(404).json({ message: "Exam not found" });
+    // ✅ Retry on Mongoose VersionError (concurrent exam.save)
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const exam = await Exam.findById(examId);
+      if (!exam) return res.status(404).json({ message: "Exam not found" });
 
-  ensureMaps(exam);
+      // ---- keep these helpers exactly as in your file ----
+      // ensureMaps(exam)
+      // actorFromReq(req)
+      // isGlobalKind(kind)
+      // ensureStudentFile(exam, studentId)
+      // ensureStudentStat(exam, studentId)
+      // -----------------------------------------------
 
-  const actor = actorFromReq(req);
+      ensureMaps(exam);
 
-  // find attendance record if studentId exists
-  const a =
-    studentId != null
-      ? (exam.attendance || []).find((x) => String(x.studentId) === String(studentId))
-      : null;
+      const actor = actorFromReq(req);
 
-  const classroom =
-    meta.room || meta.classroom || a?.roomId || a?.classroom || "";
-  const seat = meta.seat || a?.seat || "";
+      // If this is not a global kind, require studentId
+      if (!isGlobalKind(kind) && !studentId) {
+        return res.status(400).json({ message: "studentId is required for this incident kind" });
+      }
 
-  // 1) Save to exam.events (for dashboard cards / feed)
-  exam.events.push({
-    type: String(kind),
-    timestamp: new Date(),
-    description: String(note || ""),
-    severity,
-    classroom,
-    seat,
-    studentId: studentId || null,
-    actor,
-  });
+      const a =
+        studentId != null
+          ? (exam.attendance || []).find((x) => String(x.studentId) === String(studentId))
+          : null;
 
-  // 2) Save to exam.report.timeline (global exam report)
-  exam.report.timeline.push({
-    kind: "INCIDENT",
-    at: new Date(),
-    roomId: classroom,
-    actor,
-    student: studentId
-      ? {
-          id: studentId,
-          name: a?.name || "",
-          code: a?.studentNumber || "",
+      const roomId = meta.roomId || meta.room || meta.classroom || a?.roomId || a?.classroom || "";
+      const seat = meta.seat || a?.seat || "";
+
+      // ✅ caps (avoid huge docs)
+      const MAX_EVENTS = 200;
+      const MAX_TIMELINE = 300;
+      const MAX_STUDENT_TIMELINE = 200;
+
+      // 1) events
+      exam.events = exam.events || [];
+      exam.events.push({
+        type: String(kind),
+        timestamp: new Date(),
+        description: String(note || ""),
+        severity: String(severity),
+        classroom: String(roomId),
+        seat: String(seat),
+        studentId: studentId || null,
+        actor,
+      });
+      exam.events = exam.events.slice(-MAX_EVENTS);
+
+      // 2) report timeline
+      if (!exam.report) exam.report = {};
+      if (!Array.isArray(exam.report.timeline)) exam.report.timeline = [];
+      if (!exam.report.summary) exam.report.summary = {};
+
+      exam.report.timeline.push({
+        kind: "INCIDENT",
+        at: new Date(),
+        roomId: String(roomId),
+        actor,
+        student: studentId
+          ? { id: String(studentId), name: a?.name || "", code: a?.studentNumber || "", seat, classroom: roomId }
+          : null,
+        details: { kind, severity, note, meta },
+      });
+      exam.report.timeline = exam.report.timeline.slice(-MAX_TIMELINE);
+
+      // 3) student file/stats
+      if (studentId) {
+        const file = ensureStudentFile(exam, studentId);
+        const stat = ensureStudentStat(exam, studentId);
+
+        file.notes = file.notes || [];
+        file.timeline = file.timeline || [];
+
+        file.notes.push(`${kind}: ${note}`.trim());
+        file.incidentCount = Number(file.incidentCount || 0) + 1;
+        file.violations = Number(file.violations || 0) + 1;
+
+        file.timeline.push({
+          at: new Date(),
+          kind: "INCIDENT",
+          note: `${kind}: ${note}`.trim(),
+          severity,
+          classroom: roomId,
           seat,
-          classroom,
-        }
-      : null,
-    details: { kind, severity, note, meta },
-  });
+          meta,
+        });
+        file.timeline = file.timeline.slice(-MAX_STUDENT_TIMELINE);
 
-  // 3) If this is student-related => save to student file/stats
-  if (studentId) {
-    const file = ensureStudentFile(exam, studentId);
-    const stat = ensureStudentStat(exam, studentId);
+        stat.incidentCount = Number(stat.incidentCount || 0) + 1;
+        stat.lastIncidentAt = new Date();
 
-    file.notes.push(`${kind}: ${note}`.trim());
-    file.incidentCount = Number(file.incidentCount || 0) + 1;
-    file.violations = Number(file.violations || 0) + 1;
+        if (a) a.violations = Number(a.violations || 0) + 1;
 
-    file.timeline.push({
-      at: new Date(),
-      kind: "INCIDENT",
-      note: `${kind}: ${note}`.trim(),
-      severity,
-      classroom,
-      seat,
-      meta,
-    });
+        exam.report.summary.incidents = Number(exam.report.summary.incidents || 0) + 1;
+        exam.report.summary.violations = Number(exam.report.summary.violations || 0) + 1;
+      } else {
+        exam.report.summary.incidents = Number(exam.report.summary.incidents || 0) + 1;
+      }
 
-    stat.incidentCount = Number(stat.incidentCount || 0) + 1;
-    stat.lastIncidentAt = new Date();
+      try {
+        await exam.save();
+        const out = exam.toObject({ getters: true });
+        return res.json({ ok: true, exam: { ...out, id: String(out._id) } });
+      } catch (err) {
+        // ✅ If concurrent save happened, retry
+        if (err?.name === "VersionError" && attempt < 3) continue;
+        throw err;
+      }
+    }
 
-    // bump attendance violations for quick UI
-    if (a) a.violations = Number(a.violations || 0) + 1;
-
-    if (!exam.report.summary) exam.report.summary = {};
-    exam.report.summary.incidents = Number(exam.report.summary.incidents || 0) + 1;
-    exam.report.summary.violations = Number(exam.report.summary.violations || 0) + 1;
-  } else {
-    // global incident summary
-    if (!exam.report.summary) exam.report.summary = {};
-    exam.report.summary.incidents = Number(exam.report.summary.incidents || 0) + 1;
+    return res.status(409).json({ message: "CONFLICT_TRY_AGAIN" });
+  } catch (err) {
+    console.error("logIncident error:", err);
+    return res.status(500).json({ message: err?.message || "Failed to log incident" });
   }
-
-  await exam.save();
-  const out = exam.toObject();
-  return res.json({ ok: true, exam: { ...out, id: String(out._id) } });
 }

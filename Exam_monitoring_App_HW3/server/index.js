@@ -42,9 +42,7 @@ expressApp.use(express.json());
 /* =========================
    Health
 ========================= */
-expressApp.get("/health", (_, res) =>
-  res.json({ ok: true, ts: new Date().toISOString() })
-);
+expressApp.get("/health", (_, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
 /* =========================
    CORS
@@ -114,83 +112,124 @@ async function start() {
   const port = process.env.PORT || 5000;
 
   const httpServer = http.createServer(expressApp);
+
   const wsServer = new WebSocketServer({ server: httpServer, path: "/ws" });
   globalThis.__wss = wsServer;
 
   wsServer.on("connection", (socket) => {
     socket.send(JSON.stringify({ type: "WELCOME" }));
+
     const ping = setInterval(() => {
       if (socket.readyState === WebSocket.OPEN) socket.ping();
     }, 30000);
+
     socket.on("close", () => clearInterval(ping));
   });
 
   /* =========================
      ⏱️ EXAM TIME ALERT TIMER
+     ✅ FIX: atomic update (no exam.save) to avoid VersionError:
+     "No matching document found for id ... version ..."
   ========================= */
+  const ALERTS = [
+    { min: 30, key: "m30", type: "EXAM_30_MIN_LEFT" },
+    { min: 15, key: "m15", type: "EXAM_15_MIN_LEFT" },
+    { min: 5, key: "m5", type: "EXAM_5_MIN_LEFT" },
+  ];
+
+  let timerBusy = false;
+
   setInterval(async () => {
-  try {
-    const now = Date.now();
-    const exams = await Exam.find({ status: "running" });
+    if (timerBusy) return;
+    timerBusy = true;
 
-    for (const exam of exams) {
-      if (!exam.endAt) continue;
+    try {
+      const nowMs = Date.now();
 
-      const remainingMs = new Date(exam.endAt).getTime() - now;
-      if (remainingMs <= 0) continue;
+      // lean + minimal fields (fast, avoids mongoose doc versioning)
+      const exams = await Exam.find({ status: "running" })
+        .select("_id endAt report.summary.timeAlerts")
+        .lean();
 
-      // ✅ make sure nested structures exist
-      exam.report = exam.report || {};
-      exam.report.summary = exam.report.summary || {};
-      exam.report.summary.timeAlerts = exam.report.summary.timeAlerts || {};
-      exam.report.timeline = Array.isArray(exam.report.timeline) ? exam.report.timeline : [];
+      for (const exam of exams) {
+        if (!exam?.endAt) continue;
 
-      exam.events = Array.isArray(exam.events) ? exam.events : [];
+        const endMs = new Date(exam.endAt).getTime();
+        if (!Number.isFinite(endMs)) continue;
 
-      const alerts = [
-        { min: 30, key: "m30", type: "EXAM_30_MIN_LEFT" },
-        { min: 15, key: "m15", type: "EXAM_15_MIN_LEFT" },
-        { min: 5, key: "m5", type: "EXAM_5_MIN_LEFT" },
-      ];
+        const remainingMs = endMs - nowMs;
+        if (remainingMs <= 0) continue;
 
-      for (const a of alerts) {
-        if (remainingMs <= a.min * 60 * 1000 && !exam.report.summary.timeAlerts[a.key]) {
-          exam.report.timeline.push({
-            kind: a.type,
-            at: new Date(),
-            details: { minutesLeft: a.min },
-          });
+        const timeAlerts = exam?.report?.summary?.timeAlerts || {};
 
-          exam.events.push({
-            type: a.type,
-            timestamp: new Date(),
-            severity: "medium",
-            description: `${a.min} minutes remaining`,
-          });
+        for (const a of ALERTS) {
+          const shouldFire = remainingMs <= a.min * 60 * 1000;
+          const alreadyFired = Boolean(timeAlerts?.[a.key]);
+          if (!shouldFire || alreadyFired) continue;
 
-          exam.report.summary.timeAlerts[a.key] = true;
+          const at = new Date();
 
-          globalThis.__wss?.clients?.forEach((c) => {
-            if (c.readyState === WebSocket.OPEN) {
-              c.send(JSON.stringify({ type: "EXAM_UPDATED" }));
-            }
-          });
+          // atomic: set flag + push timeline + push event
+          const filter = {
+            _id: exam._id,
+            status: "running",
+            [`report.summary.timeAlerts.${a.key}`]: { $ne: true },
+          };
+
+          const update = {
+            $set: { [`report.summary.timeAlerts.${a.key}`]: true },
+            $push: {
+              "report.timeline": {
+                kind: a.type,
+                at,
+                roomId: null,
+                actor: { id: null, name: "system", role: "system" },
+                student: null,
+                details: { minutesLeft: a.min },
+              },
+              events: {
+                type: a.type,
+                timestamp: at,
+                severity: "medium",
+                description: `${a.min} minutes remaining`,
+                classroom: "",
+                seat: "",
+                studentId: null,
+              },
+            },
+          };
+
+          const r = await Exam.updateOne(filter, update);
+
+          // only broadcast if we actually updated (prevents duplicate pushes)
+          if (r?.modifiedCount === 1) {
+            globalThis.__wss?.clients?.forEach((c) => {
+              if (c.readyState === WebSocket.OPEN) {
+                c.send(
+                  JSON.stringify({
+                    type: "EXAM_UPDATED",
+                    examId: String(exam._id),
+                    at: at.toISOString(),
+                    reason: "time_alert",
+                    minutesLeft: a.min,
+                  })
+                );
+              }
+            });
+
+            // update local cached flag so we don't try again in same loop
+            timeAlerts[a.key] = true;
+          }
         }
       }
-
-      exam.markModified("report");
-      exam.markModified("events");
-      await exam.save();
+    } catch (err) {
+      console.error("⛔ Exam timer failed:", err?.message || err);
+    } finally {
+      timerBusy = false;
     }
-  } catch (err) {
-    console.error("⛔ Exam timer failed:", err?.message || err);
-  }
-}, 30000);
+  }, 30000);
 
-
-  httpServer.listen(port, () =>
-    console.log("🚀 Server running on", port)
-  );
+  httpServer.listen(port, () => console.log("🚀 Server running on", port));
 }
 
 start();

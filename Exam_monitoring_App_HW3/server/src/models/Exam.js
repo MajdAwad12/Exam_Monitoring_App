@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 
 /* =========================
    Attendance (per student)
+   ✅ FIX: Keep _id (so we can update safely by attendance._id)
 ========================= */
 const attendanceSchema = new mongoose.Schema(
   {
@@ -29,7 +30,11 @@ const attendanceSchema = new mongoose.Schema(
 
     violations: { type: Number, default: 0 },
   },
-  { _id: false }
+  {
+    // ❌ was: { _id: false }
+    // ✅ keep _id so we can reference / update a specific attendance row safely
+    _id: true,
+  }
 );
 
 const eventSchema = new mongoose.Schema(
@@ -158,14 +163,13 @@ const classroomSchema = new mongoose.Schema(
 );
 
 /* =========================
-   ✅ NEW: Lecturer assignment per rooms
-   - 1 lecturer per 3 rooms
+   Lecturer assignment per rooms
 ========================= */
 const lecturerAssignmentSchema = new mongoose.Schema(
   {
     id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     name: { type: String, default: "" },
-    roomIds: { type: [String], default: [] }, // ✅ e.g. ["A101","B202","C303"]
+    roomIds: { type: [String], default: [] }, // e.g. ["A101","B202","C303"]
   },
   { _id: false }
 );
@@ -182,10 +186,7 @@ const examSchema = new mongoose.Schema(
 
     status: { type: String, enum: ["scheduled", "running", "ended"], default: "scheduled" },
 
-    // ✅ Main lecturer (for first 3 rooms)
     lecturer: { type: lecturerAssignmentSchema, required: true },
-
-    // ✅ Additional lecturers (each for next 3 rooms)
     coLecturers: { type: [lecturerAssignmentSchema], default: [] },
 
     supervisors: [
@@ -228,7 +229,7 @@ const examSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    collection: "moddle", // ✅ keep as you requested
+    collection: "moddle", // ✅ keep as requested
   }
 );
 

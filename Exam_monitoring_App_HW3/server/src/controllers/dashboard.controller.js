@@ -14,6 +14,7 @@ function isRecipient(msg, user) {
   if (toRoles.includes(user.role)) return true;
   return false;
 }
+
 async function findRunningExamForUser(user) {
   if (String(user.role).toLowerCase() === "admin") {
     return Exam.findOne({ status: "running" }).sort({ startAt: 1 });

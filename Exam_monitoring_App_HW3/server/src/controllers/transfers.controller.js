@@ -15,6 +15,15 @@ function isLecturerOrAdmin(user) {
   const r = roleOf(user);
   return r === "lecturer" || r === "admin";
 }
+
+async function pushExamTimelineAtom(examId, item) {
+  await Exam.updateOne({ _id: examId }, { $push: { "report.timeline": item } });
+}
+
+async function pushExamEventAtom(examId, item) {
+  await Exam.updateOne({ _id: examId }, { $push: { events: item } });
+}
+
 function isSupervisor(user) {
   return roleOf(user) === "supervisor";
 }
@@ -47,10 +56,33 @@ function ensureReport(exam) {
   if (!exam.report.summary) exam.report.summary = {};
   if (!Array.isArray(exam.report.timeline)) exam.report.timeline = [];
 }
-function pushTimeline(exam, payload) {
-  ensureReport(exam);
-  exam.report.timeline.push(payload);
-}
+
+const timelineItem = {
+  kind: "TRANSFER_REQUEST",
+  at: new Date(),
+  roomId: fromClassroom,
+  actor: actorOf(user),
+  student: {
+    id: att.studentId,
+    name: att.name || "",
+    code: att.studentNumber || "",
+    seat: fromSeat,
+    classroom: fromClassroom,
+  },
+  details: {
+    toClassroom: targetRoom,
+    toSeat: seatNorm,
+    requestId: String(created._id),
+    note: created.note,
+    reasonCode: created.reasonCode || "",
+  },
+};
+
+// ✅ atomic push (no exam.save)
+await pushExamTimelineAtom(eid, timelineItem);
+
+return res.status(201).json({ item: created });
+
 
 /* =========================
    Events helpers (Exam.events schema from Exam.js)
