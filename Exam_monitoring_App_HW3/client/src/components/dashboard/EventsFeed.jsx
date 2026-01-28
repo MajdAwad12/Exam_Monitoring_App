@@ -26,11 +26,13 @@ function titleOf(item) {
   if (t === "EXAM_5_MIN_LEFT") return "⏰ 5 Minutes Left";
 
   if (t.includes("TOILET_LONG")) return "Toilet too long";
+  if (t.includes("TOO_MANY_TOILET") || t.includes("TOILET_LIMIT")) return "Toilet limit reached (3+)";
   if (t.includes("CALL_LECTURER")) return "Call lecturer";
   if (t.includes("VIOLATION")) return "Violation";
   if (t.includes("CHEAT")) return "Cheating note";
   if (t.includes("TRANSFER")) return "Transfer";
   if (t.includes("ALERT")) return "Alert";
+  if (t.includes("INCIDENT")) return "Incident";
 
   return t.replaceAll("_", " ");
 }
@@ -73,7 +75,6 @@ function normalize(item, source) {
   const name = item?.name || item?.student?.name || item?.studentName || "";
 
   const text = pickText(item);
-
   return { source, at, severity, roomId, seat, text, studentCode, name, raw: item };
 }
 
@@ -94,11 +95,44 @@ function sigOf(it) {
   ].join("|");
 }
 
+/* =========================
+   ✅ Toast filtering logic
+   - Only notify parent on important, NEW, RECENT events
+========================= */
+function shouldNotifyToast(it) {
+  if (!it) return false;
+
+  const sev = String(it.severity || "low").toLowerCase();
+  const type = String(it.raw?.type || it.raw?.kind || it.raw?.eventType || "").toUpperCase();
+  const src = String(it.source || "").toLowerCase();
+
+  // ✅ Alerts always allowed
+  if (src === "alert") return true;
+
+  // ✅ Explicit important types
+  if (type.includes("INCIDENT") || type.includes("ALERT") || type.includes("TRANSFER")) return true;
+
+  // ✅ Toilet limit (3+): include 3 and above
+  if (type.includes("TOO_MANY_TOILET") || type.includes("TOILET_LIMIT")) return true;
+
+  // ✅ Severity medium+ (optional safety net)
+  if (sev === "medium" || sev === "high" || sev === "critical") return true;
+
+  // ❌ Everything else (like normal toilet exit) should not trigger toast
+  return false;
+}
+
+function isRecent(at, ms = 12000) {
+  const t = new Date(at || 0).getTime();
+  if (!Number.isFinite(t)) return false;
+  return Date.now() - t <= ms;
+}
+
 export default function EventsFeed({
   events = [],
   alerts = [],
   activeRoomId = "",
-  onNewEvent, // ✅ NEW: callback when a new newest item arrives
+  onNewEvent, // ✅ callback when a new important newest item arrives
 }) {
   const [q, setQ] = useState("");
   const [onlyThisRoom, setOnlyThisRoom] = useState(false);
@@ -134,12 +168,13 @@ export default function EventsFeed({
     if (sig !== lastSigRef.current) {
       lastSigRef.current = sig;
       sessionStorage.setItem(storageKey, sig);
-      if (typeof onNewEvent === "function") {
-        // notify parent (DashboardPage) to show side bubble
+
+      // ✅ Notify ONLY if important + recent
+      if (typeof onNewEvent === "function" && shouldNotifyToast(newest) && isRecent(newest.at, 12000)) {
         onNewEvent(newest);
       }
     }
-  }, [merged, onNewEvent]);
+  }, [merged, onNewEvent, storageKey]);
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();

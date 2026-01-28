@@ -1,5 +1,5 @@
 // client/src/pages/dashboard/DashboardPage.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useDashboardLive } from "../../hooks/useDashboardLive";
 import { useSimClock } from "../../hooks/useSimClock";
@@ -83,16 +83,34 @@ export default function DashboardPage() {
     const r = selectedRoomId || activeRoomId;
     return r ? `Dashboard • ${exam.courseName} • ${r}` : `Dashboard • ${exam.courseName}`;
   }, [exam, selectedRoomId, activeRoomId]);
-  // ✅ Toast (shows only for real-time WS events while staying on Dashboard)
+
+  // ✅ Toast (only when we decide it's important)
   const [toast, setToast] = useState(null);
-  const showToast = (t) => {
+
+  function showToastFromItem(item) {
+    if (!item) return;
+
+    const sev = String(item.severity || "info").toLowerCase();
+    const type = String(item.type || "").toUpperCase();
+
+    let tTitle = "New update";
+    if (type.includes("TOO_MANY_TOILET") || type.includes("TOILET_LIMIT")) {
+      tTitle = "Toilet limit reached (3+)";
+    } else if (type.includes("INCIDENT")) tTitle = "New incident reported";
+    else if (type.includes("TRANSFER")) tTitle = "New transfer update";
+    else if (type.includes("ALERT")) tTitle = "New alert";
+    else if (sev === "high" || sev === "critical") tTitle = "Important event";
+
+    const who = item.studentNumber ? `${item.name || "Student"} • ${item.studentNumber}` : item.name || "";
+    const msg = item.text || item.title || item.description || "Check Events panel for details.";
+
     setToast({
-      type: t?.type || "info",
-      title: t?.title || "New update",
-      message: t?.message || "A new event was received.",
-      durationMs: t?.durationMs || 2600,
+      type: sev === "critical" || sev === "high" ? "danger" : sev === "medium" ? "warning" : "info",
+      title: tTitle,
+      message: `${who ? who + " — " : ""}${msg}`,
+      durationMs: 2000, // ✅ 2 seconds
     });
-  };
+  }
 
   // ✅ Update global bot context (Dashboard = richest context)
   useEffect(() => {
@@ -125,28 +143,28 @@ export default function DashboardPage() {
       const msg = ev?.detail;
       if (!msg || typeof msg !== "object") return;
 
-      // keep your behavior
       if (msg.type === "EXAM_UPDATED" || msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED") {
         scheduleRefetch();
       }
 
-      // also refetch on anything that smells like new activity
       const t = String(msg.type || "");
-      if (t.includes("TOO_MANY_TOILET")) {
+
+      // ✅ Toast ONLY for toilet limit (3+)
+      if (t.includes("TOO_MANY_TOILET") || t.includes("TOILET_LIMIT")) {
         scheduleRefetch();
-        showToast({ type: "warning", title: "Toilet limit", message: "A student exceeded toilet exits." });
+        showToastFromItem({
+          type: "TOO_MANY_TOILET",
+          severity: "medium",
+          title: "Toilet limit reached (3+)",
+          description: "A student exceeded toilet exits.",
+        });
         return;
       }
+
+      // still refetch for other important activity (no toast here)
       if (t.includes("INCIDENT") || t.includes("ALERT") || t.includes("TRANSFER")) {
         scheduleRefetch();
       }
-
-      // ✅ Toast only for real-time activity
-      showToast({
-        type: t.includes("ALERT") ? "warning" : t.includes("INCIDENT") ? "error" : "info",
-        title: "New event",
-        message: t.replaceAll("_", " "),
-      });
     };
 
     window.addEventListener("ws:event", onWs);
@@ -194,7 +212,14 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Toast toast={toast} onClose={() => setToast(null)} />
+      <Toast
+        show={!!toast}
+        type={toast?.type}
+        title={toast?.title}
+        message={toast?.message}
+        durationMs={toast?.durationMs || 2000}
+        onClose={() => setToast(null)}
+      />
 
       <div className="p-6 space-y-5">
         {/* Header */}
@@ -264,7 +289,7 @@ export default function DashboardPage() {
                 events={eventsForRoom}
                 alerts={alertsForRoom}
                 activeRoomId={selectedRoomId}
-                onNewEvent={() => {}}
+                onNewEvent={(item) => showToastFromItem(item)}
               />
             </div>
           </div>

@@ -1,78 +1,115 @@
-// client/src/components/dashboard/Toast.jsx
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
-function toneClasses(type) {
+function tone(type) {
   const t = String(type || "info").toLowerCase();
-
-  if (t === "ok" || t === "success") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-900";
+  if (t === "danger" || t === "error") {
+    return {
+      wrap: "border-rose-300 bg-rose-50 text-rose-950",
+      badge: "bg-rose-600 text-white",
+      icon: "⚠️",
+      bar: "bg-rose-500",
+    };
   }
-  if (t === "warn" || t === "warning") {
-    return "border-amber-200 bg-amber-50 text-amber-900";
+  if (t === "warning" || t === "warn") {
+    return {
+      wrap: "border-amber-300 bg-amber-50 text-amber-950",
+      badge: "bg-amber-500 text-white",
+      icon: "🔔",
+      bar: "bg-amber-500",
+    };
   }
-  if (t === "error" || t === "danger") {
-    return "border-rose-200 bg-rose-50 text-rose-900";
-  }
-  return "border-slate-200 bg-white text-slate-900";
+  return {
+    wrap: "border-sky-300 bg-white text-slate-950",
+    badge: "bg-sky-600 text-white",
+    icon: "✅",
+    bar: "bg-sky-500",
+  };
 }
 
-/**
- * Toast (single)
- * - fixed, floating "cloud" notification
- * - auto hides after `durationMs`
- *
- * usage:
- * <Toast toast={toast} onClose={() => setToast(null)} />
- *
- * toast: { title?: string, message: string, type?: "info"|"success"|"warning"|"error", durationMs?: number }
- */
-export default function Toast({ toast, onClose }) {
+export default function Toast({
+  show,
+  type = "info",
+  title = "Update",
+  message = "",
+  durationMs = 3500,
+  onClose,
+}) {
+  const ui = useMemo(() => tone(type), [type]);
+
   useEffect(() => {
-    if (!toast) return;
-
-    const ms = Number(toast?.durationMs || 2600);
-    const t = setTimeout(() => onClose?.(), Math.max(800, ms));
+    if (!show) return;
+    const t = setTimeout(() => onClose?.(), durationMs);
     return () => clearTimeout(t);
-  }, [toast, onClose]);
+  }, [show, durationMs, onClose]);
 
-  if (!toast) return null;
-
-  const type = toast?.type || "info";
-  const title = String(toast?.title || "").trim();
-  const message = String(toast?.message || "").trim();
+  if (!show) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[80] w-[min(420px,92vw)]">
+    <div className="fixed top-5 right-5 z-[9999]">
       <div
-        className={`rounded-3xl border shadow-xl px-4 py-3 ${toneClasses(type)}`}
+        className={[
+          "w-[380px] max-w-[90vw]",
+          "rounded-3xl border shadow-2xl",
+          "backdrop-blur",
+          "overflow-hidden",
+          "animate-[toastIn_.18s_ease-out]",
+          ui.wrap,
+        ].join(" ")}
         role="status"
-        aria-live="polite"
       >
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 text-lg">
-            {String(type).toLowerCase() === "success" || String(type).toLowerCase() === "ok"
-              ? "✅"
-              : String(type).toLowerCase() === "warning" || String(type).toLowerCase() === "warn"
-              ? "⚠️"
-              : String(type).toLowerCase() === "error" || String(type).toLowerCase() === "danger"
-              ? "❌"
-              : "🔔"}
-          </div>
+        {/* Progress bar */}
+        <div className="h-1 w-full bg-black/5">
+          <div
+            className={`h-1 ${ui.bar}`}
+            style={{ width: "100%", animation: `toastBar ${durationMs}ms linear forwards` }}
+          />
+        </div>
 
-          <div className="min-w-0">
-            {title ? <div className="text-sm font-extrabold truncate">{title}</div> : null}
-            {message ? <div className="text-sm font-bold text-slate-700">{message}</div> : null}
-          </div>
+        <div className="p-4">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl leading-none">{ui.icon}</div>
 
-          <button
-            onClick={onClose}
-            className="ml-auto shrink-0 px-3 py-1.5 rounded-2xl border border-slate-200 bg-white/70 hover:bg-white text-xs font-extrabold"
-            title="Close"
-          >
-            ✕
-          </button>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <div className="font-extrabold text-base">{title}</div>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${ui.badge}`}>
+                  LIVE
+                </span>
+              </div>
+
+              <div className="mt-1 text-sm text-slate-700">{message}</div>
+
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={() => onClose?.()}
+                  className="ml-auto px-3 py-1.5 rounded-2xl text-sm font-bold bg-black/5 hover:bg-black/10"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() => onClose?.()}
+              className="text-slate-500 hover:text-slate-700 px-2 -mt-1"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes toastIn {
+          from { transform: translateY(-6px); opacity: 0; }
+          to   { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes toastBar {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-100%); }
+        }
+      `}</style>
     </div>
   );
 }
