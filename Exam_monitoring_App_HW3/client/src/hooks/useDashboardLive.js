@@ -29,6 +29,7 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
 
   const aliveRef = useRef(true);
   const inFlightRef = useRef(false);
+  const pendingForceRef = useRef(false); // if a forced refresh happens during an in-flight fetch, run again after it finishes
   const reqIdRef = useRef(0);
 
   const timerRef = useRef(null);
@@ -74,7 +75,12 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
     async (opts = { force: false }) => {
       if (!aliveRef.current) return;
       if (shouldPause() && !opts.force) return;
-      if (inFlightRef.current) return;
+      if (inFlightRef.current) {
+        // If user explicitly requested refresh (force) while a poll is already fetching,
+        // queue another fetch immediately after the current one completes.
+        if (opts.force) pendingForceRef.current = true;
+        return;
+      }
 
       inFlightRef.current = true;
       const myReqId = ++reqIdRef.current;
@@ -103,6 +109,10 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
         backoffRef.current = clamp(backoffRef.current * 2, 1, MAX_BACKOFF);
       } finally {
         inFlightRef.current = false;
+        if (pendingForceRef.current) {
+          pendingForceRef.current = false;
+          setTimeout(() => fetchOnce({ force: true }), 0);
+        }
       }
     },
     [shouldPause]

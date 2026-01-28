@@ -712,8 +712,12 @@ export async function updateAttendance(req, res) {
             att.outStartedAt = leftAt;
 
             // ✅ increment once on transition
-            ss.toiletCount = (Number(ss.toiletCount) || 0) + 1;
-            ss.activeToilet = {
+            // IMPORTANT: use studentFile as the baseline if it was edited/reset manually in DB,
+            // otherwise studentStats may overwrite the reset with an older cached value.
+            const sf = getStudentFile(exam, studentId);
+            const baseCount = Number(sf?.toiletCount ?? ss.toiletCount ?? 0) || 0;
+            ss.toiletCount = baseCount + 1;
+ss.activeToilet = {
               leftAt,
               bySupervisorId: actor.id,
               reason: "toilet",
