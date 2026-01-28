@@ -99,7 +99,7 @@ export default function ClassroomMap({
   // optimistic patches (for status changes only)
   const [localAttendance, setLocalAttendance] = useState(attendanceSrc || []);
   const pendingRef = useRef(new Map());
-  const commitTimeoutMs = 7000;
+  const commitTimeoutMs = 60000;
 
   // local shadow copies for transfers (only when we inject missing student)
   const [localTransferShadow, setLocalTransferShadow] = useState(() => new Map());
@@ -426,14 +426,16 @@ export default function ClassroomMap({
       setSaving(true);
       await updateAttendance({ examId: exam.id, studentId, patch });
       refreshNow?.();
-    } catch (e) {
-      pendingRef.current.delete(String(resolvedId));
-      setLocalError(e?.message || String(e));
-      refreshNow?.();
-    } finally {
-      setSaving(false);
-    }
-  }
+      } catch (e) {
+    pendingRef.current.delete(String(resolvedId));
+    setLocalError(e?.message || String(e));
+    refreshNow?.();
+    throw e;     
+      }
+    finally {
+          setSaving(false);
+        }
+      }
 
   async function markPresentById(idText) {
     if (!canEditAttendance) {
