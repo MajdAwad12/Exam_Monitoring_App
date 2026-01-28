@@ -45,30 +45,42 @@ function pushExamEvent(exam, ev) {
  * ✅ Fix for "fast clicks override each other":
  * Always re-fetch latest doc inside retries, mutate, then save.
  */
-async function updateExamWithRetry(examId, mutator, retries = 5) {
+async function updateExamWithRetry(examId, mutator, retries = 6) {
+  // ✅ Atomic optimistic update (no exam.save()) to avoid VersionError under rapid multi-click
   for (let i = 0; i < retries; i++) {
     const exam = await Exam.findById(examId);
     if (!exam) return { exam: null, notFound: true };
 
-    try {
-      await mutator(exam);
+    await mutator(exam);
 
-      // deep paths
-      exam.markModified("attendance");
-      exam.markModified("report");
-      exam.markModified("events");
+    // Convert to plain objects so $set works reliably (Maps -> Objects, Dates preserved)
+    const next = exam.toObject({ depopulate: true, getters: false, virtuals: false });
 
-      const saved = await exam.save();
-      return { exam: saved, notFound: false };
-    } catch (err) {
-      const isVersionError =
-        err?.name === "VersionError" || String(err?.message || "").includes("VersionError");
-      if (!isVersionError || i === retries - 1) throw err;
-      await new Promise((r) => setTimeout(r, 25 * (i + 1)));
-    }
+    // Atomic write only if __v is still the same (optimistic CAS)
+    const updated = await Exam.findOneAndUpdate(
+      { _id: examId, __v: exam.__v },
+      {
+        $set: {
+          attendance: next.attendance,
+          report: next.report,
+          events: next.events,
+        },
+        $inc: { __v: 1 },
+      },
+      { new: true }
+    );
+
+    if (updated) return { exam: updated, notFound: false };
+
+    // version mismatch -> retry with small backoff
+    await new Promise((r) => setTimeout(r, 25 * (i + 1)));
   }
-  return { exam: null, notFound: false };
+
+  const err = new Error("CONCURRENT_UPDATE_RETRY_EXHAUSTED");
+  err.statusCode = 409;
+  throw err;
 }
+
 
 function toOut(doc) {
   const o = doc.toObject({ getters: true });
