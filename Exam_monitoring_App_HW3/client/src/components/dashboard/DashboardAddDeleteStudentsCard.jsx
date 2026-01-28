@@ -230,7 +230,7 @@ export default function DashboardAddDeleteStudentsCard({
               onClick={onAdd}
               className={[
                 "w-full rounded-2xl px-4 py-2 text-sm font-extrabold",
-                "text-white bg-emerald-600 hover:bg-emerald-700",
+                "text-white bg-emerald-400 hover:bg-emerald-300",
                 "disabled:opacity-60 disabled:cursor-not-allowed",
                 "flex items-center justify-center gap-2",
                 "shadow-sm hover:shadow-md transition-all",
