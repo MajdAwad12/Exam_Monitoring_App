@@ -88,29 +88,78 @@ export default function DashboardPage() {
   const [toast, setToast] = useState(null);
 
   function showToastFromItem(item) {
-    if (!item) return;
+  if (!item) return;
 
-    const sev = String(item.severity || "info").toLowerCase();
-    const type = String(item.type || "").toUpperCase();
+  const sev = String(item.severity || "info").toLowerCase();
+  const type = String(item.type || item.raw?.type || "").toUpperCase();
 
-    let tTitle = "New update";
-    if (type.includes("TOO_MANY_TOILET") || type.includes("TOILET_LIMIT")) {
-      tTitle = "Toilet limit reached (3+)";
-    } else if (type.includes("INCIDENT")) tTitle = "New incident reported";
-    else if (type.includes("TRANSFER")) tTitle = "New transfer update";
-    else if (type.includes("ALERT")) tTitle = "New alert";
-    else if (sev === "high" || sev === "critical") tTitle = "Important event";
+  const studentName = item.name || "Student";
+  const studentId = item.studentCode || item.studentNumber || "";
+  const room = item.roomId ? `Room ${item.roomId}` : "";
 
-    const who = item.studentNumber ? `${item.name || "Student"} • ${item.studentNumber}` : item.name || "";
-    const msg = item.text || item.title || item.description || "Check Events panel for details.";
+  let title = "New update";
+  let message = item.text || item.description || "A new event was recorded.";
+  let icon = "✅";
 
-    setToast({
-      type: sev === "critical" || sev === "high" ? "danger" : sev === "medium" ? "warning" : "info",
-      title: tTitle,
-      message: `${who ? who + " — " : ""}${msg}`,
-      durationMs: 2000, // ✅ 2 seconds
-    });
+  // ➕ Add student
+  if (type.includes("STUDENT_ADDED") || type.includes("ADD_STUDENT")) {
+    title = "Student Added";
+    icon = "➕";
+    message = `Student added to ${room} — ${studentName} • ${studentId}`;
   }
+  // 🗑️ Delete student
+  else if (type.includes("STUDENT_REMOVED") || type.includes("DELETE_STUDENT")) {
+    title = "Student Removed";
+    icon = "🗑️";
+    message = `Student removed from the exam — ${studentName} • ${studentId}`;
+  }
+  // 🚻 Toilet limit 3+
+  else if (type.includes("TOO_MANY_TOILET") || type.includes("TOILET_LIMIT")) {
+    title = "Toilet Limit Reached";
+    icon = "🚻";
+    message = `${studentName} • ${studentId} exceeded the toilet exit limit (3+)`;
+  }
+  // ⚠️ Incident
+  else if (type.includes("INCIDENT")) {
+    title = "Incident Reported";
+    icon = "⚠️";
+    message = item.text || "An incident was reported.";
+  }
+  // 🔔 Alert
+  else if (type.includes("ALERT")) {
+    title = "New Alert";
+    icon = "🔔";
+    message = item.text || "A new alert was triggered.";
+  }
+  // 🔁 Transfer
+  else if (type.includes("TRANSFER")) {
+    title = "Transfer Update";
+    icon = "🔁";
+    message = item.text || "A transfer request was updated.";
+  }
+
+  const toastType =
+    sev === "critical" || sev === "high"
+      ? "danger"
+      : sev === "medium"
+      ? "warning"
+      : "info";
+
+  setToast({
+    type: toastType,
+    title,
+    message,
+    icon,
+    durationMs: 2200,
+    actionLabel: "Go to Events",
+    onAction: () => {
+      const el = document.getElementById("events-panel");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+  });
+}
+
+
 
   // ✅ Update global bot context (Dashboard = richest context)
   useEffect(() => {
@@ -217,9 +266,13 @@ export default function DashboardPage() {
         type={toast?.type}
         title={toast?.title}
         message={toast?.message}
-        durationMs={toast?.durationMs || 2000}
+        durationMs={toast?.durationMs || 2200}
+        icon={toast?.icon}
+        actionLabel={toast?.actionLabel}
+        onAction={toast?.onAction}
         onClose={() => setToast(null)}
       />
+
 
       <div className="p-6 space-y-5">
         {/* Header */}
@@ -284,14 +337,14 @@ export default function DashboardPage() {
               <TransfersPanel me={me} items={transfersForRoom} loading={false} error={""} onChanged={refetch} />
             </div>
 
-            <div className="col-span-12 lg:col-span-6">
-              <EventsFeed
-                events={eventsForRoom}
-                alerts={alertsForRoom}
-                activeRoomId={selectedRoomId}
-                onNewEvent={(item) => showToastFromItem(item)}
-              />
-            </div>
+            <div id="events-panel" className="col-span-12 lg:col-span-6">
+            <EventsFeed
+              events={eventsForRoom}
+              alerts={alertsForRoom}
+              activeRoomId={selectedRoomId}
+              onNewEvent={(item) => showToastFromItem(item)}
+            />
+          </div>
           </div>
         </div>
       </div>

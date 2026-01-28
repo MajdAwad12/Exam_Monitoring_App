@@ -110,7 +110,17 @@ function shouldNotifyToast(it) {
   if (src === "alert") return true;
 
   // ✅ Explicit important types
-  if (type.includes("INCIDENT") || type.includes("ALERT") || type.includes("TRANSFER")) return true;
+  if (
+  type.includes("INCIDENT") ||
+  type.includes("ALERT") ||
+  type.includes("TRANSFER") ||
+  type.includes("STUDENT_ADDED") ||
+  type.includes("STUDENT_REMOVED") ||
+  type.includes("ADD_STUDENT") ||
+  type.includes("DELETE_STUDENT") ||
+  type.includes("ADD_DELETE_STUDENT")
+) return true;
+
 
   // ✅ Toilet limit (3+): include 3 and above
   if (type.includes("TOO_MANY_TOILET") || type.includes("TOILET_LIMIT")) return true;
