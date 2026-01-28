@@ -87,7 +87,7 @@ export default function Toast({
                       onAction();
                       onClose?.();
                     }}
-                    className="px-3 py-1.5 rounded-2xl text-sm font-extrabold bg-slate-900 text-white hover:bg-slate-800"
+                    className="px-3 py-1.5 rounded-2xl text-sm font-extrabold bg-amber-600 text-white hover:bg-amber-700"
                     title={actionLabel}
                   >
                     {actionLabel}
