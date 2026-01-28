@@ -20,6 +20,23 @@ function wsBroadcast(payload) {
 /* =========================
    Helpers
 ========================= */
+async function saveWithRetry(doc, retries = 5) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await doc.save();
+    } catch (err) {
+      const isVersionError =
+        err?.name === "VersionError" ||
+        String(err?.message || "").includes("VersionError");
+
+      if (!isVersionError || i === retries - 1) {
+        throw err;
+      }
+
+      await new Promise((r) => setTimeout(r, 25 * (i + 1)));
+    }
+  }
+}
 
 function toOut(doc) {
   const o = doc.toObject({ getters: true });
@@ -723,7 +740,7 @@ export async function updateAttendance(req, res) {
 
     exam.markModified("attendance");
     exam.markModified("report");
-    await exam.save();
+await saveWithRetry(exam);
 
     wsBroadcast({
       type: "EXAM_UPDATED",
@@ -847,7 +864,7 @@ export async function addStudentToExam(req, res) {
 
     exam.markModified("attendance");
     exam.markModified("report");
-    await exam.save();
+await saveWithRetry(exam);
 
     wsBroadcast({
       type: "EXAM_UPDATED",
@@ -928,7 +945,7 @@ export async function deleteStudentFromExam(req, res) {
 
     exam.markModified("attendance");
     exam.markModified("report");
-    await exam.save();
+await saveWithRetry(exam);
 
     wsBroadcast({
       type: "EXAM_UPDATED",
@@ -987,7 +1004,7 @@ export async function startExam(req, res) {
       recalcSummary(exam);
 
       exam.markModified("report");
-      await exam.save();
+await saveWithRetry(exam);
 
       wsBroadcast({
         type: "EXAM_STARTED",
@@ -1022,7 +1039,7 @@ export async function startExam(req, res) {
     recalcSummary(exam);
 
     exam.markModified("report");
-    await exam.save();
+await saveWithRetry(exam);
 
     wsBroadcast({
       type: "EXAM_STARTED",
@@ -1072,7 +1089,7 @@ export async function endExam(req, res) {
     recalcSummary(exam);
 
     exam.markModified("report");
-    await exam.save();
+await saveWithRetry(exam);
 
     wsBroadcast({
       type: "EXAM_ENDED",

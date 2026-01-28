@@ -5,6 +5,24 @@ import Exam from "../models/Exam.js";
 /* =========================
    Helpers
 ========================= */
+async function saveWithRetry(doc, retries = 5) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await doc.save();
+    } catch (err) {
+      const isVersionError =
+        err?.name === "VersionError" ||
+        String(err?.message || "").includes("VersionError");
+
+      if (!isVersionError || i === retries - 1) {
+        throw err;
+      }
+
+      await new Promise((r) => setTimeout(r, 25 * (i + 1)));
+    }
+  }
+}
+
 function normalizeRoomId(v) {
   return String(v || "").trim();
 }
@@ -363,8 +381,10 @@ export async function createTransfer(req, res) {
       student: { id: att.studentId, name: att.name || "", code: att.studentNumber || "", seat: fromSeat, classroom: fromClassroom },
       details: { toClassroom: targetRoom, toSeat: seatNorm, requestId: String(created._id), note: created.note, reasonCode: created.reasonCode || "" },
     });
+    exam.markModified("report");
 
-    await exam.save();
+
+await saveWithRetry(exam);
     return res.status(201).json({ item: created });
   } catch (err) {
     console.error("createTransfer:", err);
@@ -417,7 +437,7 @@ export async function approveTransfer(req, res) {
       });
 
       exam.markModified("events");
-      await exam.save();
+await saveWithRetry(exam);
 
       return res.status(409).json({ message: "ROOM_FULL", item: tr });
     }
@@ -464,7 +484,7 @@ export async function approveTransfer(req, res) {
       });
 
       exam.markModified("events");
-      await exam.save();
+await saveWithRetry(exam);
 
       return res.status(409).json({ message: "ROOM_FULL", item: tr });
     }
@@ -486,6 +506,8 @@ export async function approveTransfer(req, res) {
       student: { id: att.studentId, name: att.name || "", code: att.studentNumber || "", seat: att.seat || "", classroom: att.classroom || "" },
       details: { from, to: { classroom: targetRoom, seat: finalSeat }, requestId: String(tr._id) },
     });
+    exam.markModified("report");
+
 
     pushEvent(exam, {
       type: "TRANSFER_APPROVED",
@@ -499,7 +521,7 @@ export async function approveTransfer(req, res) {
 
     exam.markModified("events");
     exam.markModified("attendance");
-    await exam.save();
+await saveWithRetry(exam);
 
     tr.status = "approved";
     tr.lastError = "";
@@ -554,6 +576,8 @@ export async function rejectTransfer(req, res) {
       student: { id: tr.studentId || null, name: tr.studentName || "", code: tr.studentCode || "", seat: tr.fromSeat || tr.seat || "", classroom: tr.fromClassroom || "" },
       details: { requestId: String(tr._id), toClassroom: canonicalRoomId(exam, tr.toClassroom), toSeat: String(tr.toSeat || "").trim(), note: tr.note || "" },
     });
+    exam.markModified("report");
+
 
     pushEvent(exam, {
       type: "TRANSFER_REJECTED",
@@ -566,7 +590,7 @@ export async function rejectTransfer(req, res) {
     });
 
     exam.markModified("events");
-    await exam.save();
+await saveWithRetry(exam);
 
     return res.json({ item: tr });
   } catch (err) {
@@ -610,6 +634,8 @@ export async function cancelTransfer(req, res) {
       student: { id: tr.studentId || null, name: tr.studentName || "", code: tr.studentCode || "", seat: tr.fromSeat || tr.seat || "", classroom: tr.fromClassroom || "" },
       details: { requestId: String(tr._id), toClassroom: canonicalRoomId(exam, tr.toClassroom), toSeat: String(tr.toSeat || "").trim(), note: tr.note || "" },
     });
+    exam.markModified("report");
+
 
     pushEvent(exam, {
       type: "TRANSFER_CANCELLED",
@@ -622,7 +648,7 @@ export async function cancelTransfer(req, res) {
     });
 
     exam.markModified("events");
-    await exam.save();
+await saveWithRetry(exam);
 
     return res.json({ item: tr });
   } catch (err) {

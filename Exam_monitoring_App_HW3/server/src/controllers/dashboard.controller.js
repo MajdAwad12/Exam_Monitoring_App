@@ -4,6 +4,25 @@ import User from "../models/User.js";
 import TransferRequest from "../models/TransferRequest.js";
 
 /* =========================
+   Save helper: retry on VersionError
+========================= */
+async function saveWithRetry(doc, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await doc.save();
+    } catch (err) {
+      const isVersionError =
+        err?.name === "VersionError" ||
+        String(err?.message || "").includes("VersionError");
+
+      if (!isVersionError || i === retries - 1) throw err;
+
+      await new Promise((r) => setTimeout(r, 25 * (i + 1)));
+    }
+  }
+}
+
+/* =========================
    helpers
 ========================= */
 function isRecipient(msg, user) {
@@ -184,6 +203,22 @@ function ensureLecturerOwnsExam(req, res, exam) {
 }
 
 /* =========================
+   Ensure report maps exist AND are Maps
+========================= */
+function ensureReportMaps(exam) {
+  if (!exam.report) exam.report = {};
+  if (!exam.report.summary) exam.report.summary = {};
+
+  const sf = exam.report.studentFiles;
+  const sfIsMap = sf && typeof sf.get === "function" && typeof sf.set === "function";
+  if (!sfIsMap) exam.report.studentFiles = new Map(Object.entries(sf || {}));
+
+  const ss = exam.report.studentStats;
+  const ssIsMap = ss && typeof ss.get === "function" && typeof ss.set === "function";
+  if (!ssIsMap) exam.report.studentStats = new Map(Object.entries(ss || {}));
+}
+
+/* =========================
    clock + snapshot (existing)
 ========================= */
 export async function getClock(req, res) {
@@ -234,16 +269,16 @@ export async function getDashboardSnapshot(req, res) {
     }
 
     const role = String(user.role || "").toLowerCase();
-    const isSupervisor = role === "supervisor";
+    const isSupervisorRole = role === "supervisor";
     const isLecturerLike = role === "lecturer" || role === "admin";
 
-    const myRoomId = isSupervisor ? deriveSupervisorRoomId({ user, exam }) : "";
+    const myRoomId = isSupervisorRole ? deriveSupervisorRoomId({ user, exam }) : "";
 
     // ---------------- Attendance visibility ----------------
     const allAttendance = exam.attendance || [];
 
     const visibleAttendance =
-      isSupervisor && myRoomId
+      isSupervisorRole && myRoomId
         ? allAttendance.filter((a) => attRoom(a) === normalizeRoomId(myRoomId))
         : allAttendance;
 
@@ -329,7 +364,8 @@ export async function getDashboardSnapshot(req, res) {
       if (!isUnread) continue;
       if (!isRecipient(m, user)) continue;
 
-      if (isSupervisor && myRoomId && m.roomId && normalizeRoomId(m.roomId) !== normalizeRoomId(myRoomId)) continue;
+      if (isSupervisorRole && myRoomId && m.roomId && normalizeRoomId(m.roomId) !== normalizeRoomId(myRoomId))
+        continue;
 
       alerts.push({
         type: "MESSAGE",
@@ -348,7 +384,7 @@ export async function getDashboardSnapshot(req, res) {
       .lean();
 
     const transfers =
-      isSupervisor && myRoomId
+      isSupervisorRole && myRoomId
         ? allTransfers.filter(
             (t) =>
               normalizeRoomId(t.toClassroom) === normalizeRoomId(myRoomId) ||
@@ -359,7 +395,7 @@ export async function getDashboardSnapshot(req, res) {
     const pending = allTransfers.filter((t) => t.status === "pending");
 
     for (const t of pending) {
-      if (isSupervisor && myRoomId && normalizeRoomId(t.toClassroom) === normalizeRoomId(myRoomId)) {
+      if (isSupervisorRole && myRoomId && normalizeRoomId(t.toClassroom) === normalizeRoomId(myRoomId)) {
         alerts.push({
           type: "TRANSFER_PENDING_TO_YOU",
           severity: "medium",
@@ -397,7 +433,7 @@ export async function getDashboardSnapshot(req, res) {
       const at = t.lastErrorAt || t.updatedAt || t.createdAt;
 
       // notify target supervisor
-      if (isSupervisor && myRoomId && normalizeRoomId(t.toClassroom) === normalizeRoomId(myRoomId)) {
+      if (isSupervisorRole && myRoomId && normalizeRoomId(t.toClassroom) === normalizeRoomId(myRoomId)) {
         alerts.push({
           type: "TRANSFER_ROOM_FULL",
           severity: "medium",
@@ -433,7 +469,7 @@ export async function getDashboardSnapshot(req, res) {
 
     const pendingByStudent = new Set(
       pending
-        .filter((t) => (isSupervisor ? normalizeRoomId(t.fromClassroom) === normalizeRoomId(myRoomId) : true))
+        .filter((t) => (isSupervisorRole ? normalizeRoomId(t.fromClassroom) === normalizeRoomId(myRoomId) : true))
         .map((t) => String(t.studentId))
     );
 
@@ -447,7 +483,7 @@ export async function getDashboardSnapshot(req, res) {
     const rawEvents = (exam.events || []).slice(-30).reverse();
 
     const visibleEvents =
-      isSupervisor && myRoomId
+      isSupervisorRole && myRoomId
         ? rawEvents.filter((e) => !e.classroom || normalizeRoomId(e.classroom) === normalizeRoomId(myRoomId))
         : rawEvents;
 
@@ -472,7 +508,7 @@ export async function getDashboardSnapshot(req, res) {
         role: user.role,
         username: user.username,
         fullName: user.fullName,
-        assignedRoomId: isSupervisor ? myRoomId || null : user.assignedRoomId || null,
+        assignedRoomId: isSupervisorRole ? myRoomId || null : user.assignedRoomId || null,
       },
       exam: {
         ...examPayload,
@@ -600,10 +636,8 @@ export async function addStudentToRunningExam(req, res) {
       });
     }
 
-    // ensure report maps exist
-    if (!exam.report) exam.report = {};
-    if (!exam.report.studentStats) exam.report.studentStats = new Map();
-    if (!exam.report.studentFiles) exam.report.studentFiles = new Map();
+    // ✅ ensure report maps exist
+    ensureReportMaps(exam);
 
     // attendance record
     const att = {
@@ -654,24 +688,30 @@ export async function addStudentToRunningExam(req, res) {
       notes: [],
     });
 
-    // optional: push an event
-    exam.events = [
-      ...(exam.events || []),
-      {
-        at: new Date().toISOString(),
-        type: "STUDENT_ADDED",
-        title: "Student added",
-        description: `${fullName} (${studentId}) added to ${roomId}`,
-        classroom: roomId,
-        by: {
-          id: String(req.user?._id),
-          role: String(req.user?.role || "unknown"),
-          name: actorUser.fullName || actorUser.username || "user",
-        },
+    // ✅ unified event schema
+    exam.events = exam.events || [];
+    exam.events.push({
+      type: "STUDENT_ADDED",
+      timestamp: new Date(),
+      description: `${fullName} (${studentId}) added to ${roomId}`,
+      severity: "low",
+      classroom: roomId,
+      seat,
+      studentId: createdUser._id,
+      actor: {
+        id: req.user?._id,
+        name: actorUser.fullName || actorUser.username || "",
+        role: String(req.user?.role || "").toLowerCase(),
       },
-    ].slice(-200);
+    });
+    exam.events = exam.events.slice(-200);
 
-    await exam.save();
+    // ✅ IMPORTANT: report has Maps + deep mutations
+    exam.markModified("attendance");
+    exam.markModified("report");
+    exam.markModified("events");
+
+    await saveWithRetry(exam);
 
     return res.json({
       message: "STUDENT_ADDED",
@@ -739,29 +779,37 @@ export async function deleteStudentFromRunningExam(req, res) {
 
     exam.attendance = attendance.filter((_, i) => i !== idx);
 
-    // remove from report maps
+    // ✅ ensure report maps exist then remove from maps
+    ensureReportMaps(exam);
+
     const key = String(removed?.studentId || "");
     if (exam.report?.studentStats?.delete && key) exam.report.studentStats.delete(key);
     if (exam.report?.studentFiles?.delete && key) exam.report.studentFiles.delete(key);
 
-    // optional event
-    exam.events = [
-      ...(exam.events || []),
-      {
-        at: new Date().toISOString(),
-        type: "STUDENT_DELETED",
-        title: "Student deleted",
-        description: `${fullName} (${studentId}) deleted from ${roomId}`,
-        classroom: roomId,
-        by: {
-          id: String(req.user?._id),
-          role: String(req.user?.role || "unknown"),
-          name: actorUser.fullName || actorUser.username || "user",
-        },
+    // ✅ unified event schema
+    exam.events = exam.events || [];
+    exam.events.push({
+      type: "STUDENT_DELETED",
+      timestamp: new Date(),
+      description: `${fullName} (${studentId}) deleted from ${roomId}`,
+      severity: "low",
+      classroom: roomId,
+      seat: removed?.seat || "",
+      studentId: removed?.studentId || null,
+      actor: {
+        id: req.user?._id,
+        name: actorUser.fullName || actorUser.username || "",
+        role: String(req.user?.role || "").toLowerCase(),
       },
-    ].slice(-200);
+    });
+    exam.events = exam.events.slice(-200);
 
-    await exam.save();
+    // ✅ IMPORTANT: report has Maps + deep mutations
+    exam.markModified("attendance");
+    exam.markModified("report");
+    exam.markModified("events");
+
+    await saveWithRetry(exam);
 
     // delete from users collection (system-level)
     // (if you want delete only from exam and not from system, remove this line)
