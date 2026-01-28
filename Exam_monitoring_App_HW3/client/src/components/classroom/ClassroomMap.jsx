@@ -105,7 +105,6 @@ export default function ClassroomMap({
   const [localTransferShadow, setLocalTransferShadow] = useState(() => new Map());
   const [optimisticPendingTransfers, setOptimisticPendingTransfers] = useState(() => new Map());
 
-
   // QR scanner state
   const [cameraOpen, setCameraOpen] = useState(false);
   const [scanId, setScanId] = useState("");
@@ -189,7 +188,6 @@ export default function ClassroomMap({
           continue;
         }
 
-
         if (now - pending.ts > commitTimeoutMs) {
           pendingRef.current.delete(sid);
           continue;
@@ -211,6 +209,14 @@ export default function ClassroomMap({
         item.lastStatusAt = nowISO;
       }
 
+      // ✅ Safety: clean pending items that no longer exist in the server list (avoid stuck optimistic patches)
+      const serverIds = new Set(next.map((x) => String(x?.studentId || "")).filter(Boolean));
+      for (const [pid, p] of pendingRef.current.entries()) {
+        if (!serverIds.has(String(pid)) && now - (p?.ts || 0) > 8000) {
+          pendingRef.current.delete(String(pid));
+        }
+      }
+
       return next;
     });
   }, [attendanceSrc]);
@@ -218,42 +224,42 @@ export default function ClassroomMap({
   /**
    * pendingByStudent: sid -> { transferId, fromClassroom, toClassroom, fromSeat }
    */
- const pendingTransfersByStudent = useMemo(() => {
-  const map = new Map();
-  const list = Array.isArray(transfersSrc) ? transfersSrc : [];
+  const pendingTransfersByStudent = useMemo(() => {
+    const map = new Map();
+    const list = Array.isArray(transfersSrc) ? transfersSrc : [];
 
-  // 1) real pending transfers from server
-  for (const t of list) {
-    const st = normStatus(t?.status);
-    if (st !== "pending") continue;
+    // 1) real pending transfers from server
+    for (const t of list) {
+      const st = normStatus(t?.status);
+      if (st !== "pending") continue;
 
-    const sid = t?.studentId != null ? String(t.studentId) : "";
-    if (!sid) continue;
+      const sid = t?.studentId != null ? String(t.studentId) : "";
+      if (!sid) continue;
 
-    map.set(sid, {
-      transferId: String(t?._id || t?.id || ""),
-      fromClassroom: normRoom(t?.fromClassroom),
-      toClassroom: normRoom(t?.toClassroom),
-      fromSeat: String(t?.fromSeat || t?.seat || "").trim(),
-    });
-  }
+      map.set(sid, {
+        transferId: String(t?._id || t?.id || ""),
+        fromClassroom: normRoom(t?.fromClassroom),
+        toClassroom: normRoom(t?.toClassroom),
+        fromSeat: String(t?.fromSeat || t?.seat || "").trim(),
+      });
+    }
 
-  // 2) optimistic pending (only if server doesn't already have it)
-  for (const [sid, opt] of optimisticPendingTransfers.entries()) {
-    const key = String(sid || "").trim();
-    if (!key) continue;
-    if (map.has(key)) continue;
+    // 2) optimistic pending (only if server doesn't already have it)
+    for (const [sid, opt] of optimisticPendingTransfers.entries()) {
+      const key = String(sid || "").trim();
+      if (!key) continue;
+      if (map.has(key)) continue;
 
-    map.set(key, {
-      transferId: "__optimistic__",
-      fromClassroom: normRoom(opt?.fromClassroom),
-      toClassroom: normRoom(opt?.toClassroom),
-      fromSeat: String(opt?.fromSeat || "").trim(),
-    });
-  }
+      map.set(key, {
+        transferId: "__optimistic__",
+        fromClassroom: normRoom(opt?.fromClassroom),
+        toClassroom: normRoom(opt?.toClassroom),
+        fromSeat: String(opt?.fromSeat || "").trim(),
+      });
+    }
 
-  return map;
-}, [transfersSrc, optimisticPendingTransfers]);
+    return map;
+  }, [transfersSrc, optimisticPendingTransfers]);
 
   // clean local shadow when transfer no longer pending
   useEffect(() => {
@@ -346,12 +352,11 @@ export default function ClassroomMap({
   const visibleRoster = showAllStudents ? rosterFiltered : rosterFiltered.slice(0, maxPreview);
   const moreCount = Math.max(0, rosterFiltered.length - visibleRoster.length);
 
- useEffect(() => {
-  setShowAllStudents(false);
-  setRosterFilter("all");
-  setMapGuideOpen(false); // ✅ close guide when switching rooms
-}, [activeRoom]);
-
+  useEffect(() => {
+    setShowAllStudents(false);
+    setRosterFilter("all");
+    setMapGuideOpen(false); // ✅ close guide when switching rooms
+  }, [activeRoom]);
 
   const spec = useMemo(() => getRoomSpec5x5(), []);
 
@@ -374,7 +379,6 @@ export default function ClassroomMap({
   const selectedStudentFile = useMemo(() => {
     if (!selectedSeat) return null;
     return getStudentFileByAttendance(selectedSeat);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSeat, filesByStudentId]);
 
   function getElapsedMs(a) {
@@ -431,18 +435,17 @@ export default function ClassroomMap({
 
     try {
       setSaving(true);
-      await updateAttendance({ examId: exam.id, studentId, patch });
+      await updateAttendance({ examId: exam.id, studentId: resolvedId, patch });
       refreshNow?.();
-      } catch (e) {
-    pendingRef.current.delete(String(resolvedId));
-    setLocalError(e?.message || String(e));
-    refreshNow?.();
-    throw e;     
-      }
-    finally {
-          setSaving(false);
-        }
-      }
+    } catch (e) {
+      pendingRef.current.delete(String(resolvedId));
+      setLocalError(e?.message || String(e));
+      refreshNow?.();
+      throw e;
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function markPresentById(idText) {
     if (!canEditAttendance) {
@@ -505,135 +508,133 @@ export default function ClassroomMap({
   }
 
   async function requestTransfer(seat, toRoom) {
-  if (!exam?.id || !seat) return;
-  setLocalError("");
+    if (!exam?.id || !seat) return;
+    setLocalError("");
 
-  const sid = String(seat.studentId || "").trim();
-  if (!sid) {
-    setLocalError("Cannot request transfer: missing studentId.");
-    return;
-  }
+    const sid = String(seat.studentId || "").trim();
+    if (!sid) {
+      setLocalError("Cannot request transfer: missing studentId.");
+      return;
+    }
 
-  // ✅ optimistic purple immediately
-  setOptimisticPendingTransfers((prev) => {
-    const next = new Map(prev);
-    next.set(sid, {
-      fromClassroom: getRoomKey(seat) || activeRoom,
-      fromSeat: String(seat?.seat || "").trim(),
-      toClassroom: String(toRoom || "").trim(),
-    });
-    return next;
-  });
-
-  // save shadow (so student can be injected in FROM room if missing)
-  setLocalTransferShadow((prev) => {
-    const next = new Map(prev);
-    next.set(sid, {
-      fromClassroom: getRoomKey(seat) || activeRoom,
-      fromSeat: String(seat?.seat || "").trim(),
-      name: seat?.name || "",
-      studentNumber: seat?.studentNumber || seat?.studentId || "",
-      status: seat?.status || "present",
-    });
-    return next;
-  });
-
-  try {
-    setSaving(true);
-
-    await createTransfer({
-      examId: exam.id,
-      studentId: sid,
-      toClassroom: toRoom,
-      toSeat: "AUTO",
-      note: `Requested by ${me?.fullName || me?.username} (from ${activeRoom})`,
-    });
-
-    showToast(`Transfer request sent to ${toRoom}`, "ok");
-    refreshNow?.();
-
-    // ✅ cleanup optimistic (server will now send the real pending transfer anyway)
+    // ✅ optimistic purple immediately
     setOptimisticPendingTransfers((prev) => {
       const next = new Map(prev);
-      next.delete(sid);
+      next.set(sid, {
+        fromClassroom: getRoomKey(seat) || activeRoom,
+        fromSeat: String(seat?.seat || "").trim(),
+        toClassroom: String(toRoom || "").trim(),
+      });
       return next;
     });
 
-    setSelectedStudentId(null);
-  } catch (e) {
-    // rollback optimistic purple if failed
-    setOptimisticPendingTransfers((prev) => {
-      const next = new Map(prev);
-      next.delete(sid);
-      return next;
-    });
-
-    // rollback shadow if failed
+    // save shadow (so student can be injected in FROM room if missing)
     setLocalTransferShadow((prev) => {
       const next = new Map(prev);
-      next.delete(sid);
+      next.set(sid, {
+        fromClassroom: getRoomKey(seat) || activeRoom,
+        fromSeat: String(seat?.seat || "").trim(),
+        name: seat?.name || "",
+        studentNumber: seat?.studentNumber || seat?.studentId || "",
+        status: seat?.status || "present",
+      });
       return next;
     });
 
-    setLocalError(e?.message || String(e));
-  } finally {
-    setSaving(false);
-  }
-}
+    try {
+      setSaving(true);
 
+      await createTransfer({
+        examId: exam.id,
+        studentId: sid,
+        toClassroom: toRoom,
+        toSeat: "AUTO",
+        note: `Requested by ${me?.fullName || me?.username} (from ${activeRoom})`,
+      });
+
+      showToast(`Transfer request sent to ${toRoom}`, "ok");
+      refreshNow?.();
+
+      // ✅ cleanup optimistic (server will now send the real pending transfer anyway)
+      setOptimisticPendingTransfers((prev) => {
+        const next = new Map(prev);
+        next.delete(sid);
+        return next;
+      });
+
+      setSelectedStudentId(null);
+    } catch (e) {
+      // rollback optimistic purple if failed
+      setOptimisticPendingTransfers((prev) => {
+        const next = new Map(prev);
+        next.delete(sid);
+        return next;
+      });
+
+      // rollback shadow if failed
+      setLocalTransferShadow((prev) => {
+        const next = new Map(prev);
+        next.delete(sid);
+        return next;
+      });
+
+      setLocalError(e?.message || String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function cancelPendingTransfer(seat) {
-  if (!exam?.id || !seat) return;
-  setLocalError("");
+    if (!exam?.id || !seat) return;
+    setLocalError("");
 
-  const sid = String(seat.studentId || "").trim();
-  if (!sid) {
-    setLocalError("Cannot cancel transfer: missing studentId.");
-    return;
-  }
+    const sid = String(seat.studentId || "").trim();
+    if (!sid) {
+      setLocalError("Cannot cancel transfer: missing studentId.");
+      return;
+    }
 
-  // ✅ remove purple immediately (instant UI)
-  setOptimisticPendingTransfers((prev) => {
-    const next = new Map(prev);
-    next.delete(sid);
-    return next;
-  });
-
-  const pending = pendingTransfersByStudent.get(sid);
-  const transferId = String(pending?.transferId || "").trim();
-
-  // if it's only optimistic and server hasn't returned transfer yet, just refresh
-  if (!transferId || transferId === "__optimistic__") {
-    showToast("Cancelling…", "ok");
-    refreshNow?.();
-    setSelectedStudentId(null);
-    return;
-  }
-
-  try {
-    setSaving(true);
-
-    await apiCancelTransfer(transferId);
-
-    // remove shadow
-    setLocalTransferShadow((prev) => {
+    // ✅ remove purple immediately (instant UI)
+    setOptimisticPendingTransfers((prev) => {
       const next = new Map(prev);
       next.delete(sid);
       return next;
     });
 
-    showToast("Transfer cancelled.", "ok");
-    refreshNow?.();
-    setSelectedStudentId(null);
-  } catch (e) {
-    // if cancel failed, let server be source of truth again
-    setLocalError(e?.message || String(e));
-    refreshNow?.();
-  } finally {
-    setSaving(false);
-  }
-}
+    const pending = pendingTransfersByStudent.get(sid);
+    const transferId = String(pending?.transferId || "").trim();
 
+    // if it's only optimistic and server hasn't returned transfer yet, just refresh
+    if (!transferId || transferId === "__optimistic__") {
+      showToast("Cancelling…", "ok");
+      refreshNow?.();
+      setSelectedStudentId(null);
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      await apiCancelTransfer(transferId);
+
+      // remove shadow
+      setLocalTransferShadow((prev) => {
+        const next = new Map(prev);
+        next.delete(sid);
+        return next;
+      });
+
+      showToast("Transfer cancelled.", "ok");
+      refreshNow?.();
+      setSelectedStudentId(null);
+    } catch (e) {
+      // if cancel failed, let server be source of truth again
+      setLocalError(e?.message || String(e));
+      refreshNow?.();
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function submitCheatNote(seat, text) {
     if (!exam?.id || !seat || !text) return;
@@ -747,7 +748,6 @@ export default function ClassroomMap({
                 Mark Not Arrived
               </button>
             </div>
-            
           </div>
 
           {cameraOpen ? (
@@ -775,12 +775,28 @@ export default function ClassroomMap({
 
               <div className="flex flex-wrap gap-2">
                 <FilterChip label="All" active={rosterFilter === "all"} onClick={() => setRosterFilter("all")} />
-                <FilterChip label="Not arrived" active={rosterFilter === "not_arrived"} onClick={() => setRosterFilter("not_arrived")} />
+                <FilterChip
+                  label="Not arrived"
+                  active={rosterFilter === "not_arrived"}
+                  onClick={() => setRosterFilter("not_arrived")}
+                />
                 <FilterChip label="Absent" active={rosterFilter === "absent"} onClick={() => setRosterFilter("absent")} />
-                <FilterChip label="Finished" active={rosterFilter === "finished"} onClick={() => setRosterFilter("finished")} />
-                <FilterChip label="Present" active={rosterFilter === "present"} onClick={() => setRosterFilter("present")} />
+                <FilterChip
+                  label="Finished"
+                  active={rosterFilter === "finished"}
+                  onClick={() => setRosterFilter("finished")}
+                />
+                <FilterChip
+                  label="Present"
+                  active={rosterFilter === "present"}
+                  onClick={() => setRosterFilter("present")}
+                />
                 <FilterChip label="Out" active={rosterFilter === "temp_out"} onClick={() => setRosterFilter("temp_out")} />
-                <FilterChip label="Transfer" active={rosterFilter === "transfer"} onClick={() => setRosterFilter("transfer")} />
+                <FilterChip
+                  label="Transfer"
+                  active={rosterFilter === "transfer"}
+                  onClick={() => setRosterFilter("transfer")}
+                />
 
                 <div className="ml-auto flex items-center gap-2">
                   {moreCount > 0 ? (
@@ -839,66 +855,61 @@ export default function ClassroomMap({
         {/* Map */}
         <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="border-b border-slate-200">
-  {/* Header row */}
-  <div className="px-4 py-3 flex items-center justify-between">
-    <div className="text-sm font-extrabold text-slate-900">Classroom Map</div>
+            {/* Header row */}
+            <div className="px-4 py-3 flex items-center justify-between">
+              <div className="text-sm font-extrabold text-slate-900">Classroom Map</div>
 
-    <button
-      type="button"
-      onClick={() => setMapGuideOpen((v) => !v)}
-      className="px-3 py-1.5 rounded-2xl text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
-    >
-      💡 Map Guide
-    </button>
-  </div>
+              <button
+                type="button"
+                onClick={() => setMapGuideOpen((v) => !v)}
+                className="px-3 py-1.5 rounded-2xl text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+              >
+                💡 Map Guide
+              </button>
+            </div>
 
-  {/* Guide (below header) */}
-{mapGuideOpen && (
-  <div className="px-4 pb-4 bg-slate-50">
-    <div className="rounded-3xl border border-slate-200 bg-white p-5">
-      {/* Title */}
-      <div className="flex items-center gap-2">
-        <span className="px-4 py-2 rounded-2xl border border-slate-200 bg-white text-slate-900 text-sm font-extrabold">
-          Actions Guide in the Map :
-        </span>
-      </div>
+            {/* Guide (below header) */}
+            {mapGuideOpen && (
+              <div className="px-4 pb-4 bg-slate-50">
+                <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                  {/* Title */}
+                  <div className="flex items-center gap-2">
+                    <span className="px-4 py-2 rounded-2xl border border-slate-200 bg-white text-slate-900 text-sm font-extrabold">
+                      Actions Guide in the Map :
+                    </span>
+                  </div>
 
-      {/* Content */}
-      <div className="mt-4 grid gap-3 text-sm text-slate-700">
-        <div className="flex items-start gap-3">
-          <span className="text-base">🪑</span>
-          <span>
-            Click any <b>seat</b> to manage the student
-            (<b>Present</b> / <b>Out</b> / <b>Finished</b> / <b>Notes</b> / <b>Transfer</b>).
-          </span>
-        </div>
+                  {/* Content */}
+                  <div className="mt-4 grid gap-3 text-sm text-slate-700">
+                    <div className="flex items-start gap-3">
+                      <span className="text-base">🪑</span>
+                      <span>
+                        Click any <b>seat</b> to manage the student (<b>Present</b> / <b>Out</b> / <b>Finished</b> /{" "}
+                        <b>Notes</b> / <b>Transfer</b>).
+                      </span>
+                    </div>
 
-        <div className="flex items-start gap-3">
-          <span className="text-base">🆔</span>
-          <span>
-            Use <b>Scan / Enter Student ID</b> to quickly mark attendance.
-          </span>
-        </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-base">🆔</span>
+                      <span>
+                        Use <b>Scan / Enter Student ID</b> to quickly mark attendance.
+                      </span>
+                    </div>
 
-        <div className="flex items-start gap-3">
-          <span className="text-base">⏳</span>
-          <span>
-            <b>PENDING</b> means a transfer request is waiting for approval.
-          </span>
-        </div>
-      </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-base">⏳</span>
+                      <span>
+                        <b>PENDING</b> means a transfer request is waiting for approval.
+                      </span>
+                    </div>
+                  </div>
 
-      {/* Footer note */}
-      <div className="mt-4 text-xs text-slate-500 font-semibold">
-        Status colors are shown below the map.
-      </div>
-    </div>
-  </div>
-)}
-
-</div>
-
-
+                  {/* Footer note */}
+                  <div className="mt-4 text-xs text-slate-500 font-semibold">Status colors are shown below the map.</div>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="relative w-full h-[620px] md:h-[680px] bg-gradient-to-b from-slate-50 to-white">
             <div className="absolute left-1/2 top-4 -translate-x-1/2 w-[min(200px,92%)] rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center text-sm font-extrabold text-slate-800 shadow-sm">
@@ -994,7 +1005,6 @@ export default function ClassroomMap({
         onCancelTransfer={(seat) => cancelPendingTransfer(seat)}
         onCheatNote={(seat, text) => submitCheatNote(seat, text)}
         onActionError={(msg) => showToast(msg, "err")}
-
       />
     </div>
   );
