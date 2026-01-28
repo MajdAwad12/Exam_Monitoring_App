@@ -497,6 +497,8 @@ export async function updateAttendance(req, res) {
   try {
     const { examId, studentId } = req.params;
     const patch = req.body || {};
+    // 🔔 WS payload for immediate UI updates (Plan A)
+    let attendanceWs = null;
 
     const result = await updateExamWithRetry(examId, async (exam) => {
       const att = findAttendance(exam, studentId);
@@ -714,14 +716,15 @@ export async function updateAttendance(req, res) {
             // ✅ increment once on transition
             // IMPORTANT: use studentFile as the baseline if it was edited/reset manually in DB,
             // otherwise studentStats may overwrite the reset with an older cached value.
-            const sf = getStudentFile(exam, studentId);
             const baseCount = Number(sf?.toiletCount ?? ss.toiletCount ?? 0) || 0;
             ss.toiletCount = baseCount + 1;
-ss.activeToilet = {
+            ss.activeToilet = {
               leftAt,
               bySupervisorId: actor.id,
               reason: "toilet",
             };
+
+
 
             // keep file aligned
             syncToiletToStudentFile(sf, ss);
@@ -766,6 +769,20 @@ ss.activeToilet = {
                 studentId: att.studentId || null,
               });
             }
+                        // 🔔 WS: immediate UI update (OUT)
+            attendanceWs = {
+              type: "ATTENDANCE_UPDATED",
+              examId: String(exam._id),
+              studentId: String(att.studentId),
+              status: "temp_out",
+              classroom: String(att.classroom || ""),
+              seat: String(att.seat || ""),
+              outStartedAt: att.outStartedAt ? new Date(att.outStartedAt).toISOString() : null,
+              toiletCount: Number(ss.toiletCount) || 0,
+              totalToiletMs: Number(ss.totalToiletMs) || 0,
+              at: now.toISOString(),
+            };
+
           }
 
           // TOILET BACK (temp_out -> present)
@@ -802,6 +819,20 @@ ss.activeToilet = {
               student: sSnap,
               details: {},
             });
+                        // 🔔 WS: immediate UI update (BACK)
+            attendanceWs = {
+              type: "ATTENDANCE_UPDATED",
+              examId: String(exam._id),
+              studentId: String(att.studentId),
+              status: "present",
+              classroom: String(att.classroom || ""),
+              seat: String(att.seat || ""),
+              outStartedAt: null,
+              toiletCount: Number(ss.toiletCount) || 0,
+              totalToiletMs: Number(ss.totalToiletMs) || 0,
+              at: now.toISOString(),
+            };
+
           }
 
           // FINISHED
@@ -864,7 +895,7 @@ ss.activeToilet = {
     if (result.notFound) return res.status(404).json({ message: "Exam not found" });
 
     const savedExam = result.exam;
-
+    if (attendanceWs) wsBroadcast(attendanceWs);
     wsBroadcast({
       type: "EXAM_UPDATED",
       examId: String(savedExam._id),
@@ -1333,10 +1364,10 @@ export async function createExam(req, res) {
       messages: [],
       note: "",
       report: { summary: {}, timeline: [], studentFiles: {}, studentStats: {} },
-    });
+    }); 
 
     return res.json({ ok: true, exam: toOut(exam) });
   } catch (e) {
     return res.status(500).json({ message: e.message || "Failed to create exam" });
-  }
+  } 
 }
