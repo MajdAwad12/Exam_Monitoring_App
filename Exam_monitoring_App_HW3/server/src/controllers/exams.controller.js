@@ -21,30 +21,29 @@ function wsBroadcast(payload) {
    Helpers
 ========================= */
 function pushExamEvent(exam, ev) {
+  // ✅ Events panel must store STUDENT ObjectId (studentId), not actor id
+  const sid = ev?.studentId;
+  const sidStr = sid ? String(sid) : "";
+
   const clean = {
     type: String(ev?.type || ""),
     timestamp: ev?.timestamp ? new Date(ev.timestamp) : new Date(),
     description: String(ev?.description || ""),
-    severity: ["low", "medium", "high", "critical"].includes(ev?.severity)
-      ? ev.severity
-      : "low",
+    severity: ["low", "medium", "high", "critical"].includes(ev?.severity) ? ev.severity : "low",
     classroom: String(ev?.classroom || ""),
     seat: String(ev?.seat || ""),
-studentId:
-  mongoose.Types.ObjectId.isValid(ev?.studentId)
-    ? ev.studentId
-    : null,
+    studentId:
+      sid && mongoose.Types.ObjectId.isValid(sidStr)
+        ? new mongoose.Types.ObjectId(sidStr)
+        : null,
   };
 
   exam.events = [...(exam.events || []), clean].slice(-200);
 }
 
-
-
 /**
- * ✅ The real fix for "fast clicks override each other":
- * Always re-fetch the latest Exam inside retries, apply the mutation, then save.
- * This prevents saving an older version over a newer one.
+ * ✅ Fix for "fast clicks override each other":
+ * Always re-fetch latest doc inside retries, mutate, then save.
  */
 async function updateExamWithRetry(examId, mutator, retries = 5) {
   for (let i = 0; i < retries; i++) {
@@ -54,7 +53,7 @@ async function updateExamWithRetry(examId, mutator, retries = 5) {
     try {
       await mutator(exam);
 
-      // common deep paths
+      // deep paths
       exam.markModified("attendance");
       exam.markModified("report");
       exam.markModified("events");
@@ -64,9 +63,7 @@ async function updateExamWithRetry(examId, mutator, retries = 5) {
     } catch (err) {
       const isVersionError =
         err?.name === "VersionError" || String(err?.message || "").includes("VersionError");
-
       if (!isVersionError || i === retries - 1) throw err;
-
       await new Promise((r) => setTimeout(r, 25 * (i + 1)));
     }
   }
@@ -89,6 +86,29 @@ function ensureReport(exam) {
   if (!exam.report.studentStats || typeof exam.report.studentStats.get !== "function") {
     exam.report.studentStats = new Map(Object.entries(exam.report.studentStats || {}));
   }
+}
+
+function getStudentStat(exam, studentIdKey) {
+  ensureReport(exam);
+  const key = String(studentIdKey);
+
+  const existing = exam.report.studentStats.get(key);
+  if (existing) return existing;
+
+  const stat = {
+    toiletCount: 0,
+    totalToiletMs: 0,
+    activeToilet: {
+      leftAt: null,
+      bySupervisorId: null,
+      reason: "toilet",
+    },
+    incidentCount: 0,
+    lastIncidentAt: null,
+  };
+
+  exam.report.studentStats.set(key, stat);
+  return stat;
 }
 
 function getStudentFile(exam, studentIdKey) {
@@ -120,14 +140,30 @@ function getStudentFile(exam, studentIdKey) {
   return file;
 }
 
+function syncToiletToStudentFile(sf, ss) {
+  // ✅ keep studentFiles aligned with studentStats (studentStats is source of truth)
+  sf.toiletCount = Number(ss?.toiletCount) || 0;
+  sf.totalToiletMs = Number(ss?.totalToiletMs) || 0;
+
+  const leftAt = ss?.activeToilet?.leftAt || null;
+  const byId = ss?.activeToilet?.bySupervisorId || null;
+
+  sf.activeToilet = {
+    leftAt: leftAt ? new Date(leftAt) : null,
+    bySupervisorId: byId ? byId : null,
+  };
+}
+
 function pushExamTimeline(exam, payload) {
   ensureReport(exam);
   exam.report.timeline.push(payload);
+  if (exam.report.timeline.length > 400) exam.report.timeline = exam.report.timeline.slice(-400);
 }
 
 function pushStudentTimeline(exam, studentIdKey, payload) {
   const file = getStudentFile(exam, studentIdKey);
   file.timeline.push(payload);
+  if (file.timeline.length > 200) file.timeline = file.timeline.slice(-200);
 }
 
 function actorFromReq(req) {
@@ -141,8 +177,6 @@ function actorFromReq(req) {
     role: u.role || "",
   };
 }
-
-
 
 function studentSnapshot(att) {
   return {
@@ -180,11 +214,9 @@ function findAttendance(exam, studentIdOrNumber) {
 
   const list = exam.attendance || [];
 
-  // match by ObjectId string
   let att = list.find((x) => String(x.studentId) === key);
   if (att) return att;
 
-  // match by studentNumber
   att = list.find((x) => String(x.studentNumber || "") === key);
   if (att) return att;
 
@@ -389,30 +421,21 @@ async function buildSupervisorsFromClassrooms(classrooms) {
 }
 
 /* =========================
-   ✅ resolve student user
+   resolve student user
 ========================= */
 async function resolveStudentUser(studentIdOrNumber) {
   const raw = String(studentIdOrNumber || "").trim();
   const sid = raw.replace(/\s+/g, "");
   if (!sid) return { user: null, studentNumber: "" };
 
-  // ObjectId -> findById
   if (mongoose.Types.ObjectId.isValid(sid) && sid.length === 24) {
     const u = await User.findById(sid).select("_id fullName role studentId username").lean();
-    return {
-      user: u || null,
-      studentNumber: u?.studentId || u?.username || "",
-    };
+    return { user: u || null, studentNumber: u?.studentId || u?.username || "" };
   }
 
-  // Otherwise: treat as studentId/username
   const u =
-    (await User.findOne({ studentId: sid })
-      .select("_id fullName role studentId username")
-      .lean()) ||
-    (await User.findOne({ username: sid })
-      .select("_id fullName role studentId username")
-      .lean());
+    (await User.findOne({ studentId: sid }).select("_id fullName role studentId username").lean()) ||
+    (await User.findOne({ username: sid }).select("_id fullName role studentId username").lean());
 
   return { user: u || null, studentNumber: sid };
 }
@@ -428,7 +451,6 @@ export async function getExams(req, res) {
     const role = String(me.role || "");
 
     const exams = await Exam.find({}).sort({ startAt: -1 });
-
     let filtered = exams;
 
     if (role === "supervisor") {
@@ -465,7 +487,11 @@ export async function getExamById(req, res) {
 
 /**
  * ✅ PATCH /api/exams/:examId/attendance/:studentId
- * ✅ FIXED: uses updateExamWithRetry to avoid "fast clicks override"
+ * ✅ FIXED:
+ * - toiletCount increments ONLY on transition into temp_out
+ * - outStartedAt NEVER resets on repeated temp_out clicks
+ * - studentStats is source of truth; studentFiles is synced
+ * - Events panel studentId is always the student ObjectId
  */
 export async function updateAttendance(req, res) {
   try {
@@ -489,6 +515,7 @@ export async function updateAttendance(req, res) {
 
       const realStudentKey = String(att.studentId);
       const sf = getStudentFile(exam, realStudentKey);
+      const ss = getStudentStat(exam, realStudentKey);
       const sSnap = studentSnapshot(att);
 
       /* ============ OPTIONAL: seat/classroom patch validation ============ */
@@ -505,7 +532,10 @@ export async function updateAttendance(req, res) {
 
         ensureSeatsForRoom(exam, targetRoom);
 
-        if (!hasFreeSeat(exam, targetRoom) && normalizeRoomId(att.classroom || att.roomId) !== targetRoom) {
+        if (
+          !hasFreeSeat(exam, targetRoom) &&
+          normalizeRoomId(att.classroom || att.roomId) !== targetRoom
+        ) {
           const err = new Error("ROOM_FULL");
           err.statusCode = 409;
           throw err;
@@ -604,7 +634,14 @@ export async function updateAttendance(req, res) {
 
       /* ============ Status Changes ============ */
       if (nextStatus) {
-        const allowed = new Set(["not_arrived", "present", "temp_out", "absent", "moving", "finished"]);
+        const allowed = new Set([
+          "not_arrived",
+          "present",
+          "temp_out",
+          "absent",
+          "moving",
+          "finished",
+        ]);
         if (!allowed.has(nextStatus)) {
           const err = new Error("Invalid status");
           err.statusCode = 400;
@@ -612,19 +649,28 @@ export async function updateAttendance(req, res) {
         }
 
         if (prevStatus !== nextStatus) {
+          // set status first
           att.status = nextStatus;
 
+          // reset fields only on explicit reset statuses
           if (nextStatus === "not_arrived") {
             att.arrivedAt = null;
             att.outStartedAt = null;
+
+            // also clear active toilet if someone force-resets
+            ss.activeToilet = { leftAt: null, bySupervisorId: null, reason: "toilet" };
+            syncToiletToStudentFile(sf, ss);
           }
 
           if (nextStatus === "absent") {
             att.outStartedAt = null;
+            ss.activeToilet = { leftAt: null, bySupervisorId: null, reason: "toilet" };
+            syncToiletToStudentFile(sf, ss);
           }
 
           att.lastStatusAt = now;
 
+          // ensure seat if occupying
           if (isOccupyingStatus(nextStatus)) {
             const rid = normalizeRoomId(att.classroom || att.roomId);
             ensureSeatsForRoom(exam, rid);
@@ -634,6 +680,7 @@ export async function updateAttendance(req, res) {
             }
           }
 
+          // ARRIVED
           if (prevStatus === "not_arrived" && nextStatus === "present") {
             att.arrivedAt = att.arrivedAt || now;
             sf.arrivedAt = sf.arrivedAt || now;
@@ -658,98 +705,102 @@ export async function updateAttendance(req, res) {
             });
           }
 
+          // TOILET OUT (temp_out) — ✅ NO RESET, ✅ INCREMENT ONCE
           if (nextStatus === "temp_out" && prevStatus !== "temp_out") {
-  att.outStartedAt = att.outStartedAt || now;
+            // ✅ do not override existing outStartedAt
+            const leftAt = att.outStartedAt ? new Date(att.outStartedAt) : now;
+            att.outStartedAt = leftAt;
 
-  sf.toiletCount = (Number(sf.toiletCount) || 0) + 1;
-sf.activeToilet = {
-  leftAt: att.outStartedAt,
-  bySupervisorId: mongoose.Types.ObjectId.isValid(actor.id) ? actor.id : null,
-};
+            // ✅ increment once on transition
+            ss.toiletCount = (Number(ss.toiletCount) || 0) + 1;
+            ss.activeToilet = {
+              leftAt,
+              bySupervisorId: actor.id,
+              reason: "toilet",
+            };
 
-  pushStudentTimeline(exam, realStudentKey, {
-    at: att.outStartedAt,
-    kind: "TOILET_OUT",
-    note: "Left to toilet",
-    severity: "low",
-    classroom: att.classroom || "",
-    seat: att.seat || "",
-    meta: { by: actor },
-  });
+            // keep file aligned
+            syncToiletToStudentFile(sf, ss);
 
-  pushExamTimeline(exam, {
-    kind: "TOILET_OUT",
-    at: att.outStartedAt,
-    roomId: att.classroom || "",
-    actor,
-    student: sSnap,
-    details: {},
-  });
+            pushStudentTimeline(exam, realStudentKey, {
+              at: leftAt,
+              kind: "TOILET_OUT",
+              note: "Left to toilet",
+              severity: "low",
+              classroom: att.classroom || "",
+              seat: att.seat || "",
+              meta: { by: actor },
+            });
 
- if (sf.toiletCount === 4) {
-  // נשאר בדוח (timeline)
-  pushExamTimeline(exam, {
-    kind: "TOO_MANY_TOILET_EXITS",
-    at: att.outStartedAt,
-    roomId: att.classroom || "",
-    actor,
-    student: sSnap,
-    details: {
-      toiletCount: sf.toiletCount,
-    },
-  });
+            pushExamTimeline(exam, {
+              kind: "TOILET_OUT",
+              at: leftAt,
+              roomId: att.classroom || "",
+              actor,
+              student: sSnap,
+              details: { toiletCount: ss.toiletCount },
+            });
 
-  // ✅ נכנס ל־Events panel (תואם Exam.js)
-  pushExamEvent(exam, {
-    type: "TOO_MANY_TOILET_EXITS",
-    timestamp: att.outStartedAt,
-    severity: "medium",
-    description: `${att.name} exceeded toilet exits (${sf.toiletCount}).`,
-    classroom: att.classroom || "",
-    seat: att.seat || "",
-    studentId: att.studentId || null,
-  });
-}
+            if (ss.toiletCount === 4) {
+              pushExamTimeline(exam, {
+                kind: "TOO_MANY_TOILET_EXITS",
+                at: leftAt,
+                roomId: att.classroom || "",
+                actor,
+                student: sSnap,
+                details: { toiletCount: ss.toiletCount },
+              });
 
+              // ✅ Events panel: studentId must be the student
+              pushExamEvent(exam, {
+                type: "TOO_MANY_TOILET_EXITS",
+                timestamp: leftAt,
+                severity: "medium",
+                description: `${att.name} exceeded toilet exits (${ss.toiletCount}).`,
+                classroom: att.classroom || "",
+                seat: att.seat || "",
+                studentId: att.studentId || null,
+              });
+            }
+          }
 
-}
-
-
+          // TOILET BACK (temp_out -> present)
           if (prevStatus === "temp_out" && nextStatus === "present") {
-  if (att.outStartedAt) {
-    const leftAt = new Date(att.outStartedAt);
+            const leftAt = att.outStartedAt ? new Date(att.outStartedAt) : null;
 
-    if (!Number.isNaN(leftAt.getTime())) {
-      const deltaMs = now.getTime() - leftAt.getTime();
-      sf.totalToiletMs = (Number(sf.totalToiletMs) || 0) + Math.max(0, deltaMs);
-    }
+            if (leftAt && !Number.isNaN(leftAt.getTime())) {
+              const deltaMs = now.getTime() - leftAt.getTime();
+              ss.totalToiletMs = (Number(ss.totalToiletMs) || 0) + Math.max(0, deltaMs);
+            }
 
-    att.outStartedAt = null;
-    sf.activeToilet = { leftAt: null, bySupervisorId: null };
+            // clear out state
+            att.outStartedAt = null;
+            ss.activeToilet = { leftAt: null, bySupervisorId: null, reason: "toilet" };
 
-    pushStudentTimeline(exam, realStudentKey, {
-      at: now,
-      kind: "TOILET_BACK",
-      note: "Returned from toilet",
-      severity: "low",
-      classroom: att.classroom || "",
-      seat: att.seat || "",
-      meta: { by: actor },
-    });
+            // sync file
+            syncToiletToStudentFile(sf, ss);
 
-    pushExamTimeline(exam, {
-      kind: "TOILET_BACK",
-      at: now,
-      roomId: att.classroom || "",
-      actor,
-      student: sSnap,
-      details: {},
-    });
-  }
-}
+            pushStudentTimeline(exam, realStudentKey, {
+              at: now,
+              kind: "TOILET_BACK",
+              note: "Returned from toilet",
+              severity: "low",
+              classroom: att.classroom || "",
+              seat: att.seat || "",
+              meta: { by: actor },
+            });
 
+            pushExamTimeline(exam, {
+              kind: "TOILET_BACK",
+              at: now,
+              roomId: att.classroom || "",
+              actor,
+              student: sSnap,
+              details: {},
+            });
+          }
 
-
+          // FINISHED
           if (nextStatus === "finished") {
             att.finishedAt = att.finishedAt || now;
             sf.finishedAt = sf.finishedAt || now;
@@ -775,11 +826,10 @@ sf.activeToilet = {
           }
 
           const isSpecial =
-          (prevStatus === "not_arrived" && nextStatus === "present") ||
-          (prevStatus !== "temp_out" && nextStatus === "temp_out") ||
-          (prevStatus === "temp_out" && nextStatus === "present") ||
-          nextStatus === "finished";
-
+            (prevStatus === "not_arrived" && nextStatus === "present") ||
+            (prevStatus !== "temp_out" && nextStatus === "temp_out") ||
+            (prevStatus === "temp_out" && nextStatus === "present") ||
+            nextStatus === "finished";
 
           if (!isSpecial) {
             pushStudentTimeline(exam, realStudentKey, {
@@ -809,8 +859,6 @@ sf.activeToilet = {
 
     if (result.notFound) return res.status(404).json({ message: "Exam not found" });
 
-    // If we threw an error with statusCode inside mutator:
-    // updateExamWithRetry rethrows, so we catch here:
     const savedExam = result.exam;
 
     wsBroadcast({
@@ -829,8 +877,7 @@ sf.activeToilet = {
 }
 
 /* =========================
-   ✅ Add/Delete Students
-   ✅ FIXED: also uses updateExamWithRetry to avoid overrides
+   Add/Delete Students
 ========================= */
 
 // ✅ POST /api/exams/:examId/students
@@ -854,7 +901,6 @@ export async function addStudentToExam(req, res) {
       return res.status(400).json({ message: "Missing fields." });
     }
 
-    // resolve student user (schema requires ObjectId)
     const { user: studentUser, studentNumber } = await resolveStudentUser(studentIdInput);
     if (!studentUser?._id) {
       return res.status(404).json({
@@ -867,7 +913,6 @@ export async function addStudentToExam(req, res) {
     const fullName = `${firstName} ${lastName}`.trim();
 
     const result = await updateExamWithRetry(examId, async (exam) => {
-      // validate room exists
       const roomExists = (exam.classrooms || []).some(
         (r) => String(r?.id || r?.name || "").trim() === roomId
       );
@@ -877,10 +922,11 @@ export async function addStudentToExam(req, res) {
         throw err;
       }
 
-      // already exists?
       const exists =
         (exam.attendance || []).some((a) => String(a.studentId) === String(studentUser._id)) ||
-        (exam.attendance || []).some((a) => String(a.studentNumber || "") === String(studentNumber));
+        (exam.attendance || []).some(
+          (a) => String(a.studentNumber || "") === String(studentNumber)
+        );
       if (exists) {
         const err = new Error("Student already exists in this exam");
         err.statusCode = 409;
@@ -919,6 +965,7 @@ export async function addStudentToExam(req, res) {
 
       ensureReport(exam);
       getStudentFile(exam, String(studentUser._id));
+      getStudentStat(exam, String(studentUser._id));
 
       pushStudentTimeline(exam, String(studentUser._id), {
         at: now,
@@ -978,7 +1025,6 @@ export async function deleteStudentFromExam(req, res) {
     const sid = input.replace(/\s+/g, "");
     if (!sid) return res.status(400).json({ message: "Student ID is required" });
 
-    // resolve optional user (for ObjectId deletion)
     const { user: studentUser, studentNumber } = await resolveStudentUser(sid);
     const userIdStr = studentUser?._id ? String(studentUser._id) : null;
     const numberKey = String(studentNumber || sid);
@@ -1012,6 +1058,9 @@ export async function deleteStudentFromExam(req, res) {
       const reportKey = userIdStr || (removed ? String(removed.studentId) : null);
       if (reportKey && exam.report?.studentFiles?.delete) {
         exam.report.studentFiles.delete(String(reportKey));
+      }
+      if (reportKey && exam.report?.studentStats?.delete) {
+        exam.report.studentStats.delete(String(reportKey));
       }
 
       pushExamTimeline(exam, {
@@ -1048,11 +1097,9 @@ export async function deleteStudentFromExam(req, res) {
 export async function startExam(req, res) {
   try {
     const { examId } = req.params;
-
     const force = String(req.query.force || "") === "1" || Boolean(req.body?.force);
 
     if (!force) {
-      // normal start should also be safe against concurrency
       const now = new Date();
       const actor = actorFromReq(req);
 
@@ -1065,7 +1112,6 @@ export async function startExam(req, res) {
           err.statusCode = 400;
           throw err;
         }
-
         if (!ws.active) {
           const err = new Error(ws.future ? "EXAM_NOT_STARTED_YET" : "EXAM_TIME_WINDOW_ENDED");
           err.statusCode = 400;
@@ -1162,7 +1208,6 @@ export async function endExam(req, res) {
         err.statusCode = 400;
         throw err;
       }
-
       if (!ws.active) {
         const err = new Error(ws.future ? "EXAM_NOT_STARTED_YET" : "EXAM_TIME_WINDOW_ENDED");
         err.statusCode = 400;
