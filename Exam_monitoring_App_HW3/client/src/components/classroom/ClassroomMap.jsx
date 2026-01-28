@@ -178,10 +178,17 @@ export default function ClassroomMap({
         const serverStatus = normStatus(item?.status);
         const wantStatus = normStatus(pending.patch?.status);
 
-        if (wantStatus && serverStatus === wantStatus) {
+        // ✅ for temp_out – do NOT commit until server has outStartedAt
+        if (wantStatus === "temp_out") {
+          if (serverStatus === "temp_out" && item.outStartedAt) {
+            pendingRef.current.delete(sid);
+            continue;
+          }
+        } else if (wantStatus && serverStatus === wantStatus) {
           pendingRef.current.delete(sid);
           continue;
         }
+
 
         if (now - pending.ts > commitTimeoutMs) {
           pendingRef.current.delete(sid);
