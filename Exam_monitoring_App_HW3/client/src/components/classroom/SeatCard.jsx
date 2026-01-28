@@ -50,7 +50,7 @@ export default function SeatCard({ a, elapsedMs = 0, toiletCount = 0, onClick })
   const showTimer = rawStatus === "temp_out";
   const seatTxt = seatLabel(a?.seat);
 
-  const overToiletLimit = Number(toiletCount) > 3;
+  const overToiletLimit = Number(toiletCount) >= 3;
 
   return (
     <button
