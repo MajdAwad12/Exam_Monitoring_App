@@ -226,25 +226,21 @@ export default function DashboardAddDeleteStudentsCard({
 
             <div className="col-span-12 md:col-span-6 flex items-end">
               <button
-              disabled={addBusy}
-              onClick={onAdd}
-              className={[
-                "w-full rounded-full px-6 py-3",
-                "text-white text-base font-extrabold",
-                "bg-gradient-to-r from-emerald-600 to-emerald-700",
-                "hover:from-emerald-700 hover:to-emerald-800",
-                "focus:outline-none focus:ring-4 focus:ring-emerald-300",
-                "shadow-lg hover:shadow-xl transition-all duration-200",
-                "disabled:opacity-60 disabled:cursor-not-allowed",
-                "flex items-center justify-center gap-3",
-              ].join(" ")}
-            >
-              <span className="text-xl leading-none">
-                {addBusy ? "⏳" : "➕"}
-              </span>
-              <span>{addBusy ? "Adding Student..." : "Add Student"}</span>
-            </button>
-
+                disabled={addBusy}
+                onClick={onAdd}
+                className={[
+                  "inline-flex items-center gap-2",
+                  "rounded-xl px-5 py-2",
+                  "text-sm font-bold",
+                  "text-white bg-emerald-600 hover:bg-emerald-700",
+                  "focus:outline-none focus:ring-2 focus:ring-emerald-300",
+                  "disabled:opacity-60 disabled:cursor-not-allowed",
+                  "shadow-sm hover:shadow-md transition-all",
+                ].join(" ")}
+              >
+                <span className="text-base leading-none">{addBusy ? "⏳" : "➕"}</span>
+                <span>{addBusy ? "Adding..." : "Add Student"}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -269,17 +265,19 @@ export default function DashboardAddDeleteStudentsCard({
             disabled={delBusy}
             onClick={onDelete}
             className={[
-              "mt-3 w-full rounded-2xl px-4 py-2 text-sm font-extrabold",
-              "border border-red-200 bg-red-50 text-red-800 hover:bg-red-100",
+              "inline-flex items-center gap-2",
+              "rounded-xl px-5 py-2",
+              "text-sm font-bold",
+              "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100",
+              "focus:outline-none focus:ring-2 focus:ring-red-200",
               "disabled:opacity-60 disabled:cursor-not-allowed",
-              "flex items-center justify-center gap-2",
               "shadow-sm hover:shadow-md transition-all",
-              "ring-1 ring-black/5",
             ].join(" ")}
           >
             <span className="text-base leading-none">{delBusy ? "⏳" : "🗑️"}</span>
             <span>{delBusy ? "Deleting..." : "Delete Student"}</span>
           </button>
+
         </div>
       </div>
     </div>
