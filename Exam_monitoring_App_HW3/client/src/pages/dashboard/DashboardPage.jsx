@@ -11,6 +11,7 @@ import DashboardAddDeleteStudentsCard from "../../components/dashboard/Dashboard
 import EventsFeed from "../../components/dashboard/EventsFeed";
 import TransfersPanel from "../../components/dashboard/TransfersPanel";
 import ClassroomMap from "../../components/classroom/ClassroomMap";
+import Toast from "../../components/dashboard/Toast.jsx";
 
 function normRoom(x) {
   return String(x || "").trim();
@@ -82,30 +83,16 @@ export default function DashboardPage() {
     const r = selectedRoomId || activeRoomId;
     return r ? `Dashboard • ${exam.courseName} • ${r}` : `Dashboard • ${exam.courseName}`;
   }, [exam, selectedRoomId, activeRoomId]);
-
-  // ✅ Side bubble (NOT inside Events panel)
-  const [nudge, setNudge] = useState(null);
-  const nudgeTimerRef = useRef(null);
-
-  const showNudge = () => {
-    if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
-
-    setNudge({
-      title: "New event 😊",
-      message: "A new update was received. Check Events panel.",
+  // ✅ Toast (shows only for real-time WS events while staying on Dashboard)
+  const [toast, setToast] = useState(null);
+  const showToast = (t) => {
+    setToast({
+      type: t?.type || "info",
+      title: t?.title || "New update",
+      message: t?.message || "A new event was received.",
+      durationMs: t?.durationMs || 2600,
     });
-
-    nudgeTimerRef.current = setTimeout(() => {
-      setNudge(null);
-      nudgeTimerRef.current = null;
-    }, 2600);
   };
-
-  useEffect(() => {
-    return () => {
-      if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
-    };
-  }, []);
 
   // ✅ Update global bot context (Dashboard = richest context)
   useEffect(() => {
@@ -145,9 +132,21 @@ export default function DashboardPage() {
 
       // also refetch on anything that smells like new activity
       const t = String(msg.type || "");
+      if (t.includes("TOO_MANY_TOILET")) {
+        scheduleRefetch();
+        showToast({ type: "warning", title: "Toilet limit", message: "A student exceeded toilet exits." });
+        return;
+      }
       if (t.includes("INCIDENT") || t.includes("ALERT") || t.includes("TRANSFER")) {
         scheduleRefetch();
       }
+
+      // ✅ Toast only for real-time activity
+      showToast({
+        type: t.includes("ALERT") ? "warning" : t.includes("INCIDENT") ? "error" : "info",
+        title: "New event",
+        message: t.replaceAll("_", " "),
+      });
     };
 
     window.addEventListener("ws:event", onWs);
@@ -195,27 +194,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* ✅ Side floating bubble */}
-      {nudge ? (
-        <div className="fixed top-5 right-5 z-[9999]">
-          <div className="max-w-sm rounded-3xl border border-slate-200 bg-white shadow-lg px-4 py-3">
-            <div className="flex items-start gap-3">
-              <div className="text-xl">😊</div>
-              <div className="min-w-0">
-                <div className="text-sm font-extrabold text-slate-900">{nudge.title}</div>
-                <div className="mt-0.5 text-xs text-slate-600">{nudge.message}</div>
-              </div>
-              <button
-                className="ml-2 text-slate-400 hover:text-slate-700 font-extrabold"
-                onClick={() => setNudge(null)}
-                aria-label="close"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
       <div className="p-6 space-y-5">
         {/* Header */}
@@ -285,7 +264,7 @@ export default function DashboardPage() {
                 events={eventsForRoom}
                 alerts={alertsForRoom}
                 activeRoomId={selectedRoomId}
-                onNewEvent={() => showNudge()}
+                onNewEvent={() => {}}
               />
             </div>
           </div>

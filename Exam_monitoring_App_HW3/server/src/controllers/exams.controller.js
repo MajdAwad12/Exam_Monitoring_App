@@ -710,7 +710,10 @@ export async function updateAttendance(req, res) {
           // TOILET OUT (temp_out) — ✅ NO RESET, ✅ INCREMENT ONCE
           if (nextStatus === "temp_out" && prevStatus !== "temp_out") {
             // ✅ do not override existing outStartedAt
-            const leftAt = att.outStartedAt ? new Date(att.outStartedAt) : now;
+            const leftAtCandidate = patch?.outStartedAt ? new Date(patch.outStartedAt) : null;
+            const leftAt = leftAtCandidate && !Number.isNaN(leftAtCandidate.getTime())
+              ? leftAtCandidate
+              : (att.outStartedAt ? new Date(att.outStartedAt) : now);
             att.outStartedAt = leftAt;
 
             // ✅ increment once on transition
@@ -748,7 +751,7 @@ export async function updateAttendance(req, res) {
               details: { toiletCount: ss.toiletCount },
             });
 
-            if (ss.toiletCount === 4) {
+            if (ss.toiletCount === 3) {
               pushExamTimeline(exam, {
                 kind: "TOO_MANY_TOILET_EXITS",
                 at: leftAt,
@@ -763,9 +766,11 @@ export async function updateAttendance(req, res) {
                 type: "TOO_MANY_TOILET_EXITS",
                 timestamp: leftAt,
                 severity: "medium",
-                description: `${att.name} exceeded toilet exits (${ss.toiletCount}).`,
+                description: `${att.name} (${att.studentNumber || "—"}) exceeded toilet exits (${ss.toiletCount}).`,
                 classroom: att.classroom || "",
                 seat: att.seat || "",
+                studentNumber: String(att.studentNumber || ""),
+                studentName: String(att.name || ""),
                 studentId: att.studentId || null,
               });
             }

@@ -69,7 +69,7 @@ function normalize(item, source) {
   const severity = item?.severity || item?.level || (source === "alert" ? "medium" : "low");
   const roomId = item?.roomId || item?.classroom || item?.room || "";
   const seat = item?.seat || item?.seatId || "";
-  const studentCode = item?.studentCode || item?.studentNumber || item?.studentId || "";
+  const studentCode = item?.studentCode || item?.studentNumber || "";
   const name = item?.name || item?.student?.name || item?.studentName || "";
 
   const text = pickText(item);
@@ -115,6 +115,8 @@ export default function EventsFeed({
   const lastSigRef = useRef("");
   const didMountRef = useRef(false);
 
+  const storageKey = useMemo(() => `EVENTS_FEED_LASTSIG::${String(activeRoomId || "all")}`, [activeRoomId]);
+
   useEffect(() => {
     const newest = merged[0];
     const sig = sigOf(newest);
@@ -123,12 +125,15 @@ export default function EventsFeed({
     if (!didMountRef.current) {
       // First render: store but don't notify
       didMountRef.current = true;
-      lastSigRef.current = sig;
+      const stored = sessionStorage.getItem(storageKey);
+      lastSigRef.current = stored || sig;
+      sessionStorage.setItem(storageKey, lastSigRef.current);
       return;
     }
 
     if (sig !== lastSigRef.current) {
       lastSigRef.current = sig;
+      sessionStorage.setItem(storageKey, sig);
       if (typeof onNewEvent === "function") {
         // notify parent (DashboardPage) to show side bubble
         onNewEvent(newest);

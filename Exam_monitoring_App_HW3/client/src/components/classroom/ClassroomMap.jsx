@@ -98,6 +98,9 @@ export default function ClassroomMap({
 
   // optimistic patches (for status changes only)
   const [localAttendance, setLocalAttendance] = useState(attendanceSrc || []);
+
+  // ✅ Optimistic counters (toiletCount) so UI doesn't jump while server syncs
+  const [toiletOverride, setToiletOverride] = useState({});
   const pendingRef = useRef(new Map());
   const commitTimeoutMs = 60000;
 
@@ -128,7 +131,12 @@ export default function ClassroomMap({
   function getStudentFileByAttendance(a) {
     const sid = String(a?.studentId || "");
     if (!sid) return null;
-    return filesByStudentId[sid] || null;
+    const base = filesByStudentId[sid] || null;
+    const ov = toiletOverride?.[sid];
+    if (ov === undefined || ov === null) return base;
+    const baseCount = Number(base?.toiletCount || 0) || 0;
+    const want = Math.max(baseCount, Number(ov) || 0);
+    return { ...(base || {}), toiletCount: want };
   }
 
   const roomList = useMemo(() => {
@@ -159,7 +167,30 @@ export default function ClassroomMap({
     return list[0] || "";
   }, [roomList, forcedRoomId, isLecturer, isAdmin, isSupervisor, me?.assignedRoomId]);
 
-  // reconcile local attendance whenever server snapshot changes
+  
+// Reconcile optimistic toiletOverride once server snapshot catches up
+useEffect(() => {
+  const base = filesByStudentId || {};
+  const ov = toiletOverride || {};
+  const keys = Object.keys(ov);
+  if (!keys.length) return;
+
+  const next = { ...ov };
+  let changed = false;
+
+  for (const sid of keys) {
+    const serverCount = Number(base?.[sid]?.toiletCount || 0) || 0;
+    const localCount = Number(ov?.[sid] || 0) || 0;
+    if (serverCount >= localCount) {
+      delete next[sid];
+      changed = true;
+    }
+  }
+
+  if (changed) setToiletOverride(next);
+}, [filesByStudentId, toiletOverride]);
+
+// reconcile local attendance whenever server snapshot changes
   useEffect(() => {
     const serverList = Array.isArray(attendanceSrc) ? attendanceSrc : [];
 
@@ -403,6 +434,16 @@ export default function ClassroomMap({
     const nowISO = new Date().toISOString();
     pendingRef.current.set(sid, { patch: { ...patch }, ts: Date.now() });
 
+    // ✅ Optimistic toiletCount increment (immediate, stable under multi-click)
+    if (String(patch?.status) === "temp_out") {
+      const sidKey = sid;
+      if (sidKey) {
+        const base =
+          Number((toiletOverride || {})[sidKey] ?? filesByStudentId?.[sidKey]?.toiletCount ?? 0) || 0;
+        setToiletOverride((prev) => ({ ...prev, [sidKey]: base + 1 }));
+      }
+    }
+
     setLocalAttendance((prev) =>
       (prev || []).map((x) => {
         const same = String(x.studentId) === sid || String(x.studentNumber || "") === sid;
@@ -421,21 +462,30 @@ export default function ClassroomMap({
 
         // ✅ not_arrived should not "fake" arrivedAt
         next.lastStatusAt = nowISO;
+
         return next;
       })
     );
   }
+
 
   async function patchStatus(studentId, patch) {
     if (!exam?.id) return;
     setLocalError("");
 
     const resolvedId = resolveStudentIdKey(studentId);
-    applyOptimistic(resolvedId, patch);
+
+    // ✅ Ensure OUT uses a stable timestamp from client (prevents timer reset after server reply)
+    const safePatch = { ...(patch || {}) };
+    if (String(safePatch?.status) === "temp_out" && !safePatch.outStartedAt) {
+      safePatch.outStartedAt = new Date().toISOString();
+    }
+
+    applyOptimistic(resolvedId, safePatch);
 
     try {
       setSaving(true);
-      await updateAttendance({ examId: exam.id, studentId: resolvedId, patch });
+      await updateAttendance({ examId: exam.id, studentId: resolvedId, patch: safePatch });
       refreshNow?.();
     } catch (e) {
       pendingRef.current.delete(String(resolvedId));
