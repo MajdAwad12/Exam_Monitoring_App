@@ -648,14 +648,24 @@ export async function updateAttendance(req, res) {
             });
           }
 
-          if (nextStatus === "temp_out" && prevStatus !== "temp_out") {
-            att.outStartedAt = now;
+          // ✅ ENTER toilet ONLY ONCE (idempotent)
+          if (nextStatus === "temp_out") {
+            // already out → do nothing
+            if (prevStatus === "temp_out") {
+              return;
+            }
+
+            // keep original start time if exists
+            att.outStartedAt = att.outStartedAt || now;
 
             sf.toiletCount = (Number(sf.toiletCount) || 0) + 1;
-            sf.activeToilet = { leftAt: now, bySupervisorId: actor.id || null };
+            sf.activeToilet = {
+              leftAt: att.outStartedAt,
+              bySupervisorId: actor.id || null,
+            };
 
             pushStudentTimeline(exam, realStudentKey, {
-              at: now,
+              at: att.outStartedAt,
               kind: "TOILET_OUT",
               note: "Left to toilet",
               severity: "low",
@@ -666,7 +676,7 @@ export async function updateAttendance(req, res) {
 
             pushExamTimeline(exam, {
               kind: "TOILET_OUT",
-              at: now,
+              at: att.outStartedAt,
               roomId: att.classroom || "",
               actor,
               student: sSnap,
@@ -676,7 +686,7 @@ export async function updateAttendance(req, res) {
             if (sf.toiletCount > 3) {
               pushExamTimeline(exam, {
                 kind: "TOO_MANY_TOILET_EXITS",
-                at: now,
+                at: att.outStartedAt,
                 roomId: att.classroom || "",
                 actor,
                 student: sSnap,
@@ -687,6 +697,7 @@ export async function updateAttendance(req, res) {
               });
             }
           }
+
 
           if (prevStatus === "temp_out" && nextStatus === "present") {
             const leftAt = att.outStartedAt ? new Date(att.outStartedAt) : null;
