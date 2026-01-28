@@ -229,17 +229,22 @@ export default function DashboardAddDeleteStudentsCard({
               disabled={addBusy}
               onClick={onAdd}
               className={[
-                "w-full rounded-2xl px-4 py-2 text-sm font-extrabold",
-                "text-white bg-emerald-200 hover:bg-emerald-200",
+                "w-full rounded-full px-6 py-3",
+                "text-white text-base font-extrabold",
+                "bg-gradient-to-r from-emerald-600 to-emerald-700",
+                "hover:from-emerald-700 hover:to-emerald-800",
+                "focus:outline-none focus:ring-4 focus:ring-emerald-300",
+                "shadow-lg hover:shadow-xl transition-all duration-200",
                 "disabled:opacity-60 disabled:cursor-not-allowed",
-                "flex items-center justify-center gap-2",
-                "shadow-sm hover:shadow-md transition-all",
-                "ring-1 ring-black/5",
+                "flex items-center justify-center gap-3",
               ].join(" ")}
             >
-              <span className="text-base leading-none">{addBusy ? "⏳" : "➕"}</span>
-              <span>{addBusy ? "Adding..." : "Add Student"}</span>
+              <span className="text-xl leading-none">
+                {addBusy ? "⏳" : "➕"}
+              </span>
+              <span>{addBusy ? "Adding Student..." : "Add Student"}</span>
             </button>
+
             </div>
           </div>
         </div>
