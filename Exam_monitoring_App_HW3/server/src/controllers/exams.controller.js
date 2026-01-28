@@ -20,22 +20,26 @@ function wsBroadcast(payload) {
 /* =========================
    Helpers
 ========================= */
-async function saveWithRetry(doc, retries = 5) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await doc.save();
-    } catch (err) {
-      const isVersionError =
-        err?.name === "VersionError" || String(err?.message || "").includes("VersionError");
+function pushExamEvent(exam, ev) {
+  const clean = {
+    type: String(ev?.type || ""),
+    timestamp: ev?.timestamp ? new Date(ev.timestamp) : new Date(),
+    description: String(ev?.description || ""),
+    severity: ["low", "medium", "high", "critical"].includes(ev?.severity)
+      ? ev.severity
+      : "low",
+    classroom: String(ev?.classroom || ""),
+    seat: String(ev?.seat || ""),
+studentId:
+  mongoose.Types.ObjectId.isValid(ev?.studentId)
+    ? ev.studentId
+    : null,
+  };
 
-      if (!isVersionError || i === retries - 1) {
-        throw err;
-      }
-
-      await new Promise((r) => setTimeout(r, 25 * (i + 1)));
-    }
-  }
+  exam.events = [...(exam.events || []), clean].slice(-200);
 }
+
+
 
 /**
  * ✅ The real fix for "fast clicks override each other":
@@ -53,6 +57,7 @@ async function updateExamWithRetry(examId, mutator, retries = 5) {
       // common deep paths
       exam.markModified("attendance");
       exam.markModified("report");
+      exam.markModified("events");
 
       const saved = await exam.save();
       return { exam: saved, notFound: false };
@@ -127,12 +132,17 @@ function pushStudentTimeline(exam, studentIdKey, payload) {
 
 function actorFromReq(req) {
   const u = req.user || {};
+  const raw = u.id || u._id || null;
+  const idStr = raw ? String(raw) : "";
+
   return {
-    id: u.id || u._id || null,
+    id: mongoose.Types.ObjectId.isValid(idStr) ? new mongoose.Types.ObjectId(idStr) : null,
     name: u.fullName || u.username || "",
     role: u.role || "",
   };
 }
+
+
 
 function studentSnapshot(att) {
   return {
@@ -648,87 +658,97 @@ export async function updateAttendance(req, res) {
             });
           }
 
-          // ✅ ENTER toilet ONLY ONCE (idempotent)
-          if (nextStatus === "temp_out") {
-            // already out → do nothing
-            if (prevStatus === "temp_out") {
-              return;
-            }
+          if (nextStatus === "temp_out" && prevStatus !== "temp_out") {
+  att.outStartedAt = att.outStartedAt || now;
 
-            // keep original start time if exists
-            att.outStartedAt = att.outStartedAt || now;
+  sf.toiletCount = (Number(sf.toiletCount) || 0) + 1;
+sf.activeToilet = {
+  leftAt: att.outStartedAt,
+  bySupervisorId: mongoose.Types.ObjectId.isValid(actor.id) ? actor.id : null,
+};
 
-            sf.toiletCount = (Number(sf.toiletCount) || 0) + 1;
-            sf.activeToilet = {
-              leftAt: att.outStartedAt,
-              bySupervisorId: actor.id || null,
-            };
+  pushStudentTimeline(exam, realStudentKey, {
+    at: att.outStartedAt,
+    kind: "TOILET_OUT",
+    note: "Left to toilet",
+    severity: "low",
+    classroom: att.classroom || "",
+    seat: att.seat || "",
+    meta: { by: actor },
+  });
 
-            pushStudentTimeline(exam, realStudentKey, {
-              at: att.outStartedAt,
-              kind: "TOILET_OUT",
-              note: "Left to toilet",
-              severity: "low",
-              classroom: att.classroom || "",
-              seat: att.seat || "",
-              meta: { by: actor },
-            });
+  pushExamTimeline(exam, {
+    kind: "TOILET_OUT",
+    at: att.outStartedAt,
+    roomId: att.classroom || "",
+    actor,
+    student: sSnap,
+    details: {},
+  });
 
-            pushExamTimeline(exam, {
-              kind: "TOILET_OUT",
-              at: att.outStartedAt,
-              roomId: att.classroom || "",
-              actor,
-              student: sSnap,
-              details: {},
-            });
+ if (sf.toiletCount === 4) {
+  // נשאר בדוח (timeline)
+  pushExamTimeline(exam, {
+    kind: "TOO_MANY_TOILET_EXITS",
+    at: att.outStartedAt,
+    roomId: att.classroom || "",
+    actor,
+    student: sSnap,
+    details: {
+      toiletCount: sf.toiletCount,
+    },
+  });
 
-            if (sf.toiletCount > 3) {
-              pushExamTimeline(exam, {
-                kind: "TOO_MANY_TOILET_EXITS",
-                at: att.outStartedAt,
-                roomId: att.classroom || "",
-                actor,
-                student: sSnap,
-                details: {
-                  toiletCount: sf.toiletCount,
-                  message: "Student exceeded recommended toilet breaks",
-                },
-              });
-            }
-          }
+  // ✅ נכנס ל־Events panel (תואם Exam.js)
+  pushExamEvent(exam, {
+    type: "TOO_MANY_TOILET_EXITS",
+    timestamp: att.outStartedAt,
+    severity: "medium",
+    description: `${att.name} exceeded toilet exits (${sf.toiletCount}).`,
+    classroom: att.classroom || "",
+    seat: att.seat || "",
+    studentId: att.studentId || null,
+  });
+}
+
+
+}
 
 
           if (prevStatus === "temp_out" && nextStatus === "present") {
-            const leftAt = att.outStartedAt ? new Date(att.outStartedAt) : null;
+  if (att.outStartedAt) {
+    const leftAt = new Date(att.outStartedAt);
 
-            if (leftAt && !Number.isNaN(leftAt.getTime())) {
-              const deltaMs = now.getTime() - leftAt.getTime();
-              sf.totalToiletMs = (Number(sf.totalToiletMs) || 0) + Math.max(0, deltaMs);
-            }
+    if (!Number.isNaN(leftAt.getTime())) {
+      const deltaMs = now.getTime() - leftAt.getTime();
+      sf.totalToiletMs = (Number(sf.totalToiletMs) || 0) + Math.max(0, deltaMs);
+    }
 
-            att.outStartedAt = null;
-            sf.activeToilet = { leftAt: null, bySupervisorId: null };
+    att.outStartedAt = null;
+    sf.activeToilet = { leftAt: null, bySupervisorId: null };
 
-            pushStudentTimeline(exam, realStudentKey, {
-              at: now,
-              kind: "TOILET_BACK",
-              note: "Returned from toilet",
-              severity: "low",
-              classroom: att.classroom || "",
-              seat: att.seat || "",
-              meta: { by: actor },
-            });
+    pushStudentTimeline(exam, realStudentKey, {
+      at: now,
+      kind: "TOILET_BACK",
+      note: "Returned from toilet",
+      severity: "low",
+      classroom: att.classroom || "",
+      seat: att.seat || "",
+      meta: { by: actor },
+    });
 
-            pushExamTimeline(exam, {
-              kind: "TOILET_BACK",
-              at: now,
-              roomId: att.classroom || "",
-              actor,
-              student: sSnap,
-              details: {},
-            });
-          }
+    pushExamTimeline(exam, {
+      kind: "TOILET_BACK",
+      at: now,
+      roomId: att.classroom || "",
+      actor,
+      student: sSnap,
+      details: {},
+    });
+  }
+}
+
+
 
           if (nextStatus === "finished") {
             att.finishedAt = att.finishedAt || now;
@@ -755,10 +775,11 @@ export async function updateAttendance(req, res) {
           }
 
           const isSpecial =
-            (prevStatus === "not_arrived" && nextStatus === "present") ||
-            nextStatus === "temp_out" ||
-            (prevStatus === "temp_out" && nextStatus === "present") ||
-            nextStatus === "finished";
+          (prevStatus === "not_arrived" && nextStatus === "present") ||
+          (prevStatus !== "temp_out" && nextStatus === "temp_out") ||
+          (prevStatus === "temp_out" && nextStatus === "present") ||
+          nextStatus === "finished";
+
 
           if (!isSpecial) {
             pushStudentTimeline(exam, realStudentKey, {
