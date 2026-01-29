@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-  "dev": "nodemon index.js",
-  "start": "node index.js"
-},
+    "dev": "nodemon index.js",
+    "start": "node index.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -28,9 +28,9 @@
     "helmet": "^8.1.0",
     "mongoose": "^9.0.2",
     "morgan": "^1.10.1",
+    "nodemailer": "^7.0.13",
     "pdfkit": "^0.17.2",
-    "zod": "^4.2.1" ,
-    "ws": "^8.18.0"
-
+    "ws": "^8.18.0",
+    "zod": "^4.2.1"
   }
 }
