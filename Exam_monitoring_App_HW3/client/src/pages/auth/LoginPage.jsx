@@ -13,8 +13,6 @@ import LoginHeader from "../../components/auth/LoginHeader";
 import LoginCard from "../../components/auth/LoginCard";
 import ErrorAlert from "../../components/auth/ErrorAlert";
 import LoginForm from "../../components/auth/LoginForm";
-import DemoAccountsBox from "../../components/auth/DemoAccountsBox";
-import SupportBox from "../../components/auth/SupportBox";
 import AuthFooter from "../../components/auth/AuthFooter";
 
 export default function LoginPage() {
@@ -355,14 +353,6 @@ export default function LoginPage() {
                           </div>
                         </div>
                       ) : null}
-
-                      <div className="mt-5">
-                        <DemoAccountsBox
-                          demoUsers={staffDemos}
-                          isLoading={isLoading}
-                          onFill={onFillDemoStaff}
-                        />
-                      </div>
                     </>
                   ) : (
                     <>
@@ -406,14 +396,6 @@ export default function LoginPage() {
                           <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3">
                             ✅ After sending OTP, please check your Inbox and also{" "}
                             <span className="font-extrabold">Spam/Junk</span>.
-                          </div>
-
-                          <div className="mt-2">
-                            <DemoAccountsBox
-                              demoUsers={studentDemos}
-                              isLoading={isLoading}
-                              onFill={onFillDemoStudent}
-                            />
                           </div>
                         </form>
                       ) : (
@@ -469,10 +451,6 @@ export default function LoginPage() {
                       )}
                     </>
                   )}
-                </div>
-
-                <div className="mt-5">
-                  <SupportBox />
                 </div>
               </LoginCard>
 
