@@ -34,12 +34,6 @@ export default function HomePage() {
         <div className="relative mx-auto max-w-7xl px-6 py-16 md:py-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           {/* Text */}
           <div className="text-white">
-            <div className="inline-flex items-center gap-3 px-3 py-2 rounded-full bg-white/10 border border-white/20 text-xs font-bold">
-              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/15 border border-white/20">
-                ✅
-              </span>
-              Production-style UI • Clean • Modern
-            </div>
 
             <div className="mt-6 flex items-center gap-4">
               <img

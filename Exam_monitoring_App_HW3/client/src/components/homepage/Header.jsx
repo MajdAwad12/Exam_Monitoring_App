@@ -3,14 +3,14 @@ import { Link } from "react-router-dom";
 
 export default function Header() {
   return (
-    <header className="sticky top-0 z-50 bg-white/85 backdrop-blur border-b border-slate-200">
-      <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-4">
-        {/* Brand */}
-        <Link to="/" className="flex items-center gap-3 min-w-0 group">
+    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200">
+      <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-6">
+        {/* Brand (BIG Logo) */}
+        <Link to="/" className="flex items-center gap-4 min-w-0 group">
           <img
             src="/system_logo.png"
             alt="Exam Monitoring Logo"
-            className="w-11 h-11 rounded-2xl bg-white shadow-sm border border-slate-200 object-contain"
+            className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white shadow-md border border-slate-200 object-contain"
             onError={(e) => {
               e.currentTarget.style.display = "none";
               const sib = e.currentTarget.nextSibling;
@@ -18,17 +18,17 @@ export default function Header() {
             }}
           />
           <span
-            className="hidden items-center justify-center w-11 h-11 rounded-2xl bg-slate-100 border border-slate-200"
+            className="hidden items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-100 border border-slate-200"
             style={{ display: "none" }}
           >
             ⏱️
           </span>
 
           <div className="min-w-0">
-            <div className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight truncate">
+            <div className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight truncate">
               Exam Monitoring App
             </div>
-            <div className="text-[11px] sm:text-xs text-slate-500 leading-tight truncate">
+            <div className="text-xs sm:text-sm text-slate-500 leading-tight truncate">
               Real-time supervision • Attendance • Integrity
             </div>
           </div>
@@ -51,18 +51,18 @@ export default function Header() {
           </span>
         </div>
 
-        {/* Auth buttons (ONLY HERE) */}
+        {/* Auth buttons (BIGGER + CLEARER) */}
         <nav className="flex items-center gap-3 shrink-0">
           <Link
             to="/login"
-            className="px-4 py-2 rounded-full border border-slate-300 text-slate-800 hover:bg-slate-100 transition text-sm font-semibold"
+            className="px-6 py-3 rounded-full border-2 border-slate-300 text-slate-900 hover:bg-slate-100 transition text-base font-extrabold shadow-sm"
           >
             Login
           </Link>
 
           <Link
             to="/register"
-            className="px-4 py-2 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition text-sm font-semibold shadow-sm"
+            className="px-6 py-3 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition text-base font-extrabold shadow-md"
           >
             Register
           </Link>
