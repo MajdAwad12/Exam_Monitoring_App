@@ -1,71 +1,87 @@
-// client/src/components/homepage/Footer.jsx
-export default function Footer() {
+// client/src/components/homepage/Header.jsx
+import { Link, useLocation } from "react-router-dom";
+
+export default function Header() {
+  const { pathname } = useLocation();
+  const isHome = pathname === "/";
+
   return (
-    <footer className="bg-slate-900 text-slate-200">
-      <div className="mx-auto max-w-7xl px-6 py-12 grid grid-cols-1 md:grid-cols-3 gap-8">
-        
-        {/* Brand */}
-        <div>
-          <div className="flex items-center gap-3 mb-4">
+    <header className="sticky top-0 z-50 bg-white/85 backdrop-blur border-b border-slate-200">
+      <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-4">
+        {/* Left: Brand */}
+        <div className="flex items-center gap-3 min-w-0">
+          <Link to="/" className="flex items-center gap-3 group">
+            {/* ✅ absolute path from /public */}
             <img
               src="/logo-mark.svg"
               alt="Exam Monitoring Logo"
-              className="w-10 h-10"
+              className="w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-200 object-contain"
+              onError={(e) => {
+                // fallback: hide broken image, show emoji
+                e.currentTarget.style.display = "none";
+                const sib = e.currentTarget.nextSibling;
+                if (sib) sib.style.display = "inline-flex";
+              }}
             />
-            <h3 className="text-lg font-extrabold text-white">
-              Exam Monitoring App
-            </h3>
-          </div>
+            <span
+              className="hidden items-center justify-center w-10 h-10 rounded-xl bg-slate-100 border border-slate-200"
+              style={{ display: "none" }}
+            >
+              ⏱️
+            </span>
 
-          <p className="text-sm text-slate-400 max-w-xs">
-            A smart web platform for real-time exam supervision, attendance
-            tracking, and academic integrity management.
-          </p>
+            <div className="min-w-0">
+              <div className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight truncate">
+                Exam Monitoring App
+              </div>
+              <div className="text-[11px] sm:text-xs text-slate-500 leading-tight truncate">
+                Real-time supervision • Attendance • Integrity
+              </div>
+            </div>
+          </Link>
         </div>
 
-        {/* Contact */}
-        <div>
-          <h4 className="text-white font-semibold mb-4">Contact</h4>
-          <ul className="space-y-2 text-sm">
-            <li>
-              📧{" "}
-              <a
-                href="mailto:helpdesk@exam-monitoring.com"
-                className="hover:underline"
-              >
-                helpdesk@exam-monitoring.com
-              </a>
-            </li>
-            <li>
-              ☎{" "}
-              <a href="tel:+97231234567" className="hover:underline">
-                +972-3-123-4567
-              </a>
-            </li>
-          </ul>
+        {/* Middle: Helpdesk */}
+        <div className="hidden lg:flex items-center gap-3 text-sm text-slate-600">
+          <span className="inline-flex items-center gap-2">
+            📧{" "}
+            <a className="hover:underline" href="mailto:helpdesk@exam-monitoring.com">
+              helpdesk@exam-monitoring.com
+            </a>
+          </span>
+          <span className="text-slate-300">|</span>
+          <span className="inline-flex items-center gap-2">
+            ☎{" "}
+            <a className="hover:underline" href="tel:+97231234567">
+              +972-3-123-4567
+            </a>
+          </span>
         </div>
 
-        {/* Social */}
-        <div>
-          <h4 className="text-white font-semibold mb-4">Follow Us</h4>
-          <div className="flex gap-4 text-sm">
-            <a href="#" className="hover:underline">
-              Instagram
-            </a>
-            <a href="#" className="hover:underline">
-              Facebook
-            </a>
-            <a href="#" className="hover:underline">
-              Gmail
-            </a>
-          </div>
-        </div>
+        {/* Right: Auth buttons (only here, no duplicates elsewhere) */}
+        <nav className="flex items-center gap-3 shrink-0">
+          <Link
+            to="/login"
+            className="px-4 py-2 rounded-full border border-slate-300 text-slate-800 hover:bg-slate-100 transition text-sm font-semibold"
+          >
+            Login
+          </Link>
+
+          <Link
+            to="/register"
+            className="px-4 py-2 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition text-sm font-semibold shadow-sm"
+          >
+            Register
+          </Link>
+
+          {/* subtle indicator on home */}
+          {isHome ? (
+            <span className="hidden sm:inline-flex px-3 py-2 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100">
+              Home
+            </span>
+          ) : null}
+        </nav>
       </div>
-
-      {/* Bottom bar */}
-      <div className="border-t border-slate-800 text-center text-xs text-slate-500 py-4">
-        © {new Date().getFullYear()} Exam Monitoring App. All rights reserved.
-      </div>
-    </footer>
+    </header>
   );
 }
