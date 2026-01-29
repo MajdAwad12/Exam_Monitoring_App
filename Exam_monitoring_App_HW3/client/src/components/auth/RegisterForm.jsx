@@ -39,51 +39,57 @@ export default function RegisterForm({ onSubmit, captchaLabel }) {
   }
 
   const input =
-    "w-full px-4 py-3 rounded-xl border border-slate-200 bg-white " +
+    "w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-white " +
+    "text-slate-900 placeholder:text-slate-400 " +
     "focus:outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition";
+
+  const roleBtnBase =
+    "w-full py-2.5 rounded-xl text-sm font-extrabold transition focus:outline-none focus:ring-4 focus:ring-indigo-100";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
-      <div>
-        <label className="block text-sm font-semibold text-slate-800 mb-2">
-          Full name
-        </label>
-        <input
-          className={input}
-          type="text"
-          value={form.fullName}
-          onChange={(e) => setField("fullName", e.target.value)}
-          placeholder="e.g. Rina Cohen"
-          required
-        />
-      </div>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-semibold text-slate-800 mb-2">
+            Full name
+          </label>
+          <input
+            className={input}
+            type="text"
+            value={form.fullName}
+            onChange={(e) => setField("fullName", e.target.value)}
+            placeholder="e.g. Rina Cohen"
+            required
+          />
+        </div>
 
-      <div>
-        <label className="block text-sm font-semibold text-slate-800 mb-2">
-          Email
-        </label>
-        <input
-          className={input}
-          type="email"
-          value={form.email}
-          onChange={(e) => setField("email", e.target.value)}
-          placeholder="name@example.com"
-          required
-        />
-      </div>
+        <div>
+          <label className="block text-sm font-semibold text-slate-800 mb-2">
+            Email
+          </label>
+          <input
+            className={input}
+            type="email"
+            value={form.email}
+            onChange={(e) => setField("email", e.target.value)}
+            placeholder="name@example.com"
+            required
+          />
+        </div>
 
-      <div>
-        <label className="block text-sm font-semibold text-slate-800 mb-2">
-          Username
-        </label>
-        <input
-          className={input}
-          type="text"
-          value={form.username}
-          onChange={(e) => setField("username", e.target.value)}
-          placeholder="Choose a username"
-          required
-        />
+        <div>
+          <label className="block text-sm font-semibold text-slate-800 mb-2">
+            Username
+          </label>
+          <input
+            className={input}
+            type="text"
+            value={form.username}
+            onChange={(e) => setField("username", e.target.value)}
+            placeholder="Choose a username"
+            required
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -116,36 +122,42 @@ export default function RegisterForm({ onSubmit, captchaLabel }) {
         </div>
       </div>
 
+      {/* Clean role selector (no icons) */}
       <div>
         <label className="block text-sm font-semibold text-slate-800 mb-2">
           Role
         </label>
 
-        <div className="flex items-center gap-4 text-sm text-slate-700">
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="radio"
-              name="role"
-              value="supervisor"
-              checked={form.role === "supervisor"}
-              onChange={(e) => setField("role", e.target.value)}
-              required
-            />
+        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 border border-slate-200 p-2">
+          <button
+            type="button"
+            onClick={() => setField("role", "supervisor")}
+            className={[
+              roleBtnBase,
+              form.role === "supervisor"
+                ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+                : "text-slate-600 hover:text-slate-900",
+            ].join(" ")}
+          >
             Supervisor
-          </label>
+          </button>
 
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="radio"
-              name="role"
-              value="lecturer"
-              checked={form.role === "lecturer"}
-              onChange={(e) => setField("role", e.target.value)}
-              required
-            />
+          <button
+            type="button"
+            onClick={() => setField("role", "lecturer")}
+            className={[
+              roleBtnBase,
+              form.role === "lecturer"
+                ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+                : "text-slate-600 hover:text-slate-900",
+            ].join(" ")}
+          >
             Lecturer
-          </label>
+          </button>
         </div>
+
+        {/* keep HTML validation happy */}
+        <input type="hidden" value={form.role} required />
       </div>
 
       <div>
@@ -154,11 +166,13 @@ export default function RegisterForm({ onSubmit, captchaLabel }) {
         </label>
 
         <div className="flex items-center gap-3">
-          <span className="px-3 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold">
+          <span className="px-3 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold border border-slate-200">
             {captchaLabel}
           </span>
+
           <input
-            className="w-28 px-3 py-3 rounded-xl border border-slate-200 bg-white
+            className="w-28 px-3 py-3.5 rounded-xl border border-slate-200 bg-white
+                       text-slate-900 placeholder:text-slate-400
                        focus:outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition"
             type="number"
             value={form.captchaAnswer}
@@ -172,9 +186,12 @@ export default function RegisterForm({ onSubmit, captchaLabel }) {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full rounded-xl bg-indigo-600 text-white py-3 font-extrabold
-                   hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 transition
-                   disabled:opacity-60"
+        className={[
+          "w-full rounded-xl bg-indigo-600 text-white py-3.5 font-extrabold",
+          "hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 transition",
+          "shadow-sm hover:shadow-md",
+          "disabled:opacity-60 disabled:cursor-not-allowed",
+        ].join(" ")}
       >
         {isSubmitting ? "Creating..." : "Create account"}
       </button>

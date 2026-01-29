@@ -106,7 +106,7 @@ export default function RegisterPage() {
       </button>
 
       <div className="min-h-screen flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-5xl">
+        <div className="w-full max-w-6xl">
           {/* TOP title row */}
           <div className="mb-6 flex items-center justify-center gap-3">
             <img
@@ -120,32 +120,15 @@ export default function RegisterPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-            {/* LEFT side (only on large screens) */}
+            {/* LEFT image (only on large screens) */}
             <div className="hidden lg:block">
-              <div className="text-white">
-                <h2 className="text-3xl font-extrabold tracking-tight">
-                  Staff Registration
-                </h2>
-                <p className="mt-3 text-white/85 leading-relaxed">
-                  Create a clean staff account for supervision and exam
-                  management. Keep your credentials private and secure.
-                </p>
-
-                <div className="mt-6 rounded-2xl bg-white/10 border border-white/20 backdrop-blur p-5">
-                  <div className="text-sm font-bold text-white/90">
-                    Roles
-                  </div>
-                  <div className="mt-2 text-sm text-white/80 leading-relaxed">
-                    Supervisor: classroom monitoring. Lecturer: exams and reports.
-                  </div>
-                </div>
-
-                <div className="mt-6 text-sm text-white/75">
-                  Already have an account?{" "}
-                  <span className="font-semibold text-white/90">
-                    Go to Login from the Home page.
-                  </span>
-                </div>
+              <div className="relative rounded-3xl overflow-hidden border border-white/20 bg-white/10 backdrop-blur shadow-2xl">
+                <img
+                  src="/dashboardPIC.jpg"
+                  alt="Dashboard preview"
+                  className="w-full h-[520px] object-cover opacity-85"
+                />
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-indigo-950/35 via-transparent to-cyan-500/10" />
               </div>
             </div>
 

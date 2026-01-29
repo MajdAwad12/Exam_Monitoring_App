@@ -3,8 +3,9 @@ export default function LoginCard({ shake, children }) {
   return (
     <div
       className={[
-        "bg-white rounded-2xl shadow-sm border border-slate-200",
-        "p-6 sm:p-7",
+        // bigger + cleaner
+        "bg-white/95 backdrop-blur rounded-3xl shadow-2xl border border-white/30",
+        "p-7 sm:p-9",
         shake ? "shake" : "",
       ].join(" ")}
     >

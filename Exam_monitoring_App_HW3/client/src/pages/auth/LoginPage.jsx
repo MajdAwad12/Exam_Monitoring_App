@@ -110,7 +110,7 @@ export default function LoginPage() {
       </button>
 
       <div className="min-h-screen flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-5xl">
+        <div className="w-full max-w-6xl">
           {/* TOP title row */}
           <div className="mb-6 flex items-center justify-center gap-3">
             <img
@@ -124,33 +124,16 @@ export default function LoginPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-            {/* LEFT side (only on large screens) */}
+            {/* LEFT image (only on large screens) */}
             <div className="hidden lg:block">
-              <div className="text-white">
-                <h2 className="text-3xl font-extrabold tracking-tight">
-                  Exam Monitoring System
-                </h2>
-                <p className="mt-3 text-white/85 leading-relaxed">
-                  A clean and focused environment for supervisors, lecturers,
-                  and students. Login to access your exam dashboard.
-                </p>
-
-                <div className="mt-6 rounded-2xl bg-white/10 border border-white/20 backdrop-blur p-5">
-                  <div className="text-sm font-bold text-white/90">
-                    Quick notes
-                  </div>
-                  <div className="mt-2 text-sm text-white/80 leading-relaxed">
-                    Staff users go to the dashboard. Students go to the student
-                    page. Use demo accounts for testing if needed.
-                  </div>
-                </div>
-
-                <div className="mt-6 text-sm text-white/75">
-                  Need a staff account?{" "}
-                  <span className="font-semibold text-white/90">
-                    Register from the Home page.
-                  </span>
-                </div>
+              <div className="relative rounded-3xl overflow-hidden border border-white/20 bg-white/10 backdrop-blur shadow-2xl">
+                <img
+                  src="/dashboardPIC.jpg"
+                  alt="Dashboard preview"
+                  className="w-full h-[520px] object-cover opacity-85"
+                />
+                {/* subtle overlay for softness */}
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-indigo-950/35 via-transparent to-cyan-500/10" />
               </div>
             </div>
 
@@ -167,9 +150,7 @@ export default function LoginPage() {
                       <div
                         className={[
                           "absolute top-0 left-0 h-full w-1/2 rounded-xl bg-indigo-600 shadow transition-transform duration-300",
-                          tab === "student"
-                            ? "translate-x-full"
-                            : "translate-x-0",
+                          tab === "student" ? "translate-x-full" : "translate-x-0",
                         ].join(" ")}
                       />
 
