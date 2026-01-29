@@ -328,22 +328,39 @@ export default function LoginPage() {
                           </div>
 
                           <div className="mt-3 flex gap-2">
-                            <input
-                              value={forgotEmail}
-                              onChange={(e) => setForgotEmail(e.target.value)}
-                              className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                              placeholder="your.email@..."
-                              disabled={isLoading}
-                            />
-                            <button
-                              type="button"
-                              onClick={onStaffForgot}
-                              disabled={isLoading}
-                              className="rounded-xl px-4 py-2 text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700"
-                            >
-                              {isLoading ? "Sending..." : "Send"}
-                            </button>
-                          </div>
+                          <input
+                            value={forgotEmail}
+                            onChange={(e) => setForgotEmail(e.target.value)}
+                            className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                            placeholder="your.email@..."
+                            disabled={isLoading}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={onStaffForgot}
+                            disabled={isLoading}
+                            className="rounded-xl px-4 py-2 text-sm font-extrabold text-white
+                                      bg-indigo-600 hover:bg-indigo-700"
+                          >
+                            {isLoading ? "Sending..." : "Send"}
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={isLoading}
+                            onClick={() => {
+                              setShowForgot(false);
+                              setForgotEmail("");
+                              setNotice(null);
+                            }}
+                            className="rounded-xl px-4 py-2 text-sm font-extrabold
+                                      bg-slate-200 hover:bg-slate-300 text-slate-800"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+
 
                           {/* Professional hint always visible */}
                           <div className="mt-3 text-xs text-slate-600">
@@ -392,7 +409,7 @@ export default function LoginPage() {
                           </button>
 
                           <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                            ✅ After sending OTP, please check your Inbox and also{" "}
+                             After sending OTP, please check your Inbox and also{" "}
                             <span className="font-extrabold">Spam/Junk</span>.
                           </div>
                         </form>
