@@ -21,8 +21,13 @@ export default function Footer() {
         <div>
           <h4 className="text-white font-semibold mb-4">Help Desk</h4>
           <ul className="space-y-2 text-sm">
-            <li>
-              📧{" "}
+            <li className="flex items-center gap-2">
+              <img
+                src="/gmailICON.png"
+                alt="Gmail"
+                className="w-5 h-5 object-contain"
+                draggable={false}
+              />
               <a
                 href="mailto:helpdesk@exam-monitoring.com"
                 className="hover:underline"
@@ -30,12 +35,14 @@ export default function Footer() {
                 helpdesk@exam-monitoring.com
               </a>
             </li>
-            <li>
-              ☎{" "}
+
+            <li className="flex items-center gap-2">
+              <span className="text-base">☎</span>
               <a href="tel:+97231234567" className="hover:underline">
                 +972-3-123-4567
               </a>
             </li>
+
             <li className="text-slate-400 text-xs pt-2">
               For any defect, issue, or support request — contact us anytime.
             </li>
@@ -45,10 +52,48 @@ export default function Footer() {
         {/* Social */}
         <div>
           <h4 className="text-white font-semibold mb-4">Social</h4>
-          <div className="flex flex-col gap-2 text-sm">
-            <a href="#" className="hover:underline">Instagram</a>
-            <a href="#" className="hover:underline">Facebook</a>
-            <a href="mailto:helpdesk@exam-monitoring.com" className="hover:underline">
+
+          <div className="flex flex-col gap-3 text-sm">
+            <a
+              href="https://instagram.com"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 hover:underline"
+            >
+              <img
+                src="/instgramICON.jpg"
+                alt="Instagram"
+                className="w-5 h-5 object-contain"
+                draggable={false}
+              />
+              Instagram
+            </a>
+
+            <a
+              href="https://facebook.com"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 hover:underline"
+            >
+              <img
+                src="/facebookICON.jpg"
+                alt="Facebook"
+                className="w-5 h-5 object-contain"
+                draggable={false}
+              />
+              Facebook
+            </a>
+
+            <a
+              href="mailto:helpdesk@exam-monitoring.com"
+              className="inline-flex items-center gap-2 hover:underline"
+            >
+              <img
+                src="/gmailICON.png"
+                alt="Gmail"
+                className="w-5 h-5 object-contain"
+                draggable={false}
+              />
               Gmail
             </a>
           </div>
