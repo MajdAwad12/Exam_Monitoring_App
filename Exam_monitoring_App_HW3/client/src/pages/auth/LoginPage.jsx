@@ -111,17 +111,6 @@ export default function LoginPage() {
 
       <div className="min-h-screen flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-6xl">
-          {/* TOP title row */}
-          <div className="mb-6 flex items-center justify-center gap-3">
-            <img
-              src="/exammonitoringPIC.png"
-              alt="Exam Monitoring"
-              className="w-10 h-10 object-contain"
-            />
-            <h1 className="text-white text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Login Page
-            </h1>
-          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
             {/* LEFT image (only on large screens) */}
