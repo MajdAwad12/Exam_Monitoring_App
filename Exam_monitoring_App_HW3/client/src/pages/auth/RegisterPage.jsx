@@ -101,16 +101,7 @@ export default function RegisterPage() {
             captchaLabel={`${captcha.a} + ${captcha.b} = ?`}
           />
 
-          {/* Extra helper CTA (no login link) */}
-          <div className="mt-5 text-center">
-            <button
-              type="button"
-              onClick={() => navigate("/", { replace: true })}
-              className="text-sm font-semibold text-indigo-700 hover:text-indigo-900 hover:underline"
-            >
-              Back to Home to Login
-            </button>
-          </div>
+          
         </div>
 
         <AuthFooter />
