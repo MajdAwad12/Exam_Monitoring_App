@@ -31,39 +31,47 @@ const FEATURES = [
   },
 ];
 
-// ✅ Update src names here to match EXACT filenames in /public
-const TOUR = [
+// ✅ Your real images (from /public) — no other images used
+const PRODUCT_SECTIONS = [
   {
-    key: "examlist",
-    src: "/examlistPIC.png",
-    alt: "Exam List",
-    title: "Exam List — Organized & Fast",
-    desc: "Browse active exams instantly, jump into the right room, and stay in control with a clear, structured view.",
-    bullets: ["One-click access", "Clean layout", "Zero confusion"],
+    key: "dashboard",
+    img: "/dashboardPIC.jpg",
+    alt: "Dashboard",
+    title: "A Powerful Dashboard that keeps you in control",
+    desc: "Monitor classrooms in one place, take fast actions, and get clear visibility during the exam — without stress.",
+    bullets: ["Real-time overview", "Fast actions", "Clean layout"],
   },
   {
-    key: "reports",
-    src: "/reportANDhistoryPIC.png",
-    alt: "Reports & History",
-    title: "Reports & History — Ready for Review",
-    desc: "Get a full exam story: attendance, incidents, and key actions — presented in a professional, readable format.",
-    bullets: ["Timeline clarity", "Audit-friendly", "Export-ready"],
+    key: "examlist",
+    img: "/examlistPIC.jpg",
+    alt: "Exam List",
+    title: "Exam List that feels organized and instant",
+    desc: "Jump to any exam quickly, keep everything structured, and navigate like a professional system.",
+    bullets: ["Quick navigation", "Organized structure", "Zero confusion"],
   },
   {
     key: "manage",
-    src: "/manageEXAMPIC.png",
-    alt: "Manage Exams",
-    title: "Manage Exams — Full Control",
-    desc: "Create, edit, and manage exam settings with confidence. Built for staff workflows and real operation needs.",
-    bullets: ["Role-based actions", "Safe updates", "Production-style UX"],
+    img: "/mangeEXAM_pic.jpg",
+    alt: "Manage Exam",
+    title: "Manage Exams with confidence",
+    desc: "Create and update exam settings smoothly with a clear workflow designed for staff and supervisors.",
+    bullets: ["Staff workflow", "Safe updates", "Role-based control"],
+  },
+  {
+    key: "reports",
+    img: "/reporANDhistoryPIC.jpg",
+    alt: "Reports & History",
+    title: "Reports & History that tell the full story",
+    desc: "Everything is documented: attendance, incidents, and actions — presented in a clean, readable timeline.",
+    bullets: ["Timeline clarity", "Audit-friendly", "Professional reporting"],
   },
   {
     key: "chatbot",
-    src: "/chatbotPIC.png",
+    img: "/chatbotPIC.png",
     alt: "Chatbot",
-    title: "Smart Assistant — Help in Seconds",
-    desc: "A built-in assistant to guide staff quickly, reduce mistakes, and keep the workflow moving during pressure time.",
-    bullets: ["Instant guidance", "Less support load", "Smooth experience"],
+    title: "Smart Assistant that helps in seconds",
+    desc: "Quick guidance for staff during pressure time — fewer mistakes, faster decisions, smoother exam flow.",
+    bullets: ["Instant help", "Less friction", "Better experience"],
   },
 ];
 
@@ -87,7 +95,6 @@ export default function HomePage() {
 
       {/* ===== HERO ===== */}
       <section className="relative overflow-hidden">
-        {/* background */}
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-sky-800 to-cyan-600" />
         <div className="absolute -top-28 -left-28 w-[26rem] h-[26rem] rounded-full bg-white/10 blur-3xl" />
         <div className="absolute -bottom-36 -right-36 w-[34rem] h-[34rem] rounded-full bg-white/10 blur-3xl" />
@@ -95,12 +102,12 @@ export default function HomePage() {
         <div className="relative mx-auto max-w-7xl px-6 py-16 md:py-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           {/* Text */}
           <div className="text-white">
-            {/* Brand row (BIG logo + title) */}
             <div className="flex items-center gap-5">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-white/10 border border-white/20 backdrop-blur shadow-xl flex items-center justify-center overflow-hidden">
+              {/* ✅ Use your hero logo image */}
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white/10 border border-white/20 backdrop-blur shadow-2xl overflow-hidden">
                 <img
-                  src="/system_logo.png"
-                  alt="System Logo"
+                  src="/exammonitoringPIC.png"
+                  alt="Exam Monitoring Logo"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -120,7 +127,7 @@ export default function HomePage() {
               incident reporting, and structured exam management.
             </p>
 
-            {/* ✅ no login/register here */}
+            {/* ✅ no login/register duplicates */}
             <div className="mt-8 flex flex-wrap gap-3">
               <button
                 type="button"
@@ -133,15 +140,14 @@ export default function HomePage() {
 
               <button
                 type="button"
-                onClick={() => scrollToId("dashboard")}
+                onClick={() => scrollToId("product")}
                 className="px-7 py-3.5 rounded-full bg-white/10 border border-white/25 text-white font-extrabold
                            hover:bg-white/15 transition"
               >
-                View Dashboard Preview
+                View System Screens
               </button>
             </div>
 
-            {/* Stats */}
             <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-xl">
               {STATS.map((s) => (
                 <div
@@ -161,10 +167,9 @@ export default function HomePage() {
               <div className="absolute -inset-4 rounded-[2.2rem] bg-white/10 blur-2xl" />
               <img
                 src="/hero-classroom.jpg"
-                alt="Exam classroom monitoring"
+                alt="Exam classroom"
                 className="relative w-full rounded-[2rem] shadow-2xl border border-white/20 object-cover max-h-[420px]"
               />
-
               <div className="absolute bottom-4 left-4 right-4 rounded-2xl bg-slate-900/40 border border-white/15 backdrop-blur px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-white">
@@ -178,7 +183,6 @@ export default function HomePage() {
                   </div>
                 </div>
               </div>
-
               <p className="mt-3 text-xs text-white/70">
                 Clean UI • Fast actions • Consistent feedback
               </p>
@@ -227,110 +231,65 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ===== DASHBOARD PREVIEW + TOUR ===== */}
-      <section id="dashboard" className="bg-slate-50">
+      {/* ===== PRODUCT SCREENS (one under another) ===== */}
+      <section id="product" className="bg-slate-50">
         <div className="mx-auto max-w-7xl px-6 py-16">
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
             <div>
               <h2 className="text-3xl font-extrabold text-slate-900">
-                Dashboard Preview
+                System Screens (Real UI)
               </h2>
-              <p className="mt-3 text-slate-600 max-w-2xl leading-relaxed">
-                A focused, production-style dashboard built for speed: clear visibility,
-                fast actions, and smooth navigation during real exams.
+              <p className="mt-2 text-slate-600 max-w-2xl">
+                A clean, modern experience across the entire platform — designed for real exam pressure.
               </p>
             </div>
 
             <Pill>
               <span className="w-2 h-2 rounded-full bg-indigo-600" />
-              Real Screens • Real Workflow
+              Dashboard • Exams • Reports • Chatbot
             </Pill>
           </div>
 
-          {/* Main preview (dashboardPIC.png) */}
-          <div className="mt-10">
-            <div className="relative w-full">
-              <div className="absolute -inset-4 rounded-[2rem] bg-indigo-200/50 blur-2xl" />
-              <img
-                src="/dashboardPIC.png"
-                alt="Exam Monitoring Dashboard"
-                className="relative w-full rounded-[2rem] shadow-2xl border border-slate-200 object-cover"
-              />
-            </div>
-          </div>
-
-          {/* TOUR - your added screenshots */}
-          <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {TOUR.map((t, idx) => (
+          <div className="mt-10 space-y-10">
+            {PRODUCT_SECTIONS.map((s) => (
               <div
-                key={t.key}
-                className="rounded-3xl bg-white border border-slate-200 shadow-sm hover:shadow-xl transition overflow-hidden"
+                key={s.key}
+                className="rounded-[2rem] bg-white border border-slate-200 shadow-sm hover:shadow-xl transition overflow-hidden"
               >
-                <div className="p-5 flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-extrabold text-indigo-700">
-                      SCREEN {String(idx + 1).padStart(2, "0")}
-                    </div>
-                    <h3 className="mt-1 text-xl font-extrabold text-slate-900">
-                      {t.title}
-                    </h3>
-                    <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                      {t.desc}
-                    </p>
+                {/* Text */}
+                <div className="p-7 md:p-9">
+                  <h3 className="text-2xl md:text-3xl font-extrabold text-slate-900">
+                    {s.title}
+                  </h3>
+                  <p className="mt-2 text-slate-600 text-sm md:text-base max-w-3xl leading-relaxed">
+                    {s.desc}
+                  </p>
 
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {t.bullets.map((b) => (
-                        <span
-                          key={b}
-                          className="text-xs font-extrabold text-slate-700 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-full"
-                        >
-                          {b}
-                        </span>
-                      ))}
-                    </div>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {s.bullets.map((b) => (
+                      <span
+                        key={b}
+                        className="text-xs md:text-sm font-extrabold text-slate-700 bg-slate-100 border border-slate-200 px-3 py-2 rounded-full"
+                      >
+                        {b}
+                      </span>
+                    ))}
                   </div>
                 </div>
 
-                <div className="px-5 pb-5">
+                {/* Image */}
+                <div className="px-7 pb-7 md:px-9 md:pb-9">
                   <div className="relative">
-                    <div className="absolute -inset-3 rounded-2xl bg-slate-200/40 blur-xl" />
+                    <div className="absolute -inset-4 rounded-[1.8rem] bg-indigo-200/40 blur-2xl" />
                     <img
-                      src={t.src}
-                      alt={t.alt}
-                      className="relative w-full rounded-2xl border border-slate-200 shadow-lg object-cover"
+                      src={s.img}
+                      alt={s.alt}
+                      className="relative w-full rounded-[1.8rem] border border-slate-200 shadow-2xl object-cover"
                     />
                   </div>
-
-                  <p className="mt-3 text-[11px] text-slate-500">
-                    Tip: If the image doesn’t show, double-check the exact filename in <code>/public</code>.
-                  </p>
                 </div>
               </div>
             ))}
-          </div>
-
-          {/* Small extra cards */}
-          <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
-              <div className="text-sm font-extrabold text-slate-900">Fast Actions</div>
-              <div className="text-xs text-slate-600 mt-1">
-                One-click updates and consistent UI feedback.
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
-              <div className="text-sm font-extrabold text-slate-900">Clear Visibility</div>
-              <div className="text-xs text-slate-600 mt-1">
-                Organized panels with live indicators.
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
-              <div className="text-sm font-extrabold text-slate-900">Designed for Teams</div>
-              <div className="text-xs text-slate-600 mt-1">
-                Built for supervisors and lecturers with role-based access.
-              </div>
-            </div>
           </div>
         </div>
       </section>
