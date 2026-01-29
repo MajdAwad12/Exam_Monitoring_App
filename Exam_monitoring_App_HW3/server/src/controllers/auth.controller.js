@@ -1,5 +1,7 @@
 // server/src/controllers/auth.controller.js
+import crypto from "crypto";
 import User from "../models/User.js";
+import { sendOtpEmail } from "../mailer/mailer.js";
 
 function safeUser(u) {
   return {
@@ -11,6 +13,81 @@ function safeUser(u) {
     studentId: u.studentId ?? null,
     assignedRoomId: u.assignedRoomId ?? null,
   };
+}
+
+/* =========================
+   OTP helpers (Step 1.3)
+========================= */
+function generateOtp6() {
+  // 6 digits, leading zeros allowed
+  const n = crypto.randomInt(0, 1000000);
+  return String(n).padStart(6, "0");
+}
+
+function hashOtp(code) {
+  // Use server secret if exists (Render env var recommended)
+  const secret = process.env.OTP_SECRET || "DEV_OTP_SECRET_CHANGE_ME";
+  return crypto.createHash("sha256").update(`${secret}:${code}`).digest("hex");
+}
+
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60 * 1000);
+}
+
+/* =========================
+   STUDENT: Request OTP
+   POST /api/auth/student/request-otp
+   body: { email, studentId }
+========================= */
+export async function studentRequestOtp(req, res) {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const studentId = String(req.body?.studentId || "").trim();
+
+    if (!email || !studentId) {
+      return res.status(400).json({ message: "Missing email or studentId" });
+    }
+
+    // Find the student by BOTH email + studentId (as you requested)
+    const user = await User.findOne({
+      role: "student",
+      email,
+      studentId,
+    });
+
+    // Return a generic error to avoid leaking which field is wrong
+    if (!user) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const now = new Date();
+    const otp = generateOtp6();
+    const codeHash = hashOtp(otp);
+    const minutes = 10;
+
+    user.otp = {
+      codeHash,
+      purpose: "student_login",
+      expiresAt: addMinutes(now, minutes),
+      attempts: 0,
+      requestedAt: now,
+    };
+
+    await user.save();
+
+    // Send OTP via your mailer path
+    await sendOtpEmail({
+      to: user.email,
+      code: otp,
+      purpose: "student_login",
+      minutes,
+    });
+
+    return res.json({ message: "OTP sent to your email" });
+  } catch (err) {
+    console.error("STUDENT REQUEST OTP ERROR:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
 }
 
 // ================= LOGIN =================
