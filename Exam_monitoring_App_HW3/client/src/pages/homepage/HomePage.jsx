@@ -5,7 +5,7 @@ import Footer from "../../components/homepage/Footer.jsx";
 const STATS = [
   { label: "Global Users", value: "2M+" },
   { label: "Users in Israel", value: "55K+" },
-  { label: "System Uptime", value: "99.9%" },
+  { label: "System Uptime", value: "100%" },
 ];
 
 const FEATURES = [
