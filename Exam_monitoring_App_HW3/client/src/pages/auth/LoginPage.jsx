@@ -15,10 +15,8 @@ import AuthFooter from "../../components/auth/AuthFooter";
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  // ✅ Tabs
   const [tab, setTab] = useState("staff"); // "staff" | "student"
 
-  // ✅ Separate state per tab (clean UX)
   const [staffUsername, setStaffUsername] = useState("");
   const [staffPassword, setStaffPassword] = useState("");
 
@@ -58,21 +56,24 @@ export default function LoginPage() {
     const p = tab === "staff" ? staffPassword.trim() : studentPassword.trim();
 
     if (!u || !p) {
-      setErrorMsg(tab === "staff" ? "Please enter username and password." : "Please enter Student ID and password.");
+      setErrorMsg(
+        tab === "staff"
+          ? "Please enter username and password."
+          : "Please enter Student ID and password."
+      );
       triggerShake();
       return;
     }
 
     try {
       setIsLoading(true);
-
       const user = await loginUser({ username: u, password: p });
 
-      // ✅ correct landing
       if (user?.role === "student") navigate("/app/student", { replace: true });
       else navigate("/app/dashboard", { replace: true });
     } catch (err) {
-      const msg = err?.message || "Invalid username or password. Please try again.";
+      const msg =
+        err?.message || "Invalid username or password. Please try again.";
       setErrorMsg(msg);
       triggerShake();
     } finally {
@@ -80,13 +81,8 @@ export default function LoginPage() {
     }
   }
 
-  function onGoRegister() {
-    navigate("/register");
-  }
-
   function onFillDemo(d) {
     setErrorMsg("");
-
     if (tab === "staff") {
       setStaffUsername(d.u);
       setStaffPassword(d.p);
@@ -101,91 +97,152 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <LoginHeader />
 
-        <LoginCard shake={shake}>
-          {/* ✅ Tabs */}
-          <div className="mb-5">
-            <div className="grid grid-cols-2 rounded-xl bg-white/70 p-1 border border-white/40">
-              <button
-                type="button"
-                onClick={() => {
-                  setTab("staff");
-                  setErrorMsg("");
-                }}
-                className={[
-                  "py-2 rounded-lg text-sm font-extrabold transition",
-                  tab === "staff"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-700 hover:bg-white/60",
-                ].join(" ")}
-                disabled={isLoading}
-              >
-                Admin / Supervisor / Lecturer
-              </button>
+        {/* Back to Home */}
+        <div className="mb-3 flex justify-center">
+          <button
+            type="button"
+            onClick={() => navigate("/", { replace: true })}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 hover:bg-white/30 text-white text-sm font-semibold backdrop-blur transition"
+          >
+            ← Back to Home
+          </button>
+        </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setTab("student");
-                  setErrorMsg("");
-                }}
-                className={[
-                  "py-2 rounded-lg text-sm font-extrabold transition",
-                  tab === "student"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-700 hover:bg-white/60",
-                ].join(" ")}
-                disabled={isLoading}
-              >
-                Student
-              </button>
+        <LoginCard shake={shake}>
+          {/* ✅ Premium Segmented Tabs */}
+          <div className="mb-6">
+            <div className="rounded-2xl bg-white/80 border border-white/40 p-1 shadow-sm">
+              <div className="grid grid-cols-2 relative">
+                {/* Active pill */}
+                <div
+                  className={[
+                    "absolute top-0 left-0 h-full w-1/2 rounded-xl bg-indigo-600 shadow transition-transform duration-300",
+                    tab === "student" ? "translate-x-full" : "translate-x-0",
+                  ].join(" ")}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab("staff");
+                    setErrorMsg("");
+                  }}
+                  className={[
+                    "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
+                    tab === "staff" ? "text-white" : "text-slate-700 hover:text-slate-900",
+                  ].join(" ")}
+                  disabled={isLoading}
+                >
+                  Staff
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab("student");
+                    setErrorMsg("");
+                  }}
+                  className={[
+                    "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
+                    tab === "student" ? "text-white" : "text-slate-700 hover:text-slate-900",
+                  ].join(" ")}
+                  disabled={isLoading}
+                >
+                  Student
+                </button>
+              </div>
             </div>
 
-            <p className="mt-3 text-xs text-white/90">
-              {tab === "staff"
-                ? "Staff login for Admin, Supervisors, and Lecturers."
-                : "Student login portal (separate flow)."}
-            </p>
+            {/* Card-like header that clearly changes */}
+            <div className="mt-4 rounded-2xl bg-white/10 border border-white/20 p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
+                  <span className="text-xl">
+                    {tab === "staff" ? "🧑‍🏫" : "🎓"}
+                  </span>
+                </div>
+
+                <div className="flex-1">
+                  <h2 className="text-white font-extrabold text-lg leading-tight">
+                    {tab === "staff" ? "Staff Portal Login" : "Student Portal Login"}
+                  </h2>
+                  <p className="text-white/85 text-xs mt-1">
+                    {tab === "staff"
+                      ? "For Admin, Supervisors and Lecturers."
+                      : "Student access with separate flow (ID-based)."}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {errorMsg ? <ErrorAlert message={errorMsg} /> : null}
 
-          {tab === "staff" ? (
-            <>
-              <LoginForm
-                username={staffUsername}
-                password={staffPassword}
-                setUsername={setStaffUsername}
-                setPassword={setStaffPassword}
-                isLoading={isLoading}
-                onSubmit={onSubmit}
-                onGoRegister={onGoRegister}
-                showRegister={true}
-                usernameLabel="Username"
-                usernamePlaceholder="Enter your staff username"
-              />
+          {/* ✅ Clear “card switch” feel */}
+          <div
+            className={[
+              "rounded-2xl bg-white/95 backdrop-blur border border-white/60 p-5 transition-all duration-300",
+              tab === "staff" ? "animate-[fadeIn_.25s_ease-out]" : "animate-[fadeIn_.25s_ease-out]",
+            ].join(" ")}
+          >
+            {tab === "staff" ? (
+              <>
+                <LoginForm
+                  username={staffUsername}
+                  password={staffPassword}
+                  setUsername={setStaffUsername}
+                  setPassword={setStaffPassword}
+                  isLoading={isLoading}
+                  onSubmit={onSubmit}
+                  showRegister={false}   // ✅ removed
+                  usernameLabel="Username"
+                  usernamePlaceholder="Enter your staff username"
+                />
 
-              <DemoAccountsBox demoUsers={staffDemos} isLoading={isLoading} onFill={onFillDemo} />
-            </>
-          ) : (
-            <>
-              <LoginForm
-                username={studentId}
-                password={studentPassword}
-                setUsername={setStudentId}
-                setPassword={setStudentPassword}
-                isLoading={isLoading}
-                onSubmit={onSubmit}
-                onGoRegister={onGoRegister}
-                showRegister={false} // ✅ no register on student tab
-                usernameLabel="Student ID"
-                usernamePlaceholder="Enter your student ID"
-              />
+                <div className="mt-5">
+                  <DemoAccountsBox
+                    demoUsers={staffDemos}
+                    isLoading={isLoading}
+                    onFill={onFillDemo}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <LoginForm
+                  username={studentId}
+                  password={studentPassword}
+                  setUsername={setStudentId}
+                  setPassword={setStudentPassword}
+                  isLoading={isLoading}
+                  onSubmit={onSubmit}
+                  showRegister={false}   // ✅ removed
+                  usernameLabel="Student ID"
+                  usernamePlaceholder="Enter your student ID"
+                />
 
-              <DemoAccountsBox demoUsers={studentDemos} isLoading={isLoading} onFill={onFillDemo} />
-            </>
-          )}
+                <div className="mt-5">
+                  <DemoAccountsBox
+                    demoUsers={studentDemos}
+                    isLoading={isLoading}
+                    onFill={onFillDemo}
+                  />
+                </div>
+              </>
+            )}
+          </div>
 
-          <SupportBox />
+          <div className="mt-5">
+            <SupportBox />
+          </div>
+
+          {/* ✅ tiny keyframes without adding files */}
+          <style>{`
+            @keyframes fadeIn {
+              from { opacity: 0; transform: translateY(6px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+          `}</style>
         </LoginCard>
 
         <AuthFooter />

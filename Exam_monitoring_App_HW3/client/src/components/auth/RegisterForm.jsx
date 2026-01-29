@@ -1,7 +1,7 @@
 // client/src/components/auth/RegisterForm.jsx
 import { useState } from "react";
 
-export default function RegisterForm({ onSubmit, captchaLabel, onBackToLogin }) {
+export default function RegisterForm({ onSubmit, captchaLabel }) {
   const [form, setForm] = useState({
     fullName: "",
     email: "",
@@ -40,7 +40,6 @@ export default function RegisterForm({ onSubmit, captchaLabel, onBackToLogin }) 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
-      {/* Full name */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Full name</label>
         <input
@@ -53,7 +52,6 @@ export default function RegisterForm({ onSubmit, captchaLabel, onBackToLogin }) 
         />
       </div>
 
-      {/* Email */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
         <input
@@ -66,7 +64,6 @@ export default function RegisterForm({ onSubmit, captchaLabel, onBackToLogin }) 
         />
       </div>
 
-      {/* Username */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
         <input
@@ -79,7 +76,6 @@ export default function RegisterForm({ onSubmit, captchaLabel, onBackToLogin }) 
         />
       </div>
 
-      {/* Password + Confirm */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
@@ -106,7 +102,6 @@ export default function RegisterForm({ onSubmit, captchaLabel, onBackToLogin }) 
         </div>
       </div>
 
-      {/* Role */}
       <div>
         <p className="block text-sm font-medium text-gray-700 mb-1">Role</p>
 
@@ -143,7 +138,6 @@ export default function RegisterForm({ onSubmit, captchaLabel, onBackToLogin }) 
         </p>
       </div>
 
-      {/* Captcha */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Simple security check
@@ -168,7 +162,6 @@ export default function RegisterForm({ onSubmit, captchaLabel, onBackToLogin }) 
         </p>
       </div>
 
-      {/* Submit */}
       <button
         type="submit"
         disabled={isSubmitting}
@@ -178,18 +171,6 @@ export default function RegisterForm({ onSubmit, captchaLabel, onBackToLogin }) 
       >
         {isSubmitting ? "Creating..." : "Create account"}
       </button>
-
-      {/* Back to login */}
-      <p className="text-xs text-gray-600 text-center">
-        Already have an account?{" "}
-        <button
-          type="button"
-          onClick={onBackToLogin}
-          className="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
-        >
-          Back to login
-        </button>
-      </p>
     </form>
   );
 }

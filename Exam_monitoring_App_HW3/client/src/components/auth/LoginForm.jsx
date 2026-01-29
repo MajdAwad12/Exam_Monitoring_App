@@ -6,12 +6,11 @@ export default function LoginForm({
   setPassword,
   isLoading,
   onSubmit,
-  onGoRegister,
 
-  // ✅ new (optional)
   usernameLabel = "Username",
   usernamePlaceholder = "Enter your username",
-  showRegister = true,
+  showRegister = false,
+  onGoRegister,
 }) {
   return (
     <form className="space-y-6" autoComplete="off" onSubmit={onSubmit}>

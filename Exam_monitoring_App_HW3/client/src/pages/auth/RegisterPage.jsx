@@ -14,8 +14,8 @@ export default function RegisterPage() {
   const navigate = useNavigate();
 
   const captcha = useMemo(() => {
-    const a = Math.floor(Math.random() * (9 - 2 + 1)) + 2; // 2..9
-    const b = Math.floor(Math.random() * (9 - 1 + 1)) + 1; // 1..9
+    const a = Math.floor(Math.random() * (9 - 2 + 1)) + 2;
+    const b = Math.floor(Math.random() * (9 - 1 + 1)) + 1;
     return { a, b, answer: a + b };
   }, []);
 
@@ -23,50 +23,46 @@ export default function RegisterPage() {
 
   async function handleSubmit(formData) {
     setMessage({ show: false, type: "success", text: "" });
-    
 
-    // 1) role validation
     if (!formData.role) {
       setMessage({ show: true, type: "error", text: "Please select a role (Supervisor or Lecturer)." });
       return;
     }
 
-    // 2) passwords match
     if (formData.password !== formData.password2) {
       setMessage({ show: true, type: "error", text: "Passwords do not match." });
       return;
     }
 
-    // 3) captcha check
     if (Number(formData.captchaAnswer) !== captcha.answer) {
       setMessage({ show: true, type: "error", text: "Security check failed. Please try again." });
       return;
     }
 
-    // 4) username taken (optional but nice)
     try {
-  const taken = await isUsernameTaken(formData.username);
-  if (taken) {
-    setMessage({ show: true, type: "error", text: "This username is already exist. Please choose another one." });
-    return;
-  }
-  }catch {
-    
+      const taken = await isUsernameTaken(formData.username);
+      if (taken) {
+        setMessage({ show: true, type: "error", text: "This username already exists. Please choose another one." });
+        return;
+      }
+    } catch {
+      // ignore
     }
 
-    // 5) register
     try {
       await registerUser({
         fullName: formData.fullName,
         email: formData.email,
         username: formData.username,
         password: formData.password,
-        role: formData.role, // "supervisor" | "lecturer"
+        role: formData.role,
       });
 
-      setMessage({ show: true, type: "success", text: "Account created successfully! Redirecting to login…" });
-      
-      setTimeout(() => navigate("/login", { replace: true }), 900);
+      setMessage({
+        show: true,
+        type: "success",
+        text: "Account created successfully! Please go back to Home and login.",
+      });
     } catch (err) {
       const msg =
         err?.response?.data?.message ||
@@ -81,6 +77,17 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         <RegisterHeader />
 
+        {/* Back to Home */}
+        <div className="mb-3 flex justify-center">
+          <button
+            type="button"
+            onClick={() => navigate("/", { replace: true })}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 hover:bg-white/30 text-white text-sm font-semibold backdrop-blur transition"
+          >
+            ← Back to Home
+          </button>
+        </div>
+
         <div className="bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8">
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800">Create Account</h2>
@@ -92,8 +99,18 @@ export default function RegisterPage() {
           <RegisterForm
             onSubmit={handleSubmit}
             captchaLabel={`${captcha.a} + ${captcha.b} = ?`}
-            onBackToLogin={() => navigate("/login")}
           />
+
+          {/* Extra helper CTA (no login link) */}
+          <div className="mt-5 text-center">
+            <button
+              type="button"
+              onClick={() => navigate("/", { replace: true })}
+              className="text-sm font-semibold text-indigo-700 hover:text-indigo-900 hover:underline"
+            >
+              Back to Home to Login
+            </button>
+          </div>
         </div>
 
         <AuthFooter />
