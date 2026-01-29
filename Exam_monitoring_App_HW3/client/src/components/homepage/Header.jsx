@@ -5,24 +5,13 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200">
       <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-6">
-        {/* Brand (BIG Logo) */}
-        <Link to="/" className="flex items-center gap-4 min-w-0 group">
+        {/* Brand */}
+        <Link to="/" className="flex items-center gap-4 min-w-0">
           <img
-            src="/system_logo.png"
+            src="/exammonitoringPIC.png"
             alt="Exam Monitoring Logo"
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white shadow-md border border-slate-200 object-contain"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-              const sib = e.currentTarget.nextSibling;
-              if (sib) sib.style.display = "inline-flex";
-            }}
+            className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white shadow-md border border-slate-200 object-contain"
           />
-          <span
-            className="hidden items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-100 border border-slate-200"
-            style={{ display: "none" }}
-          >
-            ⏱️
-          </span>
 
           <div className="min-w-0">
             <div className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight truncate">
@@ -34,7 +23,7 @@ export default function Header() {
           </div>
         </Link>
 
-        {/* Helpdesk (center on desktop) */}
+        {/* Helpdesk */}
         <div className="hidden lg:flex items-center gap-3 text-sm text-slate-600">
           <span className="inline-flex items-center gap-2">
             📧{" "}
@@ -51,7 +40,7 @@ export default function Header() {
           </span>
         </div>
 
-        {/* Auth buttons (BIGGER + CLEARER) */}
+        {/* Auth buttons */}
         <nav className="flex items-center gap-3 shrink-0">
           <Link
             to="/login"
