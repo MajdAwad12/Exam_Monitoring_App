@@ -6,11 +6,6 @@ export default function Footer() {
         {/* Brand */}
         <div>
           <div className="flex items-center gap-3 mb-4">
-            <img
-              src="/system_logo.png"
-              alt="Exam Monitoring Logo"
-              className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 object-contain"
-            />
             <h3 className="text-lg font-extrabold text-white">
               Exam Monitoring App
             </h3>
