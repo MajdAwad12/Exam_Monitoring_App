@@ -1,3 +1,4 @@
+// client/src/components/auth/LoginForm.jsx
 export default function LoginForm({
   username,
   password,
@@ -6,18 +7,23 @@ export default function LoginForm({
   isLoading,
   onSubmit,
   onGoRegister,
+
+  // ✅ new (optional)
+  usernameLabel = "Username",
+  usernamePlaceholder = "Enter your username",
+  showRegister = true,
 }) {
   return (
     <form className="space-y-6" autoComplete="off" onSubmit={onSubmit}>
       <div>
         <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-          Username
+          {usernameLabel}
         </label>
         <input
           type="text"
           id="username"
           name="login-username"
-          placeholder="Enter your username"
+          placeholder={usernamePlaceholder}
           autoComplete="off"
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
           required
@@ -55,17 +61,19 @@ export default function LoginForm({
         {isLoading ? "Signing In..." : "Sign In"}
       </button>
 
-      <p className="text-xs text-gray-600 text-center">
-        Don’t have an account?{" "}
-        <button
-          type="button"
-          onClick={onGoRegister}
-          className="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
-          disabled={isLoading}
-        >
-          Create one
-        </button>
-      </p>
+      {showRegister ? (
+        <p className="text-xs text-gray-600 text-center">
+          Don’t have an account?{" "}
+          <button
+            type="button"
+            onClick={onGoRegister}
+            className="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
+            disabled={isLoading}
+          >
+            Create one
+          </button>
+        </p>
+      ) : null}
     </form>
   );
 }

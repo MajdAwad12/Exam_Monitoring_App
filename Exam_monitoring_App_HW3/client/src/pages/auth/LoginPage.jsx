@@ -15,23 +15,34 @@ import AuthFooter from "../../components/auth/AuthFooter";
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  // ✅ Tabs
+  const [tab, setTab] = useState("staff"); // "staff" | "student"
+
+  // ✅ Separate state per tab (clean UX)
+  const [staffUsername, setStaffUsername] = useState("");
+  const [staffPassword, setStaffPassword] = useState("");
+
+  const [studentId, setStudentId] = useState("");
+  const [studentPassword, setStudentPassword] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
   const { shake, triggerShake } = useShake(500);
 
-  const demoUsers = useMemo(
+  const staffDemos = useMemo(
     () => [
       { label: "Admin", u: "admin", p: "1234" },
       { label: "Supervisor1", u: "supervisor1", p: "1234" },
       { label: "Supervisor2", u: "supervisor2", p: "1234" },
       { label: "Supervisor3", u: "supervisor3", p: "1234" },
       { label: "Lecturer", u: "lecturer1", p: "1234" },
-      { label: "Student", u: "std_3190010491096", p: "1234" },
     ],
+    []
+  );
+
+  const studentDemos = useMemo(
+    () => [{ label: "Student", u: "std_3190010491096", p: "1234" }],
     []
   );
 
@@ -39,11 +50,15 @@ export default function LoginPage() {
     e.preventDefault();
     setErrorMsg("");
 
-    const u = username.trim().toLowerCase();
-    const p = password.trim();
+    const u =
+      tab === "staff"
+        ? staffUsername.trim().toLowerCase()
+        : studentId.trim().toLowerCase();
+
+    const p = tab === "staff" ? staffPassword.trim() : studentPassword.trim();
 
     if (!u || !p) {
-      setErrorMsg("Please enter username and password.");
+      setErrorMsg(tab === "staff" ? "Please enter username and password." : "Please enter Student ID and password.");
       triggerShake();
       return;
     }
@@ -51,15 +66,11 @@ export default function LoginPage() {
     try {
       setIsLoading(true);
 
-      // ✅ הכי חשוב: לשלוח אובייקט {username, password}
       const user = await loginUser({ username: u, password: p });
 
-      // ניווט לפי role
-      if (user?.role === "student") navigate("/app/dashboard", { replace: true });
+      // ✅ correct landing
+      if (user?.role === "student") navigate("/app/student", { replace: true });
       else navigate("/app/dashboard", { replace: true });
-
-
-
     } catch (err) {
       const msg = err?.message || "Invalid username or password. Please try again.";
       setErrorMsg(msg);
@@ -74,9 +85,15 @@ export default function LoginPage() {
   }
 
   function onFillDemo(d) {
-    setUsername(d.u);
-    setPassword(d.p);
     setErrorMsg("");
+
+    if (tab === "staff") {
+      setStaffUsername(d.u);
+      setStaffPassword(d.p);
+    } else {
+      setStudentId(d.u);
+      setStudentPassword(d.p);
+    }
   }
 
   return (
@@ -85,19 +102,88 @@ export default function LoginPage() {
         <LoginHeader />
 
         <LoginCard shake={shake}>
+          {/* ✅ Tabs */}
+          <div className="mb-5">
+            <div className="grid grid-cols-2 rounded-xl bg-white/70 p-1 border border-white/40">
+              <button
+                type="button"
+                onClick={() => {
+                  setTab("staff");
+                  setErrorMsg("");
+                }}
+                className={[
+                  "py-2 rounded-lg text-sm font-extrabold transition",
+                  tab === "staff"
+                    ? "bg-indigo-600 text-white shadow"
+                    : "text-slate-700 hover:bg-white/60",
+                ].join(" ")}
+                disabled={isLoading}
+              >
+                Admin / Supervisor / Lecturer
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTab("student");
+                  setErrorMsg("");
+                }}
+                className={[
+                  "py-2 rounded-lg text-sm font-extrabold transition",
+                  tab === "student"
+                    ? "bg-indigo-600 text-white shadow"
+                    : "text-slate-700 hover:bg-white/60",
+                ].join(" ")}
+                disabled={isLoading}
+              >
+                Student
+              </button>
+            </div>
+
+            <p className="mt-3 text-xs text-white/90">
+              {tab === "staff"
+                ? "Staff login for Admin, Supervisors, and Lecturers."
+                : "Student login portal (separate flow)."}
+            </p>
+          </div>
+
           {errorMsg ? <ErrorAlert message={errorMsg} /> : null}
 
-          <LoginForm
-            username={username}
-            password={password}
-            setUsername={setUsername}
-            setPassword={setPassword}
-            isLoading={isLoading}
-            onSubmit={onSubmit}
-            onGoRegister={onGoRegister}
-          />
+          {tab === "staff" ? (
+            <>
+              <LoginForm
+                username={staffUsername}
+                password={staffPassword}
+                setUsername={setStaffUsername}
+                setPassword={setStaffPassword}
+                isLoading={isLoading}
+                onSubmit={onSubmit}
+                onGoRegister={onGoRegister}
+                showRegister={true}
+                usernameLabel="Username"
+                usernamePlaceholder="Enter your staff username"
+              />
 
-          <DemoAccountsBox demoUsers={demoUsers} isLoading={isLoading} onFill={onFillDemo} />
+              <DemoAccountsBox demoUsers={staffDemos} isLoading={isLoading} onFill={onFillDemo} />
+            </>
+          ) : (
+            <>
+              <LoginForm
+                username={studentId}
+                password={studentPassword}
+                setUsername={setStudentId}
+                setPassword={setStudentPassword}
+                isLoading={isLoading}
+                onSubmit={onSubmit}
+                onGoRegister={onGoRegister}
+                showRegister={false} // ✅ no register on student tab
+                usernameLabel="Student ID"
+                usernamePlaceholder="Enter your student ID"
+              />
+
+              <DemoAccountsBox demoUsers={studentDemos} isLoading={isLoading} onFill={onFillDemo} />
+            </>
+          )}
 
           <SupportBox />
         </LoginCard>
