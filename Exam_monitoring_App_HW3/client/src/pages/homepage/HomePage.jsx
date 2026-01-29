@@ -104,13 +104,6 @@ export default function HomePage() {
           <div className="text-white">
             <div className="flex items-center gap-5">
               {/* ✅ Use your hero logo image */}
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white/10 border border-white/20 backdrop-blur shadow-2xl overflow-hidden">
-                <img
-                  src="/exammonitoringPIC.png"
-                  alt="Exam Monitoring Logo"
-                  className="w-full h-full object-cover"
-                />
-              </div>
 
               <div className="min-w-0">
                 <h1 className="text-4xl md:text-5xl font-extrabold leading-tight tracking-tight">
