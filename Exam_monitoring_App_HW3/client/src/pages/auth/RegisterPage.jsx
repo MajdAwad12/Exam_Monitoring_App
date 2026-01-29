@@ -10,6 +10,20 @@ import ErrorAlert from "../../components/auth/ErrorAlert";
 
 import { isUsernameTaken, registerUser } from "../../services/auth.service";
 
+function Feature({ title, desc }) {
+  return (
+    <div className="flex gap-3">
+      <div className="mt-1 w-9 h-9 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center">
+        <span className="text-lg">✓</span>
+      </div>
+      <div>
+        <p className="text-white font-semibold leading-tight">{title}</p>
+        <p className="text-white/80 text-sm">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function RegisterPage() {
   const navigate = useNavigate();
 
@@ -19,13 +33,21 @@ export default function RegisterPage() {
     return { a, b, answer: a + b };
   }, []);
 
-  const [message, setMessage] = useState({ show: false, type: "success", text: "" });
+  const [message, setMessage] = useState({
+    show: false,
+    type: "success",
+    text: "",
+  });
 
   async function handleSubmit(formData) {
     setMessage({ show: false, type: "success", text: "" });
 
     if (!formData.role) {
-      setMessage({ show: true, type: "error", text: "Please select a role (Supervisor or Lecturer)." });
+      setMessage({
+        show: true,
+        type: "error",
+        text: "Please select a role (Supervisor or Lecturer).",
+      });
       return;
     }
 
@@ -35,14 +57,22 @@ export default function RegisterPage() {
     }
 
     if (Number(formData.captchaAnswer) !== captcha.answer) {
-      setMessage({ show: true, type: "error", text: "Security check failed. Please try again." });
+      setMessage({
+        show: true,
+        type: "error",
+        text: "Security check failed. Please try again.",
+      });
       return;
     }
 
     try {
       const taken = await isUsernameTaken(formData.username);
       if (taken) {
-        setMessage({ show: true, type: "error", text: "This username already exists. Please choose another one." });
+        setMessage({
+          show: true,
+          type: "error",
+          text: "This username already exists. Please choose another one.",
+        });
         return;
       }
     } catch {
@@ -73,38 +103,84 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-700 via-sky-600 to-cyan-400 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <RegisterHeader />
+    <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-sky-700 to-cyan-500 relative overflow-hidden">
+      <div className="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full bg-white/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -right-32 w-[28rem] h-[28rem] rounded-full bg-white/10 blur-3xl" />
 
-        {/* Back to Home */}
-        <div className="mb-3 flex justify-center">
-          <button
-            type="button"
-            onClick={() => navigate("/", { replace: true })}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 hover:bg-white/30 text-white text-sm font-semibold backdrop-blur transition"
-          >
-            ← Back to Home
-          </button>
-        </div>
+      {/* Back to Home (top-left, floating) */}
+      <button
+        type="button"
+        onClick={() => navigate("/", { replace: true })}
+        className="fixed top-5 left-5 z-50 inline-flex items-center gap-2 px-4 py-2 rounded-full
+                   bg-white/15 hover:bg-white/25 text-white text-sm font-semibold
+                   border border-white/20 backdrop-blur shadow-lg transition"
+      >
+        <span className="text-base">←</span> Back to Home
+      </button>
 
-        <div className="bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8">
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">Create Account</h2>
-            <p className="text-sm text-gray-600 mt-2">Register as a supervisor or lecturer</p>
+      <div className="min-hscreen flex items-center justify-center p-6">
+        <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          {/* LEFT */}
+          <div className="text-white px-2 lg:px-6">
+            <div className="mb-6">
+              <RegisterHeader />
+            </div>
+
+            <div className="max-w-lg">
+              <h2 className="text-3xl font-extrabold leading-tight">
+                Create your staff account.
+              </h2>
+
+              <p className="mt-3 text-white/85">
+                Register as a Supervisor or Lecturer to access the exam monitoring dashboard.
+              </p>
+
+              <div className="mt-6 space-y-4">
+                <Feature
+                  title="Professional access control"
+                  desc="Roles define permissions and dashboards."
+                />
+                <Feature
+                  title="Fast onboarding"
+                  desc="Create an account in seconds with a simple form."
+                />
+                <Feature
+                  title="Built for academic integrity"
+                  desc="Monitor attendance and incident reports."
+                />
+              </div>
+            </div>
           </div>
 
-          {message.show && <ErrorAlert type={message.type} text={message.text} />}
+          {/* RIGHT */}
+          <div className="w-full flex justify-center">
+            <div className="w-full max-w-md">
+              <div className="bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8 border border-white/40">
+                <div className="text-center mb-6">
+                  <h2 className="text-2xl font-extrabold text-slate-900">
+                    Create Account
+                  </h2>
+                  <p className="text-sm text-slate-600 mt-2">
+                    Register as a supervisor or lecturer
+                  </p>
+                </div>
 
-          <RegisterForm
-            onSubmit={handleSubmit}
-            captchaLabel={`${captcha.a} + ${captcha.b} = ?`}
-          />
+                {message.show && (
+                  <ErrorAlert type={message.type} text={message.text} />
+                )}
 
-          
+                <RegisterForm
+                  onSubmit={handleSubmit}
+                  captchaLabel={`${captcha.a} + ${captcha.b} = ?`}
+                />
+              </div>
+
+              <div className="mt-4">
+                <AuthFooter />
+              </div>
+            </div>
+          </div>
         </div>
-
-        <AuthFooter />
       </div>
     </div>
   );

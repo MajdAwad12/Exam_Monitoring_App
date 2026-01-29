@@ -15,7 +15,7 @@ export default function LoginForm({
   return (
     <form className="space-y-6" autoComplete="off" onSubmit={onSubmit}>
       <div>
-        <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-slate-900 mb-2">
           {usernameLabel}
         </label>
         <input
@@ -33,7 +33,7 @@ export default function LoginForm({
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-slate-900 mb-2">
           Password
         </label>
         <input
