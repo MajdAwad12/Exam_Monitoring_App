@@ -314,10 +314,8 @@ export default function LoginPage() {
                           onClick={() => setShowForgot((v) => !v)}
                           className="text-sm font-bold text-indigo-700 hover:text-indigo-900"
                         >
-                          Forgot password?
+                          Forgot username or password ? (email will be sent)
                         </button>
-
-                        <span className="text-xs text-slate-500">(email will be sent)</span>
                       </div>
 
                       {showForgot ? (
