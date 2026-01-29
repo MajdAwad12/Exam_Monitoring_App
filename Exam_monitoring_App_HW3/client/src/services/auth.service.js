@@ -12,7 +12,6 @@ async function handle(res) {
     const msg = data?.message || `HTTP ${res.status}`;
     throw new Error(msg);
   }
-
   return data;
 }
 
@@ -26,19 +25,43 @@ export async function loginUser({ username, password }) {
   return handle(res);
 }
 
-export async function getMe() {
-  const res = await fetch("/api/auth/me", {
-    method: "GET",
+export async function requestStudentOtp({ email, studentId }) {
+  const res = await fetch("/api/auth/student/request-otp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     credentials: "include",
+    body: JSON.stringify({ email, studentId }),
   });
   return handle(res);
 }
 
-export async function logout() {
-  const res = await fetch("/api/auth/logout", {
+export async function verifyStudentOtp({ email, studentId, otp }) {
+  const res = await fetch("/api/auth/student/verify-otp", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     credentials: "include",
+    body: JSON.stringify({ email, studentId, otp }),
   });
+  return handle(res);
+}
+
+export async function staffForgotPassword(email) {
+  const res = await fetch("/api/auth/staff/forgot-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email }),
+  });
+  return handle(res);
+}
+
+export async function getMe() {
+  const res = await fetch("/api/auth/me", { method: "GET", credentials: "include" });
+  return handle(res);
+}
+
+export async function logout() {
+  const res = await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
   return handle(res);
 }
 
@@ -73,34 +96,4 @@ export async function checkUsername(username) {
     data?.isTaken === true;
 
   return { taken: Boolean(taken), exists: Boolean(taken) };
-}
-
-export async function isUsernameTaken(username) {
-  const data = await checkUsername(username);
-  return Boolean(data.taken || data.exists);
-}
-
-export async function isEmailTaken(_email) {
-  return false;
-}
-
-export async function existsUser({ username, email }) {
-  const params = new URLSearchParams();
-  if (username) params.set("username", username);
-  if (email) params.set("email", email);
-
-  const res = await fetch(`/api/auth/exists?${params.toString()}`, {
-    method: "GET",
-    credentials: "include",
-  });
-
-  const data = await handle(res);
-
-  if (typeof data.exists === "boolean") return data;
-  if (typeof data.taken === "boolean") return { exists: data.taken };
-
-  const existsUsername = Boolean(data.existsUsername);
-  const existsEmail = Boolean(data.existsEmail);
-
-  return { exists: existsUsername || existsEmail, existsUsername, existsEmail };
 }

@@ -1,3 +1,4 @@
+// server/src/routes/auth.routes.js
 import { Router } from "express";
 import {
   login,
@@ -6,6 +7,8 @@ import {
   register,
   checkUsername,
   studentRequestOtp,
+  studentVerifyOtp,
+  staffForgotPassword,
 } from "../controllers/auth.controller.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 
@@ -16,11 +19,13 @@ router.get("/me", requireAuth, me);
 router.post("/logout", logout);
 
 router.post("/register", register);
-
-// Username availability (used by Register page)
 router.get("/check-username", checkUsername);
 
-// ✅ Student OTP (Step 1.3)
+// ✅ Student OTP login
 router.post("/student/request-otp", studentRequestOtp);
+router.post("/student/verify-otp", studentVerifyOtp);
+
+// ✅ Staff forgot password
+router.post("/staff/forgot-password", staffForgotPassword);
 
 export default router;

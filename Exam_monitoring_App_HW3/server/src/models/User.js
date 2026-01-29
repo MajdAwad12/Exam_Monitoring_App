@@ -7,14 +7,14 @@ import mongoose from "mongoose";
 const studentEventSchema = new mongoose.Schema(
   {
     at: { type: Date, default: Date.now },
-    type: { type: String, default: "" }, // e.g. "toilet_exit", "cheating_suspected", "transfer"
+    type: { type: String, default: "" },
     severity: { type: String, enum: ["low", "medium", "high", "critical"], default: "low" },
     title: { type: String, default: "" },
     description: { type: String, default: "" },
     roomId: { type: String, default: "" },
     seat: { type: String, default: "" },
     by: {
-      name: { type: String, default: "" }, // supervisor / system
+      name: { type: String, default: "" },
       role: { type: String, default: "" },
     },
     meta: { type: Object, default: {} },
@@ -36,74 +36,23 @@ const studentTransferSchema = new mongoose.Schema(
 const studentExamFileSchema = new mongoose.Schema(
   {
     examId: { type: mongoose.Schema.Types.ObjectId, ref: "Exam", required: true },
-
     courseName: { type: String, default: "" },
     examDate: { type: Date, default: null },
-
     roomId: { type: String, default: "" },
     seat: { type: String, default: "" },
-
     lecturerName: { type: String, default: "" },
     supervisorName: { type: String, default: "" },
-
-    status: { type: String, default: "" }, // present/finished/etc.
-
+    status: { type: String, default: "" },
     arrivedAt: { type: Date, default: null },
     finishedAt: { type: Date, default: null },
-
     toiletCount: { type: Number, default: 0 },
     totalToiletMs: { type: Number, default: 0 },
-
     violations: { type: Number, default: 0 },
     incidentCount: { type: Number, default: 0 },
-
     score: { type: Number, default: null },
-
     notes: { type: [String], default: [] },
-
     transfers: { type: [studentTransferSchema], default: [] },
     events: { type: [studentEventSchema], default: [] },
-  },
-  { _id: false }
-);
-
-/* =========================
-   Auth helpers: Lockout + OTP
-========================= */
-const authLockSchema = new mongoose.Schema(
-  {
-    // how many failed attempts since last successful login/reset
-    failCount: { type: Number, default: 0 },
-
-    // 0 => first lock stage (2m), 1 => second (5m), 2+ => long stage (2h repeating)
-    stage: { type: Number, default: 0 },
-
-    // if now < lockUntil => user is blocked no matter what credentials are
-    lockUntil: { type: Date, default: null },
-
-    lastFailedAt: { type: Date, default: null },
-  },
-  { _id: false }
-);
-
-const otpSchema = new mongoose.Schema(
-  {
-    // store hashed code later in controller (recommended). for now just a string field.
-    codeHash: { type: String, default: "" },
-
-    purpose: {
-      type: String,
-      enum: ["student_login", "reset_password"],
-      default: "student_login",
-    },
-
-    expiresAt: { type: Date, default: null },
-
-    // optional: limit OTP brute force
-    attempts: { type: Number, default: 0 },
-
-    // optional: for UI/debug messages
-    requestedAt: { type: Date, default: null },
   },
   { _id: false }
 );
@@ -113,57 +62,42 @@ const userSchema = new mongoose.Schema(
     /* ---------- Basic Identity ---------- */
     fullName: { type: String, required: true, trim: true },
 
-    // ✅ Staff only (students do NOT have username)
-    username: {
-      type: String,
-      required: function () {
-        return this.role !== "student";
-      },
-      unique: true,
-      sparse: true,
-      lowercase: true,
-      trim: true,
-    },
-
-    // ✅ Everyone has email (used for OTP)
+    username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
 
     /* ---------- Auth ---------- */
-    // ✅ Staff only (students do NOT have password)
-    // ⚠️ Plain password – DEMO / COURSE ONLY
-    password: {
-      type: String,
-      required: function () {
-        return this.role !== "student";
-      },
-      default: "",
-    },
+    // ⚠️ Plain password – COURSE ONLY
+    password: { type: String, required: true },
 
-    /* ---------- Role & Permissions ---------- */
+    /* ---------- Role ---------- */
     role: { type: String, required: true, enum: ["admin", "supervisor", "lecturer", "student"] },
 
     /* ---------- Student-only ---------- */
-    studentId: {
-      type: String,
-      required: function () {
-        return this.role === "student";
-      },
-      default: null,
-      index: true,
-      trim: true,
-    },
-
-    // Student personal file across exams (read-only page)
+    studentId: { type: String, default: null, index: true },
     studentFiles: { type: [studentExamFileSchema], default: [] },
 
     /* ---------- Supervisor-only ---------- */
     assignedRoomId: { type: String, default: null },
 
-    /* ---------- NEW: Lockout state ---------- */
-    authLock: { type: authLockSchema, default: () => ({}) },
+    /* =========================
+       Staff login lockout
+       - after 3 wrong tries: 2 min
+       - next time: 5 min
+       - next time: 2 hours
+       - after that: always 2 hours until success
+    ========================= */
+    loginFailCount: { type: Number, default: 0 }, // counts wrong attempts (resets when blocked)
+    loginLockUntil: { type: Date, default: null },
+    loginLockStage: { type: Number, default: 0 }, // 0->2m, 1->5m, 2->2h (cap)
 
-    /* ---------- NEW: OTP state ---------- */
-    otp: { type: otpSchema, default: () => ({}) },
+    /* =========================
+       Student OTP (email + studentId)
+    ========================= */
+    otpHash: { type: String, default: "" },
+    otpExpiresAt: { type: Date, default: null },
+    otpPurpose: { type: String, default: "" },
+    otpFailCount: { type: Number, default: 0 },
+    otpIssuedAt: { type: Date, default: null },
   },
   { timestamps: true, collection: "users" }
 );
