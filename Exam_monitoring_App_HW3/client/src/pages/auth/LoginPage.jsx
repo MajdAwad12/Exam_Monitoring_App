@@ -83,8 +83,8 @@ export default function LoginPage() {
     }
   }
 
-  async function onRequestOtp(e) {
-    e.preventDefault();
+ async function onRequestOtp(e) {
+  e?.preventDefault();
     setErrorMsg("");
     setStudentInfo("");
 

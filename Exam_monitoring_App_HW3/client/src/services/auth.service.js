@@ -32,7 +32,9 @@ export async function requestStudentOtp({ email, studentId }) {
     credentials: "include",
     body: JSON.stringify({ email, studentId }),
   });
-  return handle(res);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+  return data;
 }
 
 export async function verifyStudentOtp({ email, studentId, otp }) {
@@ -42,8 +44,11 @@ export async function verifyStudentOtp({ email, studentId, otp }) {
     credentials: "include",
     body: JSON.stringify({ email, studentId, otp }),
   });
-  return handle(res);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+  return data;
 }
+
 
 export async function staffForgotPassword(email) {
   const res = await fetch("/api/auth/staff/forgot-password", {
