@@ -1,81 +1,78 @@
-//server/src/mailer/mailer.js
-// server/src/services/mailer.js
+// server/src/mailer/mailer.js
 import nodemailer from "nodemailer";
 
-let _transporter = null;
+function isTrue(v) {
+  return String(v || "").toLowerCase() === "true";
+}
 
-function buildTransporter() {
+let _cachedTransport = null;
+
+function getTransport() {
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT || 0);
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
+  // If missing -> DEV MODE
   if (!host || !port || !user || !pass) return null;
 
-  const secure = String(process.env.SMTP_SECURE || "").toLowerCase() === "true";
+  // ✅ For SendGrid on 587: secure MUST be false, use STARTTLS
+  const secure = isTrue(process.env.SMTP_SECURE); // should be false for 587
 
-  return nodemailer.createTransport({
+  if (_cachedTransport) return _cachedTransport;
+
+  _cachedTransport = nodemailer.createTransport({
     host,
     port,
-    secure, // true for 465, false for 587
+    secure, // false for 587
     auth: { user, pass },
+
+    // ✅ Important: STARTTLS settings (helps on some providers)
+    requireTLS: port === 587, // force TLS upgrade on 587
+    tls: {
+      // do not fail on invalid certs (safe for SMTP providers)
+      rejectUnauthorized: true,
+      servername: host,
+    },
+
+    // ✅ avoid hanging forever
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 20_000,
   });
+
+  return _cachedTransport;
 }
 
-function getTransporter() {
-  if (_transporter) return _transporter;
-  _transporter = buildTransporter();
-  return _transporter;
-}
+export async function sendOtpEmail({ to, code, purpose = "otp", minutes = 10 }) {
+  const from = process.env.SMTP_FROM || "Exam Monitoring App <no-reply@example.com>";
+  const transport = getTransport();
 
-function purposeTitle(purpose) {
-  if (purpose === "student_login") return "Student Login Verification Code";
-  if (purpose === "reset_password") return "Password Reset Verification Code";
-  return "Verification Code";
-}
-
-export async function sendOtpEmail({ to, code, purpose = "student_login", minutes = 10 }) {
-  const transporter = getTransporter();
-
-  // ✅ Dev-safe mode: if SMTP not configured, don't crash server
-  if (!transporter) {
+  // DEV MODE fallback
+  if (!transport) {
     console.log(`[MAIL DEV MODE] To: ${to} | Purpose: ${purpose} | OTP: ${code}`);
-    return { ok: true, devMode: true };
+    return { ok: true, dev: true };
   }
 
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const subject = `Your OTP code: ${code}`;
+  const text =
+    `Your one-time code is: ${code}\n` +
+    `Purpose: ${purpose}\n` +
+    `Expires in: ${minutes} minutes\n\n` +
+    `If you did not request this, ignore this email.`;
 
-  const title = purposeTitle(purpose);
-  const subject = `${title} - ${code}`;
+  try {
+    const info = await transport.sendMail({
+      from,
+      to,
+      subject,
+      text,
+    });
 
-  const text = [
-    `${title}`,
-    ``,
-    `Your one-time code is: ${code}`,
-    `This code expires in ${minutes} minutes.`,
-    ``,
-    `If you did not request this, you can ignore this email.`,
-  ].join("\n");
-
-  const html = `
-    <div style="font-family:Arial,sans-serif;line-height:1.6">
-      <h2 style="margin:0 0 12px 0">${title}</h2>
-      <p style="margin:0 0 8px 0">Your one-time code is:</p>
-      <div style="display:inline-block;padding:10px 16px;border:1px solid #ddd;border-radius:10px;font-size:22px;letter-spacing:2px;font-weight:700">
-        ${code}
-      </div>
-      <p style="margin:12px 0 0 0">This code expires in <b>${minutes} minutes</b>.</p>
-      <p style="margin:12px 0 0 0;color:#666">If you did not request this, you can ignore this email.</p>
-    </div>
-  `;
-
-  await transporter.sendMail({
-    from,
-    to,
-    subject,
-    text,
-    html,
-  });
-
-  return { ok: true, devMode: false };
+    console.log(`[MAIL SENT] to=${to} messageId=${info?.messageId || "n/a"}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("[MAIL ERROR]", err);
+    throw err;
+  }
 }
