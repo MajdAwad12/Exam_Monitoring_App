@@ -55,33 +55,34 @@ export default function Header() {
 
           {open && (
             <div className="absolute right-0 top-12 w-48 rounded-xl bg-white shadow-lg border border-slate-200 overflow-hidden z-50">
-              <button
-                onClick={() => go("/login")}
+                <button
+                onClick={() => go("/login?role=admin")}
                 className="w-full text-left px-4 py-2 hover:bg-slate-100 text-sm"
-              >
+                >
                 Admin
-              </button>
-              <button
-                onClick={() => go("/login")}
+                </button>
+                <button
+                onClick={() => go("/login?role=lecturer")}
                 className="w-full text-left px-4 py-2 hover:bg-slate-100 text-sm"
-              >
+                >
                 Lecturer
-              </button>
-              <button
-                onClick={() => go("/login")}
+                </button>
+                <button
+                onClick={() => go("/login?role=supervisor")}
                 className="w-full text-left px-4 py-2 hover:bg-slate-100 text-sm"
-              >
+                >
                 Supervisor
-              </button>
-              <div className="border-t" />
-              <button
-                onClick={() => go("/login")}
+                </button>
+                <div className="border-t" />
+                <button
+                onClick={() => go("/login?role=student")}
                 className="w-full text-left px-4 py-2 hover:bg-slate-100 text-sm font-semibold"
-              >
+                >
                 Student
-              </button>
+                </button>
             </div>
-          )}
+            )}
+
 
           {/* Register */}
           <Link
