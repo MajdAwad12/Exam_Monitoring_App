@@ -1,9 +1,10 @@
-// src/pages/auth/RegisterPage.jsx
+// client/src/pages/auth/RegisterPage.jsx
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import RegisterHeader from "../../components/auth/RegisterHeader";
 import RegisterForm from "../../components/auth/RegisterForm";
+
 import AuthFooter from "../../components/auth/AuthFooter";
 import ErrorAlert from "../../components/auth/ErrorAlert";
 
@@ -13,8 +14,8 @@ export default function RegisterPage() {
   const navigate = useNavigate();
 
   const captcha = useMemo(() => {
-    const a = Math.floor(Math.random() * 8) + 2;
-    const b = Math.floor(Math.random() * 9) + 1;
+    const a = Math.floor(Math.random() * (9 - 2 + 1)) + 2;
+    const b = Math.floor(Math.random() * (9 - 1 + 1)) + 1;
     return { a, b, answer: a + b };
   }, []);
 
@@ -56,7 +57,7 @@ export default function RegisterPage() {
         setMessage({
           show: true,
           type: "error",
-          text: "This username already exists.",
+          text: "This username already exists. Please choose another one.",
         });
         return;
       }
@@ -76,58 +77,97 @@ export default function RegisterPage() {
       setMessage({
         show: true,
         type: "success",
-        text: "Account created successfully. You can login now.",
+        text: "Account created successfully! Go back to Home and login.",
       });
     } catch (err) {
-      setMessage({
-        show: true,
-        type: "error",
-        text:
-          err?.response?.data?.message ||
-          err?.message ||
-          "Registration failed. Please try again.",
-      });
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Registration failed. Please try again.";
+      setMessage({ show: true, type: "error", text: msg });
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="px-4 pt-6">
-        <button
-          type="button"
-          onClick={() => navigate("/", { replace: true })}
-          className="text-sm font-semibold text-slate-700 hover:text-slate-900"
-        >
-          ← Back to Home
-        </button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-sky-700 to-cyan-500 relative overflow-hidden">
+      {/* soft background blobs (subtle) */}
+      <div className="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full bg-white/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -right-32 w-[28rem] h-[28rem] rounded-full bg-white/10 blur-3xl" />
+
+      {/* Back to Home (top-left, clean) */}
+      <button
+        type="button"
+        onClick={() => navigate("/", { replace: true })}
+        className="fixed top-5 left-5 z-50 inline-flex items-center gap-2 px-4 py-2 rounded-full
+                   bg-white/15 hover:bg-white/25 text-white text-sm font-semibold
+                   border border-white/20 backdrop-blur shadow-lg transition"
+      >
+        ← Back to Home
+      </button>
 
       <div className="min-h-screen flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-md">
-          <RegisterHeader />
-
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-7">
-            {message.show ? (
-              <ErrorAlert type={message.type} text={message.text} />
-            ) : null}
-
-            <RegisterForm
-              onSubmit={handleSubmit}
-              captchaLabel={`${captcha.a} + ${captcha.b} = ?`}
+        <div className="w-full max-w-5xl">
+          {/* TOP title row */}
+          <div className="mb-6 flex items-center justify-center gap-3">
+            <img
+              src="/exammonitoringPIC.png"
+              alt="Exam Monitoring"
+              className="w-10 h-10 object-contain"
             />
-
-            <button
-              type="button"
-              onClick={() => navigate("/login")}
-              className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5
-                         text-sm font-extrabold text-slate-800 hover:bg-slate-50 transition"
-            >
-              Back to Login
-            </button>
+            <h1 className="text-white text-2xl sm:text-3xl font-extrabold tracking-tight">
+              Register Page
+            </h1>
           </div>
 
-          <div className="mt-4">
-            <AuthFooter />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+            {/* LEFT side (only on large screens) */}
+            <div className="hidden lg:block">
+              <div className="text-white">
+                <h2 className="text-3xl font-extrabold tracking-tight">
+                  Staff Registration
+                </h2>
+                <p className="mt-3 text-white/85 leading-relaxed">
+                  Create a clean staff account for supervision and exam
+                  management. Keep your credentials private and secure.
+                </p>
+
+                <div className="mt-6 rounded-2xl bg-white/10 border border-white/20 backdrop-blur p-5">
+                  <div className="text-sm font-bold text-white/90">
+                    Roles
+                  </div>
+                  <div className="mt-2 text-sm text-white/80 leading-relaxed">
+                    Supervisor: classroom monitoring. Lecturer: exams and reports.
+                  </div>
+                </div>
+
+                <div className="mt-6 text-sm text-white/75">
+                  Already have an account?{" "}
+                  <span className="font-semibold text-white/90">
+                    Go to Login from the Home page.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT side (your original register UI) */}
+            <div className="w-full max-w-md mx-auto">
+              <RegisterHeader />
+
+              <div className="bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8 border border-white/40">
+                {message.show && (
+                  <ErrorAlert type={message.type} text={message.text} />
+                )}
+
+                <RegisterForm
+                  onSubmit={handleSubmit}
+                  captchaLabel={`${captcha.a} + ${captcha.b} = ?`}
+                />
+              </div>
+
+              <div className="mt-4">
+                <AuthFooter />
+              </div>
+            </div>
           </div>
         </div>
       </div>
