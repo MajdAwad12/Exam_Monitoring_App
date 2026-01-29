@@ -31,46 +31,46 @@ const FEATURES = [
   },
 ];
 
-// ✅ Your real images (from /public) — no other images used
+// ✅ your images only (from /public)
 const PRODUCT_SECTIONS = [
   {
     key: "dashboard",
     img: "/dashboardPIC.jpg",
     alt: "Dashboard",
-    title: "A Powerful Dashboard that keeps you in control",
-    desc: "Monitor classrooms in one place, take fast actions, and get clear visibility during the exam — without stress.",
-    bullets: ["Real-time overview", "Fast actions", "Clean layout"],
+    title: "Control Center Dashboard",
+    desc: "One clean place to monitor classrooms, act fast, and stay calm during the exam.",
+    bullets: ["Real-time overview", "Fast actions", "Clear layout"],
   },
   {
     key: "examlist",
     img: "/examlistPIC.jpg",
     alt: "Exam List",
-    title: "Exam List that feels organized and instant",
-    desc: "Jump to any exam quickly, keep everything structured, and navigate like a professional system.",
-    bullets: ["Quick navigation", "Organized structure", "Zero confusion"],
+    title: "Exam List — organized & instant",
+    desc: "Find any exam quickly, keep everything structured, and navigate with zero confusion.",
+    bullets: ["Quick navigation", "Structured exams", "Smooth flow"],
   },
   {
     key: "manage",
     img: "/mangeEXAM_pic.jpg",
     alt: "Manage Exam",
     title: "Manage Exams with confidence",
-    desc: "Create and update exam settings smoothly with a clear workflow designed for staff and supervisors.",
-    bullets: ["Staff workflow", "Safe updates", "Role-based control"],
+    desc: "Create and update exam settings smoothly with a professional staff workflow.",
+    bullets: ["Staff workflow", "Safe updates", "Role control"],
   },
   {
     key: "reports",
     img: "/reporANDhistoryPIC.jpg",
     alt: "Reports & History",
-    title: "Reports & History that tell the full story",
-    desc: "Everything is documented: attendance, incidents, and actions — presented in a clean, readable timeline.",
-    bullets: ["Timeline clarity", "Audit-friendly", "Professional reporting"],
+    title: "Reports & History that tell the story",
+    desc: "Clear documentation of attendance, incidents, and actions — in a readable timeline.",
+    bullets: ["Timeline clarity", "Audit-friendly", "Fast review"],
   },
   {
     key: "chatbot",
     img: "/chatbotPIC.png",
     alt: "Chatbot",
-    title: "Smart Assistant that helps in seconds",
-    desc: "Quick guidance for staff during pressure time — fewer mistakes, faster decisions, smoother exam flow.",
+    title: "Smart Assistant for instant help",
+    desc: "Quick guidance when pressure is high — fewer mistakes and faster decisions.",
     bullets: ["Instant help", "Less friction", "Better experience"],
   },
 ];
@@ -80,6 +80,25 @@ function Pill({ children }) {
     <span className="inline-flex items-center gap-2 text-xs font-extrabold text-slate-700 bg-slate-100 border border-slate-200 px-3 py-2 rounded-full">
       {children}
     </span>
+  );
+}
+
+function IconLabel({ src, label, href }) {
+  return (
+    <a
+      href={href}
+      target={href?.startsWith("http") ? "_blank" : undefined}
+      rel={href?.startsWith("http") ? "noreferrer" : undefined}
+      className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition"
+    >
+      <img
+        src={src}
+        alt={label}
+        className="w-5 h-5 object-contain"
+        draggable={false}
+      />
+      <span>{label}</span>
+    </a>
   );
 }
 
@@ -103,7 +122,15 @@ export default function HomePage() {
           {/* Text */}
           <div className="text-white">
             <div className="flex items-center gap-5">
-              {/* ✅ Use your hero logo image */}
+              {/* ✅ your logo */}
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white/10 border border-white/20 backdrop-blur shadow-2xl overflow-hidden">
+                <img
+                  src="/exammonitoringPIC.png"
+                  alt="Exam Monitoring App"
+                  className="w-full h-full object-cover"
+                  draggable={false}
+                />
+              </div>
 
               <div className="min-w-0">
                 <h1 className="text-4xl md:text-5xl font-extrabold leading-tight tracking-tight">
@@ -162,6 +189,7 @@ export default function HomePage() {
                 src="/hero-classroom.jpg"
                 alt="Exam classroom"
                 className="relative w-full rounded-[2rem] shadow-2xl border border-white/20 object-cover max-h-[420px]"
+                draggable={false}
               />
               <div className="absolute bottom-4 left-4 right-4 rounded-2xl bg-slate-900/40 border border-white/15 backdrop-blur px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
@@ -224,16 +252,16 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ===== PRODUCT SCREENS (one under another) ===== */}
+      {/* ===== PRODUCT SCREENS (small image + text side) ===== */}
       <section id="product" className="bg-slate-50">
         <div className="mx-auto max-w-7xl px-6 py-16">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
             <div>
               <h2 className="text-3xl font-extrabold text-slate-900">
-                System Screens (Real UI)
+                System Screens
               </h2>
               <p className="mt-2 text-slate-600 max-w-2xl">
-                A clean, modern experience across the entire platform — designed for real exam pressure.
+                Quick look at the main parts of the platform — clean, simple, and professional.
               </p>
             </div>
 
@@ -243,42 +271,43 @@ export default function HomePage() {
             </Pill>
           </div>
 
-          <div className="mt-10 space-y-10">
+          <div className="mt-10 space-y-5">
             {PRODUCT_SECTIONS.map((s) => (
               <div
                 key={s.key}
-                className="rounded-[2rem] bg-white border border-slate-200 shadow-sm hover:shadow-xl transition overflow-hidden"
+                className="rounded-3xl bg-white border border-slate-200 shadow-sm hover:shadow-lg transition p-5 sm:p-6"
               >
-                {/* Text */}
-                <div className="p-7 md:p-9">
-                  <h3 className="text-2xl md:text-3xl font-extrabold text-slate-900">
-                    {s.title}
-                  </h3>
-                  <p className="mt-2 text-slate-600 text-sm md:text-base max-w-3xl leading-relaxed">
-                    {s.desc}
-                  </p>
-
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {s.bullets.map((b) => (
-                      <span
-                        key={b}
-                        className="text-xs md:text-sm font-extrabold text-slate-700 bg-slate-100 border border-slate-200 px-3 py-2 rounded-full"
-                      >
-                        {b}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Image */}
-                <div className="px-7 pb-7 md:px-9 md:pb-9">
+                <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] gap-6 items-start">
+                  {/* Small image */}
                   <div className="relative">
-                    <div className="absolute -inset-4 rounded-[1.8rem] bg-indigo-200/40 blur-2xl" />
+                    <div className="absolute -inset-2 rounded-3xl bg-indigo-200/35 blur-xl" />
                     <img
                       src={s.img}
                       alt={s.alt}
-                      className="relative w-full rounded-[1.8rem] border border-slate-200 shadow-2xl object-cover"
+                      className="relative w-full h-[200px] sm:h-[220px] md:h-[210px] rounded-3xl border border-slate-200 shadow-md object-cover"
+                      draggable={false}
                     />
+                  </div>
+
+                  {/* Text */}
+                  <div className="min-w-0">
+                    <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                      {s.title}
+                    </h3>
+                    <p className="mt-2 text-sm sm:text-base text-slate-600 leading-relaxed max-w-3xl">
+                      {s.desc}
+                    </p>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {s.bullets.map((b) => (
+                        <span
+                          key={b}
+                          className="text-xs sm:text-sm font-extrabold text-slate-700 bg-slate-100 border border-slate-200 px-3 py-2 rounded-full"
+                        >
+                          {b}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -287,6 +316,44 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ✅ Footer with icons line (facebook/instagram/gmail) */}
+      <section className="bg-white border-t border-slate-200">
+        <div className="mx-auto max-w-7xl px-6 py-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            {/* left */}
+            <div className="text-sm text-slate-600">
+              <div className="font-extrabold text-slate-900">Need help?</div>
+              <div className="mt-1">
+                <a className="hover:underline" href="mailto:helpdesk@exam-monitoring.com">
+                  helpdesk@exam-monitoring.com
+                </a>
+                <span className="mx-2 text-slate-300">|</span>
+                <a className="hover:underline" href="tel:+97231234567">
+                  +972-3-123-4567
+                </a>
+              </div>
+            </div>
+
+            {/* right icons */}
+            <div className="flex flex-wrap items-center gap-5">
+              <IconLabel src="/facebookICON.jpg" label="Facebook" href="https://facebook.com" />
+              <IconLabel src="/instgramICON.jpg" label="Instagram" href="https://instagram.com" />
+              <IconLabel src="/gmailICON.png" label="Gmail" href="mailto:helpdesk@exam-monitoring.com" />
+            </div>
+          </div>
+
+          <div className="mt-6 text-xs text-slate-500">
+            © {new Date().getFullYear()} Exam Monitoring App. All rights reserved.
+          </div>
+        </div>
+      </section>
+
+      {/* keep your Footer component too (if you want it), OR remove it.
+          You asked for icons in footer, so we already rendered footer here.
+          If your Footer.jsx already exists and you want to use it instead:
+          - remove the whole section above
+          - and update Footer.jsx with the same content.
+      */}
       <Footer />
     </div>
   );
