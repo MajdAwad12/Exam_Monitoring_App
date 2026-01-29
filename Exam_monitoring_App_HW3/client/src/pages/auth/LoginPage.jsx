@@ -327,39 +327,38 @@ export default function LoginPage() {
                             Enter your staff email. We will send your username + password.
                           </div>
 
-                          <div className="mt-3 flex gap-2">
-                          <input
-                            value={forgotEmail}
-                            onChange={(e) => setForgotEmail(e.target.value)}
-                            className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                            placeholder="your.email@..."
-                            disabled={isLoading}
-                          />
+                          {showForgot ? (
+                          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="text-sm font-extrabold text-slate-800">
+                              Staff Forgot Password
+                            </div>
+                            <div className="text-xs text-slate-600 mt-1">
+                              Enter your staff email. We will send your username + password.
+                            </div>
 
-                          <button
-                            type="button"
-                            onClick={onStaffForgot}
-                            disabled={isLoading}
-                            className="rounded-xl px-4 py-2 text-sm font-extrabold text-white
-                                      bg-indigo-600 hover:bg-indigo-700"
-                          >
-                            {isLoading ? "Sending..." : "Send"}
-                          </button>
+                            <div className="mt-3 flex gap-2">
+                              <input
+                                value={forgotEmail}
+                                onChange={(e) => setForgotEmail(e.target.value)}
+                                className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                                placeholder="your.email@..."
+                                disabled={isLoading}
+                              />
+                              <button
+                                type="button"
+                                onClick={onStaffForgot}
+                                disabled={isLoading}
+                                className="rounded-xl px-4 py-2 text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700"
+                              >
+                                {isLoading ? "Sending..." : "Send"}
+                              </button>
+                            </div>
 
-                          <button
-                            type="button"
-                            disabled={isLoading}
-                            onClick={() => {
-                              setShowForgot(false);
-                              setForgotEmail("");
-                              setNotice(null);
-                            }}
-                            className="rounded-xl px-4 py-2 text-sm font-extrabold
-                                      bg-slate-200 hover:bg-slate-300 text-slate-800"
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                            <div className="mt-3 text-xs text-slate-600">
+                              Tip: check <span className="font-extrabold">Spam/Junk</span> too.
+                            </div>
+                          </div>
+                        ) : null}
 
 
                           {/* Professional hint always visible */}
