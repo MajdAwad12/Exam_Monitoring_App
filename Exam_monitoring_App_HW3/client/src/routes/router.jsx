@@ -3,6 +3,8 @@ import { createBrowserRouter, Navigate, useOutletContext } from "react-router-do
 
 import AppLayout from "../components/layout/AppLayout.jsx";
 
+import HomePage from "../pages/homepage/HomePage.jsx";
+
 import LoginPage from "../pages/auth/LoginPage.jsx";
 import RegisterPage from "../pages/auth/RegisterPage.jsx";
 
@@ -21,17 +23,17 @@ function AppFallback() {
   const ctx = useOutletContext() || {};
   const me = ctx.me;
 
-  // If not loaded yet, do nothing (RoleGate already handles loading, but safe)
   if (!me) return <Navigate to="/login" replace />;
 
-  // Student always lands on /app/student
   if (me.role === "student") return <Navigate to="/app/student" replace />;
 
-  // Everyone else -> dashboard
   return <Navigate to="/app/dashboard" replace />;
 }
 
 const router = createBrowserRouter([
+  // ✅ NEW: Home page as the first entry point
+  { path: "/", element: <HomePage /> },
+
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
 
@@ -40,10 +42,8 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     errorElement: <RouteError />,
     children: [
-      // ✅ default landing inside /app
       { index: true, element: <AppFallback /> },
 
-      // ✅ Supervisor + Lecturer + Admin
       {
         path: "dashboard",
         element: (
@@ -53,7 +53,6 @@ const router = createBrowserRouter([
         ),
       },
 
-      // ✅ Supervisor + Lecturer + Admin
       {
         path: "exams",
         element: (
@@ -63,7 +62,6 @@ const router = createBrowserRouter([
         ),
       },
 
-      // ✅ Lecturer + Admin
       {
         path: "reports",
         element: (
@@ -73,7 +71,6 @@ const router = createBrowserRouter([
         ),
       },
 
-      // ✅ Admin only
       {
         path: "manage-exams",
         element: (
@@ -83,7 +80,6 @@ const router = createBrowserRouter([
         ),
       },
 
-      // ✅ Student only (Read-only page)
       {
         path: "student",
         element: (
@@ -93,12 +89,12 @@ const router = createBrowserRouter([
         ),
       },
 
-      // ✅ Smart fallback inside /app for unknown routes
       { path: "*", element: <AppFallback /> },
     ],
   },
 
-  { path: "*", element: <Navigate to="/login" replace /> },
+  // ✅ IMPORTANT: global fallback now goes to Home (not login)
+  { path: "*", element: <Navigate to="/" replace /> },
 ]);
 
 export default router;
