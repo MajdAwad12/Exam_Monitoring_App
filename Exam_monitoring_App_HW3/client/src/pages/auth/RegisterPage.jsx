@@ -7,7 +7,7 @@ import RegisterForm from "../../components/auth/RegisterForm";
 import AuthFooter from "../../components/auth/AuthFooter";
 import ErrorAlert from "../../components/auth/ErrorAlert";
 
-import { isUsernameTaken, registerUser } from "../../services/auth.service";
+import { registerUser } from "../../services/auth.service";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
