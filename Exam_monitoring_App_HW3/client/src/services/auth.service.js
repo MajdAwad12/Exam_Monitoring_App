@@ -1,5 +1,6 @@
+// ============================
 // client/src/services/auth.service.js
-
+// ============================
 async function handle(res) {
   let data = {};
   try {
@@ -49,7 +50,6 @@ export async function verifyStudentOtp({ email, studentId, otp }) {
   return data;
 }
 
-
 export async function staffForgotPassword(email) {
   const res = await fetch("/api/auth/staff/forgot-password", {
     method: "POST",
@@ -80,6 +80,10 @@ export async function registerUser(payload) {
   return handle(res);
 }
 
+/* =========================
+   Username availability check
+   GET /api/auth/check-username?username=...
+========================= */
 export async function checkUsername(username) {
   const u = String(username || "").trim();
   if (!u) return { taken: false, exists: false };
@@ -101,4 +105,10 @@ export async function checkUsername(username) {
     data?.isTaken === true;
 
   return { taken: Boolean(taken), exists: Boolean(taken) };
+}
+
+// ✅ The function RegisterPage expects:
+export async function isUsernameTaken(username) {
+  const r = await checkUsername(username);
+  return Boolean(r?.taken);
 }

@@ -1,4 +1,6 @@
+// ===============================
 // server/src/routes/auth.routes.js
+// ===============================
 import { Router } from "express";
 import {
   login,

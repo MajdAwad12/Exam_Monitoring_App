@@ -1,4 +1,6 @@
+// =======================
 // server/src/models/User.js
+// =======================
 import mongoose from "mongoose";
 
 /* =========================
@@ -62,6 +64,7 @@ const userSchema = new mongoose.Schema(
     /* ---------- Basic Identity ---------- */
     fullName: { type: String, required: true, trim: true },
 
+    // ✅ no duplicate usernames
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
 
@@ -81,14 +84,10 @@ const userSchema = new mongoose.Schema(
 
     /* =========================
        Staff login lockout
-       - after 3 wrong tries: 2 min
-       - next time: 5 min
-       - next time: 2 hours
-       - after that: always 2 hours until success
     ========================= */
-    loginFailCount: { type: Number, default: 0 }, // counts wrong attempts (resets when blocked)
+    loginFailCount: { type: Number, default: 0 },
     loginLockUntil: { type: Date, default: null },
-    loginLockStage: { type: Number, default: 0 }, // 0->2m, 1->5m, 2->2h (cap)
+    loginLockStage: { type: Number, default: 0 },
 
     /* =========================
        Student OTP (email + studentId)

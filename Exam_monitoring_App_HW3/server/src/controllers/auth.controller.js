@@ -1,4 +1,6 @@
+// ===================================
 // server/src/controllers/auth.controller.js
+// ===================================
 import crypto from "crypto";
 import User from "../models/User.js";
 import { sendOtpEmail, sendStaffCredentialsEmail } from "../mailer/mailer.js";
@@ -39,7 +41,6 @@ function hashOtp(code) {
 }
 
 function genOtp6() {
-  // 100000-999999
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
@@ -58,7 +59,6 @@ export async function login(req, res) {
     const u = String(username).trim().toLowerCase();
     const user = await User.findOne({ username: u });
 
-    // generic
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
@@ -90,8 +90,8 @@ export async function login(req, res) {
         const dur = durations[stage];
 
         user.loginLockUntil = new Date(nowMs() + dur);
-        user.loginFailCount = 0; // reset after block
-        user.loginLockStage = Math.min(stage + 1, 2); // move stage, cap at 2
+        user.loginFailCount = 0;
+        user.loginLockStage = Math.min(stage + 1, 2);
 
         await user.save();
 
@@ -122,9 +122,7 @@ export async function login(req, res) {
       assignedRoomId: user.assignedRoomId ?? null,
     };
 
-    req.session.save(() => {
-      return res.json(safeUser(user));
-    });
+    req.session.save(() => res.json(safeUser(user)));
   } catch (err) {
     console.error("LOGIN ERROR:", err);
     return res.status(500).json({ message: "Server error" });
@@ -214,10 +212,7 @@ export async function studentRequestOtp(req, res) {
     }
 
     const user = await User.findOne({ role: "student", email, studentId });
-    if (!user) {
-      // course-friendly: reveal minimal info
-      return res.status(404).json({ message: "Student not found" });
-    }
+    if (!user) return res.status(404).json({ message: "Student not found" });
 
     const code = genOtp6();
     user.otpHash = hashOtp(code);
@@ -278,7 +273,6 @@ export async function studentVerifyOtp(req, res) {
       await user.save();
 
       if (user.otpFailCount >= 5) {
-        // reset after many failures
         user.otpHash = "";
         user.otpExpiresAt = null;
         user.otpFailCount = 0;
@@ -296,7 +290,6 @@ export async function studentVerifyOtp(req, res) {
     user.otpPurpose = "";
     await user.save();
 
-    // ✅ session login
     req.session.user = {
       userId: user._id.toString(),
       id: user._id.toString(),
@@ -307,9 +300,7 @@ export async function studentVerifyOtp(req, res) {
       assignedRoomId: user.assignedRoomId ?? null,
     };
 
-    req.session.save(() => {
-      return res.json(safeUser(user));
-    });
+    req.session.save(() => res.json(safeUser(user)));
   } catch (err) {
     console.error("STUDENT VERIFY OTP ERROR:", err);
     return res.status(500).json({ message: "Server error" });
@@ -330,7 +321,7 @@ export async function staffForgotPassword(req, res) {
       role: { $in: ["admin", "supervisor", "lecturer"] },
     });
 
-    // Return same message even if not found (more professional)
+    // same message even if not found
     if (!user) {
       return res.json({ message: "If this email exists, we sent your login details." });
     }

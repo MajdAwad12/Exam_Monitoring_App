@@ -1,4 +1,6 @@
+// ==============================
 // client/src/pages/auth/RegisterPage.jsx
+// ==============================
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -7,7 +9,7 @@ import RegisterForm from "../../components/auth/RegisterForm";
 import AuthFooter from "../../components/auth/AuthFooter";
 import ErrorAlert from "../../components/auth/ErrorAlert";
 
-import { registerUser } from "../../services/auth.service";
+import { registerUser, isUsernameTaken } from "../../services/auth.service";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -50,6 +52,7 @@ export default function RegisterPage() {
       return;
     }
 
+    // ✅ No duplicate usernames (pre-check)
     try {
       const taken = await isUsernameTaken(formData.username);
       if (taken) {
@@ -60,8 +63,9 @@ export default function RegisterPage() {
         });
         return;
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      // If check fails, we continue; server-side register still blocks duplicates
+      // (because /register already checks duplicates)
     }
 
     try {
@@ -79,10 +83,7 @@ export default function RegisterPage() {
         text: "Account created successfully! Go back to Home and login.",
       });
     } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        "Registration failed. Please try again.";
+      const msg = err?.message || "Registration failed. Please try again.";
       setMessage({ show: true, type: "error", text: msg });
     }
   }
