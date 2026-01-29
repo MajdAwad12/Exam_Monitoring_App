@@ -1,5 +1,5 @@
 // client/src/pages/auth/LoginPage.jsx
-import { useMemo, useState } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   loginUser,
@@ -26,18 +26,17 @@ export default function LoginPage() {
   const [staffPassword, setStaffPassword] = useState("");
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotMsg, setForgotMsg] = useState("");
 
   // student OTP flow
   const [studentId, setStudentId] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [studentStep, setStudentStep] = useState(1); // 1=request, 2=verify
-  const [studentInfo, setStudentInfo] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
 
+  // one unified notice
+  const [notice, setNotice] = useState(null); // { type: "success"|"error"|"info"|"warning", text: string }
   const { shake, triggerShake } = useShake(500);
 
   const staffDemos = useMemo(
@@ -56,16 +55,27 @@ export default function LoginPage() {
     []
   );
 
+  function showNotice(type, text, { autoHideMs = 0 } = {}) {
+    setNotice({ type, text });
+    if (autoHideMs > 0) {
+      window.clearTimeout(showNotice._t);
+      showNotice._t = window.setTimeout(() => setNotice(null), autoHideMs);
+    }
+  }
+
+  useEffect(() => {
+    return () => window.clearTimeout(showNotice._t);
+  }, []);
+
   async function onSubmitStaff(e) {
     e.preventDefault();
-    setErrorMsg("");
-    setForgotMsg("");
+    setNotice(null);
 
     const u = staffUsername.trim().toLowerCase();
     const p = staffPassword.trim();
 
     if (!u || !p) {
-      setErrorMsg("Please enter username and password.");
+      showNotice("warning", "Please enter username and password.");
       triggerShake();
       return;
     }
@@ -76,23 +86,22 @@ export default function LoginPage() {
       if (user?.role === "student") navigate("/app/student", { replace: true });
       else navigate("/app/dashboard", { replace: true });
     } catch (err) {
-      setErrorMsg(err?.message || "Login failed.");
+      showNotice("error", err?.message || "Login failed.");
       triggerShake();
     } finally {
       setIsLoading(false);
     }
   }
 
- async function onRequestOtp(e) {
-  e?.preventDefault();
-    setErrorMsg("");
-    setStudentInfo("");
+  async function onRequestOtp(e) {
+    e?.preventDefault();
+    setNotice(null);
 
     const id = studentId.trim();
     const em = studentEmail.trim().toLowerCase();
 
     if (!id || !em) {
-      setErrorMsg("Please enter Student ID and Email.");
+      showNotice("warning", "Please enter Student ID and Email.");
       triggerShake();
       return;
     }
@@ -100,13 +109,15 @@ export default function LoginPage() {
     try {
       setIsLoading(true);
       const r = await requestStudentOtp({ email: em, studentId: id });
+
       setStudentStep(2);
-      setStudentInfo(
-        (r?.message || "OTP sent.") +
-          " ✅ Please check your Inbox and also Spam/Junk."
+      showNotice(
+        "success",
+        (r?.message || "OTP sent.") + " ✅ Please check your Inbox and also Spam/Junk.",
+        { autoHideMs: 12000 }
       );
     } catch (err) {
-      setErrorMsg(err?.message || "Failed to send OTP.");
+      showNotice("error", err?.message || "Failed to send OTP.");
       triggerShake();
     } finally {
       setIsLoading(false);
@@ -115,23 +126,26 @@ export default function LoginPage() {
 
   async function onVerifyOtp(e) {
     e.preventDefault();
-    setErrorMsg("");
+    setNotice(null);
+
     const id = studentId.trim();
     const em = studentEmail.trim().toLowerCase();
     const code = otp.trim();
 
     if (!id || !em || !code) {
-      setErrorMsg("Please enter OTP code.");
+      showNotice("warning", "Please enter OTP code.");
       triggerShake();
       return;
     }
 
     try {
       setIsLoading(true);
-      const user = await verifyStudentOtp({ email: em, studentId: id, otp: code });
+      await verifyStudentOtp({ email: em, studentId: id, otp: code });
+
+      showNotice("success", "OTP verified. Logging you in…", { autoHideMs: 2500 });
       navigate("/app/student", { replace: true });
     } catch (err) {
-      setErrorMsg(err?.message || "Invalid OTP.");
+      showNotice("error", err?.message || "Invalid OTP.");
       triggerShake();
     } finally {
       setIsLoading(false);
@@ -139,36 +153,39 @@ export default function LoginPage() {
   }
 
   async function onStaffForgot() {
-    setErrorMsg("");
-    setForgotMsg("");
+    setNotice(null);
 
     const em = forgotEmail.trim().toLowerCase();
     if (!em) {
-      setForgotMsg("Please enter your staff email.");
+      showNotice("warning", "Please enter your staff email.");
       return;
     }
 
     try {
       setIsLoading(true);
       const r = await staffForgotPassword(em);
-      setForgotMsg(r?.message || "If this email exists, we sent your login details.");
+
+      // show it as success even if email not found (server returns generic)
+      showNotice(
+        "success",
+        r?.message || "If this email exists, we sent your login details.",
+        { autoHideMs: 12000 }
+      );
     } catch (err) {
-      setForgotMsg(err?.message || "Failed to send email.");
+      showNotice("error", err?.message || "Failed to send email.");
     } finally {
       setIsLoading(false);
     }
   }
 
   function onFillDemoStaff(d) {
-    setErrorMsg("");
-    setForgotMsg("");
+    setNotice(null);
     setStaffUsername(d.u);
     setStaffPassword(d.p);
   }
 
   function onFillDemoStudent(d) {
-    setErrorMsg("");
-    setStudentInfo("");
+    setNotice(null);
     setStudentId(d.id);
     setStudentEmail(d.email);
     setOtp("");
@@ -234,8 +251,9 @@ export default function LoginPage() {
                         type="button"
                         onClick={() => {
                           setTab("staff");
-                          setErrorMsg("");
-                          setStudentInfo("");
+                          setNotice(null);
+                          setStudentStep(1);
+                          setOtp("");
                         }}
                         className={[
                           "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
@@ -252,8 +270,8 @@ export default function LoginPage() {
                         type="button"
                         onClick={() => {
                           setTab("student");
-                          setErrorMsg("");
-                          setForgotMsg("");
+                          setNotice(null);
+                          setShowForgot(false);
                         }}
                         className={[
                           "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
@@ -269,7 +287,13 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {errorMsg ? <ErrorAlert message={errorMsg} /> : null}
+                {notice ? (
+                  <ErrorAlert
+                    type={notice.type}
+                    text={notice.text}
+                    onClose={() => setNotice(null)}
+                  />
+                ) : null}
 
                 <div className="rounded-2xl bg-white border border-slate-200 p-6">
                   {tab === "staff" ? (
@@ -295,9 +319,7 @@ export default function LoginPage() {
                           Forgot password?
                         </button>
 
-                        <span className="text-xs text-slate-500">
-                          (email will be sent)
-                        </span>
+                        <span className="text-xs text-slate-500">(email will be sent)</span>
                       </div>
 
                       {showForgot ? (
@@ -323,15 +345,14 @@ export default function LoginPage() {
                               disabled={isLoading}
                               className="rounded-xl px-4 py-2 text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700"
                             >
-                              Send
+                              {isLoading ? "Sending..." : "Send"}
                             </button>
                           </div>
 
-                          {forgotMsg ? (
-                            <div className="mt-3 text-xs font-semibold text-slate-700">
-                              {forgotMsg} <span className="text-slate-500">(Check Spam too)</span>
-                            </div>
-                          ) : null}
+                          {/* Professional hint always visible */}
+                          <div className="mt-3 text-xs text-slate-600">
+                            Tip: check <span className="font-extrabold">Spam/Junk</span> too.
+                          </div>
                         </div>
                       ) : null}
 
@@ -345,7 +366,6 @@ export default function LoginPage() {
                     </>
                   ) : (
                     <>
-                      {/* Student Step 1 */}
                       {studentStep === 1 ? (
                         <form onSubmit={onRequestOtp} className="space-y-3">
                           <div>
@@ -380,10 +400,9 @@ export default function LoginPage() {
                             className="w-full rounded-full px-6 py-3 text-white text-base font-extrabold
                                        bg-indigo-600 hover:bg-indigo-700 shadow-lg transition"
                           >
-                            Send OTP
+                            {isLoading ? "Sending..." : "Send OTP"}
                           </button>
 
-                          {/* ✅ Requirement (3): show Spam note */}
                           <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3">
                             ✅ After sending OTP, please check your Inbox and also{" "}
                             <span className="font-extrabold">Spam/Junk</span>.
@@ -398,14 +417,7 @@ export default function LoginPage() {
                           </div>
                         </form>
                       ) : (
-                        /* Student Step 2 */
                         <form onSubmit={onVerifyOtp} className="space-y-3">
-                          {studentInfo ? (
-                            <div className="text-xs font-semibold text-slate-700 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                              {studentInfo}
-                            </div>
-                          ) : null}
-
                           <div>
                             <div className="text-sm font-extrabold text-slate-800 mb-1">
                               OTP Code
@@ -425,7 +437,7 @@ export default function LoginPage() {
                             className="w-full rounded-full px-6 py-3 text-white text-base font-extrabold
                                        bg-emerald-600 hover:bg-emerald-700 shadow-lg transition"
                           >
-                            Verify & Login
+                            {isLoading ? "Verifying..." : "Verify & Login"}
                           </button>
 
                           <div className="flex gap-2">
@@ -435,7 +447,7 @@ export default function LoginPage() {
                               onClick={() => {
                                 setStudentStep(1);
                                 setOtp("");
-                                setStudentInfo("");
+                                setNotice(null);
                               }}
                               className="w-full rounded-full px-6 py-2 text-sm font-extrabold
                                          bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200"
