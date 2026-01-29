@@ -22,12 +22,6 @@ export default function Footer() {
           <h4 className="text-white font-semibold mb-4">Help Desk</h4>
           <ul className="space-y-2 text-sm">
             <li className="flex items-center gap-2">
-              <img
-                src="/gmailICON.png"
-                alt="Gmail"
-                className="w-5 h-5 object-contain"
-                draggable={false}
-              />
               <a
                 href="mailto:helpdesk@exam-monitoring.com"
                 className="hover:underline"
