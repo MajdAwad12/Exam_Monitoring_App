@@ -48,48 +48,46 @@ export default function RegisterForm({ onSubmit, captchaLabel }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-semibold text-slate-800 mb-2">
-            Full name
-          </label>
-          <input
-            className={input}
-            type="text"
-            value={form.fullName}
-            onChange={(e) => setField("fullName", e.target.value)}
-            placeholder="e.g. Rina Cohen"
-            required
-          />
-        </div>
+      <div>
+        <label className="block text-sm font-semibold text-slate-800 mb-2">
+          Full name
+        </label>
+        <input
+          className={input}
+          type="text"
+          value={form.fullName}
+          onChange={(e) => setField("fullName", e.target.value)}
+          placeholder="e.g. Rina Cohen"
+          required
+        />
+      </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-slate-800 mb-2">
-            Email
-          </label>
-          <input
-            className={input}
-            type="email"
-            value={form.email}
-            onChange={(e) => setField("email", e.target.value)}
-            placeholder="name@example.com"
-            required
-          />
-        </div>
+      <div>
+        <label className="block text-sm font-semibold text-slate-800 mb-2">
+          Email
+        </label>
+        <input
+          className={input}
+          type="email"
+          value={form.email}
+          onChange={(e) => setField("email", e.target.value)}
+          placeholder="name@example.com"
+          required
+        />
+      </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-slate-800 mb-2">
-            Username
-          </label>
-          <input
-            className={input}
-            type="text"
-            value={form.username}
-            onChange={(e) => setField("username", e.target.value)}
-            placeholder="Choose a username"
-            required
-          />
-        </div>
+      <div>
+        <label className="block text-sm font-semibold text-slate-800 mb-2">
+          Username
+        </label>
+        <input
+          className={input}
+          type="text"
+          value={form.username}
+          onChange={(e) => setField("username", e.target.value)}
+          placeholder="Choose a username"
+          required
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -156,7 +154,7 @@ export default function RegisterForm({ onSubmit, captchaLabel }) {
           </button>
         </div>
 
-        {/* keep HTML validation happy */}
+        {/* keep native required validation */}
         <input type="hidden" value={form.role} required />
       </div>
 
@@ -169,7 +167,6 @@ export default function RegisterForm({ onSubmit, captchaLabel }) {
           <span className="px-3 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold border border-slate-200">
             {captchaLabel}
           </span>
-
           <input
             className="w-28 px-3 py-3.5 rounded-xl border border-slate-200 bg-white
                        text-slate-900 placeholder:text-slate-400

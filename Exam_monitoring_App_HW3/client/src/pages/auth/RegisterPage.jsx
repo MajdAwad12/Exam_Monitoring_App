@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 
 import RegisterHeader from "../../components/auth/RegisterHeader";
 import RegisterForm from "../../components/auth/RegisterForm";
-
 import AuthFooter from "../../components/auth/AuthFooter";
 import ErrorAlert from "../../components/auth/ErrorAlert";
 
@@ -106,8 +105,8 @@ export default function RegisterPage() {
       </button>
 
       <div className="min-h-screen flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-6xl">
-          {/* TOP title row */}
+        <div className="w-full max-w-md">
+          {/* Top title */}
           <div className="mb-6 flex items-center justify-center gap-3">
             <img
               src="/exammonitoringPIC.png"
@@ -115,42 +114,23 @@ export default function RegisterPage() {
               className="w-10 h-10 object-contain"
             />
             <h1 className="text-white text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Register Page
+              Register
             </h1>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-            {/* LEFT image (only on large screens) */}
-            <div className="hidden lg:block">
-              <div className="relative rounded-3xl overflow-hidden border border-white/20 bg-white/10 backdrop-blur shadow-2xl">
-                <img
-                  src="/dashboardPIC.jpg"
-                  alt="Dashboard preview"
-                  className="w-full h-[520px] object-cover opacity-85"
-                />
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-indigo-950/35 via-transparent to-cyan-500/10" />
-              </div>
-            </div>
+          <RegisterHeader />
 
-            {/* RIGHT side (your original register UI) */}
-            <div className="w-full max-w-md mx-auto">
-              <RegisterHeader />
+          <div className="bg-white/95 backdrop-blur rounded-3xl shadow-2xl p-8 border border-white/40">
+            {message.show && <ErrorAlert type={message.type} text={message.text} />}
 
-              <div className="bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8 border border-white/40">
-                {message.show && (
-                  <ErrorAlert type={message.type} text={message.text} />
-                )}
+            <RegisterForm
+              onSubmit={handleSubmit}
+              captchaLabel={`${captcha.a} + ${captcha.b} = ?`}
+            />
+          </div>
 
-                <RegisterForm
-                  onSubmit={handleSubmit}
-                  captchaLabel={`${captcha.a} + ${captcha.b} = ?`}
-                />
-              </div>
-
-              <div className="mt-4">
-                <AuthFooter />
-              </div>
-            </div>
+          <div className="mt-4">
+            <AuthFooter />
           </div>
         </div>
       </div>

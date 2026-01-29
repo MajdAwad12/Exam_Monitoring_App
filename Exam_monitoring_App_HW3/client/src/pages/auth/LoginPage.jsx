@@ -1,4 +1,4 @@
-// src/pages/auth/LoginPage.jsx
+// client/src/pages/auth/LoginPage.jsx
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginUser } from "../../services/auth.service";
@@ -72,8 +72,7 @@ export default function LoginPage() {
       if (user?.role === "student") navigate("/app/student", { replace: true });
       else navigate("/app/dashboard", { replace: true });
     } catch (err) {
-      const msg =
-        err?.message || "Invalid username or password. Please try again.";
+      const msg = err?.message || "Invalid username or password. Please try again.";
       setErrorMsg(msg);
       triggerShake();
     } finally {
@@ -110,136 +109,124 @@ export default function LoginPage() {
       </button>
 
       <div className="min-h-screen flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-6xl">
+        <div className="w-full max-w-md">
+          {/* Top title (clean, professional) */}
+          <div className="mb-6 flex items-center justify-center gap-3">
+            <img
+              src="/exammonitoringPIC.png"
+              alt="Exam Monitoring"
+              className="w-10 h-10 object-contain"
+            />
+            <h1 className="text-white text-2xl sm:text-3xl font-extrabold tracking-tight">
+              Login
+            </h1>
+          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-            {/* LEFT image (only on large screens) */}
-            <div className="hidden lg:block">
-              <div className="relative rounded-3xl overflow-hidden border border-white/20 bg-white/10 backdrop-blur shadow-2xl">
-                <img
-                  src="/dashboardPIC.jpg"
-                  alt="Dashboard preview"
-                  className="w-full h-[520px] object-cover opacity-85"
-                />
-                {/* subtle overlay for softness */}
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-indigo-950/35 via-transparent to-cyan-500/10" />
+          <LoginHeader />
+
+          <LoginCard shake={shake}>
+            {/* segmented tabs */}
+            <div className="mb-5">
+              <div className="rounded-2xl bg-white/80 border border-white/40 p-1 shadow-sm">
+                <div className="grid grid-cols-2 relative">
+                  <div
+                    className={[
+                      "absolute top-0 left-0 h-full w-1/2 rounded-xl bg-indigo-600 shadow transition-transform duration-300",
+                      tab === "student" ? "translate-x-full" : "translate-x-0",
+                    ].join(" ")}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTab("staff");
+                      setErrorMsg("");
+                    }}
+                    className={[
+                      "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
+                      tab === "staff"
+                        ? "text-white"
+                        : "text-slate-700 hover:text-slate-900",
+                    ].join(" ")}
+                    disabled={isLoading}
+                  >
+                    Staff
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTab("student");
+                      setErrorMsg("");
+                    }}
+                    className={[
+                      "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
+                      tab === "student"
+                        ? "text-white"
+                        : "text-slate-700 hover:text-slate-900",
+                    ].join(" ")}
+                    disabled={isLoading}
+                  >
+                    Student
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* RIGHT side (your original login UI) */}
-            <div className="w-full max-w-md mx-auto">
-              <LoginHeader />
+            {errorMsg ? <ErrorAlert message={errorMsg} /> : null}
 
-              <LoginCard shake={shake}>
-                {/* ✅ Clean segmented tabs (no extra text) */}
-                <div className="mb-5">
-                  <div className="rounded-2xl bg-white/80 border border-white/40 p-1 shadow-sm">
-                    <div className="grid grid-cols-2 relative">
-                      {/* active pill */}
-                      <div
-                        className={[
-                          "absolute top-0 left-0 h-full w-1/2 rounded-xl bg-indigo-600 shadow transition-transform duration-300",
-                          tab === "student" ? "translate-x-full" : "translate-x-0",
-                        ].join(" ")}
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTab("staff");
-                          setErrorMsg("");
-                        }}
-                        className={[
-                          "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
-                          tab === "staff"
-                            ? "text-white"
-                            : "text-slate-700 hover:text-slate-900",
-                        ].join(" ")}
-                        disabled={isLoading}
-                      >
-                        Staff
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTab("student");
-                          setErrorMsg("");
-                        }}
-                        className={[
-                          "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
-                          tab === "student"
-                            ? "text-white"
-                            : "text-slate-700 hover:text-slate-900",
-                        ].join(" ")}
-                        disabled={isLoading}
-                      >
-                        Student
-                      </button>
-                    </div>
+            {/* form card */}
+            <div className="rounded-2xl bg-white border border-slate-200 p-5">
+              {tab === "staff" ? (
+                <>
+                  <LoginForm
+                    username={staffUsername}
+                    password={staffPassword}
+                    setUsername={setStaffUsername}
+                    setPassword={setStaffPassword}
+                    isLoading={isLoading}
+                    onSubmit={onSubmit}
+                    usernameLabel="Username"
+                    usernamePlaceholder="Enter your username"
+                  />
+                  <div className="mt-5">
+                    <DemoAccountsBox
+                      demoUsers={staffDemos}
+                      isLoading={isLoading}
+                      onFill={onFillDemo}
+                    />
                   </div>
-                </div>
-
-                {errorMsg ? <ErrorAlert message={errorMsg} /> : null}
-
-                {/* form card */}
-                <div className="rounded-2xl bg-white border border-slate-200 p-5">
-                  {tab === "staff" ? (
-                    <>
-                      <LoginForm
-                        username={staffUsername}
-                        password={staffPassword}
-                        setUsername={setStaffUsername}
-                        setPassword={setStaffPassword}
-                        isLoading={isLoading}
-                        onSubmit={onSubmit}
-                        showRegister={false}
-                        usernameLabel="Username"
-                        usernamePlaceholder="Enter your username"
-                      />
-
-                      <div className="mt-5">
-                        <DemoAccountsBox
-                          demoUsers={staffDemos}
-                          isLoading={isLoading}
-                          onFill={onFillDemo}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <LoginForm
-                        username={studentId}
-                        password={studentPassword}
-                        setUsername={setStudentId}
-                        setPassword={setStudentPassword}
-                        isLoading={isLoading}
-                        onSubmit={onSubmit}
-                        showRegister={false}
-                        usernameLabel="Student ID"
-                        usernamePlaceholder="Enter your student ID"
-                      />
-
-                      <div className="mt-5">
-                        <DemoAccountsBox
-                          demoUsers={studentDemos}
-                          isLoading={isLoading}
-                          onFill={onFillDemo}
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <div className="mt-5">
-                  <SupportBox />
-                </div>
-              </LoginCard>
-
-              <div className="mt-4">
-                <AuthFooter />
-              </div>
+                </>
+              ) : (
+                <>
+                  <LoginForm
+                    username={studentId}
+                    password={studentPassword}
+                    setUsername={setStudentId}
+                    setPassword={setStudentPassword}
+                    isLoading={isLoading}
+                    onSubmit={onSubmit}
+                    usernameLabel="Student ID"
+                    usernamePlaceholder="Enter your student ID"
+                  />
+                  <div className="mt-5">
+                    <DemoAccountsBox
+                      demoUsers={studentDemos}
+                      isLoading={isLoading}
+                      onFill={onFillDemo}
+                    />
+                  </div>
+                </>
+              )}
             </div>
+
+            <div className="mt-5">
+              <SupportBox />
+            </div>
+          </LoginCard>
+
+          <div className="mt-4">
+            <AuthFooter />
           </div>
         </div>
       </div>
