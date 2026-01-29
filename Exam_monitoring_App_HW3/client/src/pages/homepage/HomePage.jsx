@@ -9,26 +9,10 @@ const STATS = [
 ];
 
 const FEATURES = [
-  {
-    icon: "🗺️",
-    title: "Live Classroom Map",
-    desc: "Track seat status & attendance in real time per classroom.",
-  },
-  {
-    icon: "⚡",
-    title: "Instant Incident Logging",
-    desc: "Create a clean exam timeline with fast reporting.",
-  },
-  {
-    icon: "🛡️",
-    title: "Role-Based Dashboards",
-    desc: "Supervisor and Lecturer flows stay consistent and secure.",
-  },
-  {
-    icon: "🎓",
-    title: "Student Portal (Read-Only)",
-    desc: "Students view their report without admin controls.",
-  },
+  { icon: "🗺️", title: "Live Classroom Map", desc: "Track seat status & attendance in real time per classroom." },
+  { icon: "⚡", title: "Instant Incident Logging", desc: "Create a clean exam timeline with fast reporting." },
+  { icon: "🛡️", title: "Role-Based Dashboards", desc: "Supervisor and Lecturer flows stay consistent and secure." },
+  { icon: "🎓", title: "Student Portal (Read-Only)", desc: "Students view their report without admin controls." },
 ];
 
 // ✅ your images only (from /public)
@@ -83,25 +67,6 @@ function Pill({ children }) {
   );
 }
 
-function IconLabel({ src, label, href }) {
-  return (
-    <a
-      href={href}
-      target={href?.startsWith("http") ? "_blank" : undefined}
-      rel={href?.startsWith("http") ? "noreferrer" : undefined}
-      className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition"
-    >
-      <img
-        src={src}
-        alt={label}
-        className="w-5 h-5 object-contain"
-        draggable={false}
-      />
-      <span>{label}</span>
-    </a>
-  );
-}
-
 export default function HomePage() {
   function scrollToId(id) {
     const el = document.getElementById(id);
@@ -121,25 +86,14 @@ export default function HomePage() {
         <div className="relative mx-auto max-w-7xl px-6 py-16 md:py-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           {/* Text */}
           <div className="text-white">
-            <div className="flex items-center gap-5">
-              {/* ✅ your logo */}
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white/10 border border-white/20 backdrop-blur shadow-2xl overflow-hidden">
-                <img
-                  src="/exammonitoringPIC.png"
-                  alt="Exam Monitoring App"
-                  className="w-full h-full object-cover"
-                  draggable={false}
-                />
-              </div>
-
-              <div className="min-w-0">
-                <h1 className="text-4xl md:text-5xl font-extrabold leading-tight tracking-tight">
-                  Exam Monitoring App
-                </h1>
-                <p className="text-white/85 mt-1 text-sm md:text-base">
-                  Real-time supervision • Attendance • Integrity
-                </p>
-              </div>
+            {/* ✅ NO logo here (logo is already in Header) */}
+            <div className="min-w-0">
+              <h1 className="text-4xl md:text-5xl font-extrabold leading-tight tracking-tight">
+                Exam Monitoring App
+              </h1>
+              <p className="text-white/85 mt-2 text-sm md:text-base">
+                Real-time supervision • Attendance • Integrity
+              </p>
             </div>
 
             <p className="mt-6 text-white/90 text-lg max-w-xl leading-relaxed">
@@ -261,7 +215,7 @@ export default function HomePage() {
                 System Screens
               </h2>
               <p className="mt-2 text-slate-600 max-w-2xl">
-                Quick look at the main parts of the platform — clean, simple, and professional.
+                A quick look at the system experience — clean, simple, and professional.
               </p>
             </div>
 
@@ -277,14 +231,14 @@ export default function HomePage() {
                 key={s.key}
                 className="rounded-3xl bg-white border border-slate-200 shadow-sm hover:shadow-lg transition p-5 sm:p-6"
               >
-                <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] gap-6 items-start">
-                  {/* Small image */}
+                <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] gap-6 items-start">
+                  {/* ✅ smaller image */}
                   <div className="relative">
-                    <div className="absolute -inset-2 rounded-3xl bg-indigo-200/35 blur-xl" />
+                    <div className="absolute -inset-2 rounded-3xl bg-indigo-200/30 blur-xl" />
                     <img
                       src={s.img}
                       alt={s.alt}
-                      className="relative w-full h-[200px] sm:h-[220px] md:h-[210px] rounded-3xl border border-slate-200 shadow-md object-cover"
+                      className="relative w-full h-[180px] sm:h-[200px] rounded-3xl border border-slate-200 shadow-md object-cover"
                       draggable={false}
                     />
                   </div>
@@ -316,44 +270,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ✅ Footer with icons line (facebook/instagram/gmail) */}
-      <section className="bg-white border-t border-slate-200">
-        <div className="mx-auto max-w-7xl px-6 py-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            {/* left */}
-            <div className="text-sm text-slate-600">
-              <div className="font-extrabold text-slate-900">Need help?</div>
-              <div className="mt-1">
-                <a className="hover:underline" href="mailto:helpdesk@exam-monitoring.com">
-                  helpdesk@exam-monitoring.com
-                </a>
-                <span className="mx-2 text-slate-300">|</span>
-                <a className="hover:underline" href="tel:+97231234567">
-                  +972-3-123-4567
-                </a>
-              </div>
-            </div>
-
-            {/* right icons */}
-            <div className="flex flex-wrap items-center gap-5">
-              <IconLabel src="/facebookICON.jpg" label="Facebook" href="https://facebook.com" />
-              <IconLabel src="/instgramICON.jpg" label="Instagram" href="https://instagram.com" />
-              <IconLabel src="/gmailICON.png" label="Gmail" href="mailto:helpdesk@exam-monitoring.com" />
-            </div>
-          </div>
-
-          <div className="mt-6 text-xs text-slate-500">
-            © {new Date().getFullYear()} Exam Monitoring App. All rights reserved.
-          </div>
-        </div>
-      </section>
-
-      {/* keep your Footer component too (if you want it), OR remove it.
-          You asked for icons in footer, so we already rendered footer here.
-          If your Footer.jsx already exists and you want to use it instead:
-          - remove the whole section above
-          - and update Footer.jsx with the same content.
-      */}
+      {/* ✅ Only Footer has contact + social (NO duplicates here) */}
       <Footer />
     </div>
   );
