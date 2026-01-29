@@ -89,11 +89,9 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-sky-700 to-cyan-500 relative overflow-hidden">
-      {/* soft background blobs (subtle) */}
       <div className="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full bg-white/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -right-32 w-[28rem] h-[28rem] rounded-full bg-white/10 blur-3xl" />
 
-      {/* Back to Home (top-left, clean) */}
       <button
         type="button"
         onClick={() => navigate("/", { replace: true })}
@@ -105,32 +103,53 @@ export default function RegisterPage() {
       </button>
 
       <div className="min-h-screen flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-md">
-          {/* Top title */}
-          <div className="mb-6 flex items-center justify-center gap-3">
-            <img
-              src="/exammonitoringPIC.png"
-              alt="Exam Monitoring"
-              className="w-10 h-10 object-contain"
-            />
-            <h1 className="text-white text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Register
-            </h1>
-          </div>
+        <div className="w-full max-w-6xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+            <div className="hidden lg:block">
+              <div className="max-w-md">
+                <h1 className="text-white text-4xl font-extrabold tracking-tight">
+                  Register Page
+                </h1>
+                <p className="text-indigo-100 mt-3 leading-relaxed">
+                  Create a staff account for supervisors or lecturers. Students are managed
+                  by the system in this demo version.
+                </p>
 
-          <RegisterHeader />
+                <div className="mt-6 rounded-3xl bg-white/10 border border-white/20 backdrop-blur p-6">
+                  <p className="text-white font-bold mb-2">After registration</p>
+                  <ul className="text-indigo-100 text-sm space-y-1">
+                    <li>• Login and access your dashboard</li>
+                    <li>• Manage exams and attendance flow</li>
+                    <li>• Track incidents and reporting</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
 
-          <div className="bg-white/95 backdrop-blur rounded-3xl shadow-2xl p-8 border border-white/40">
-            {message.show && <ErrorAlert type={message.type} text={message.text} />}
+            <div className="w-full max-w-xl mx-auto">
+              <div className="lg:hidden text-center mb-4">
+                <h1 className="text-white text-3xl font-extrabold tracking-tight">
+                  Register Page
+                </h1>
+              </div>
 
-            <RegisterForm
-              onSubmit={handleSubmit}
-              captchaLabel={`${captcha.a} + ${captcha.b} = ?`}
-            />
-          </div>
+              <RegisterHeader />
 
-          <div className="mt-4">
-            <AuthFooter />
+              <div className="bg-white/95 backdrop-blur rounded-3xl shadow-2xl p-8 sm:p-10 border border-white/40">
+                {message.show && (
+                  <ErrorAlert type={message.type} text={message.text} />
+                )}
+
+                <RegisterForm
+                  onSubmit={handleSubmit}
+                  captchaLabel={`${captcha.a} + ${captcha.b} = ?`}
+                />
+              </div>
+
+              <div className="mt-4">
+                <AuthFooter />
+              </div>
+            </div>
           </div>
         </div>
       </div>
