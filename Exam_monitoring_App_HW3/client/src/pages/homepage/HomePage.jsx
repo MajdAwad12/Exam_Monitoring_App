@@ -53,13 +53,6 @@ export default function HomePage() {
           <div className="text-white">
             {/* Brand row (BIG logo + title) */}
             <div className="mt-2 flex items-center gap-5">
-              <div className="w-[88px] h-[88px] sm:w-[108px] sm:h-[108px] rounded-[28px] bg-white/10 border border-white/20 shadow-xl flex items-center justify-center">
-                <img
-                  src="/exammonitoringPIC.png"
-                  alt="System Logo"
-                  className="w-[78px] h-[78px] sm:w-[96px] sm:h-[96px] object-contain"
-                />
-              </div>
 
               <div className="min-w-0">
                 <h1 className="text-4xl md:text-5xl font-extrabold leading-tight tracking-tight">
