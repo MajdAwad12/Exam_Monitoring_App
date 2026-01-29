@@ -67,30 +67,103 @@ const studentExamFileSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/* =========================
+   Auth helpers: Lockout + OTP
+========================= */
+const authLockSchema = new mongoose.Schema(
+  {
+    // how many failed attempts since last successful login/reset
+    failCount: { type: Number, default: 0 },
+
+    // 0 => first lock stage (2m), 1 => second (5m), 2+ => long stage (2h repeating)
+    stage: { type: Number, default: 0 },
+
+    // if now < lockUntil => user is blocked no matter what credentials are
+    lockUntil: { type: Date, default: null },
+
+    lastFailedAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
+const otpSchema = new mongoose.Schema(
+  {
+    // store hashed code later in controller (recommended). for now just a string field.
+    codeHash: { type: String, default: "" },
+
+    purpose: {
+      type: String,
+      enum: ["student_login", "reset_password"],
+      default: "student_login",
+    },
+
+    expiresAt: { type: Date, default: null },
+
+    // optional: limit OTP brute force
+    attempts: { type: Number, default: 0 },
+
+    // optional: for UI/debug messages
+    requestedAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     /* ---------- Basic Identity ---------- */
     fullName: { type: String, required: true, trim: true },
 
-    username: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    // ✅ Staff only (students do NOT have username)
+    username: {
+      type: String,
+      required: function () {
+        return this.role !== "student";
+      },
+      unique: true,
+      sparse: true,
+      lowercase: true,
+      trim: true,
+    },
 
+    // ✅ Everyone has email (used for OTP)
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
 
     /* ---------- Auth ---------- */
+    // ✅ Staff only (students do NOT have password)
     // ⚠️ Plain password – DEMO / COURSE ONLY
-    password: { type: String, required: true },
+    password: {
+      type: String,
+      required: function () {
+        return this.role !== "student";
+      },
+      default: "",
+    },
 
     /* ---------- Role & Permissions ---------- */
     role: { type: String, required: true, enum: ["admin", "supervisor", "lecturer", "student"] },
 
     /* ---------- Student-only ---------- */
-    studentId: { type: String, default: null, index: true },
+    studentId: {
+      type: String,
+      required: function () {
+        return this.role === "student";
+      },
+      default: null,
+      index: true,
+      trim: true,
+    },
 
-    // ✅ NEW: student personal file across exams (read-only page)
+    // Student personal file across exams (read-only page)
     studentFiles: { type: [studentExamFileSchema], default: [] },
 
     /* ---------- Supervisor-only ---------- */
     assignedRoomId: { type: String, default: null },
+
+    /* ---------- NEW: Lockout state ---------- */
+    authLock: { type: authLockSchema, default: () => ({}) },
+
+    /* ---------- NEW: OTP state ---------- */
+    otp: { type: otpSchema, default: () => ({}) },
   },
   { timestamps: true, collection: "users" }
 );
