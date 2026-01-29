@@ -15,7 +15,7 @@ export default function Header() {
 
           <div className="min-w-0">
             <div className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight truncate">
-              Exam Monitoring App - Home Page 
+              Exam Monitoring App
             </div>
             <div className="text-xs sm:text-sm text-slate-500 leading-tight truncate">
               Real-time supervision • Attendance • Integrity
