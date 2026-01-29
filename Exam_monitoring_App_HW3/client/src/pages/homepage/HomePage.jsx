@@ -9,26 +9,10 @@ const STATS = [
 ];
 
 const FEATURES = [
-  {
-    title: "Live Classroom Map",
-    desc: "Track seat status & attendance in real time per classroom.",
-    icon: "🗺️",
-  },
-  {
-    title: "Instant Incident Logging",
-    desc: "Create a clean timeline of events with fast reporting.",
-    icon: "⚡",
-  },
-  {
-    title: "Role-Based Dashboards",
-    desc: "Supervisor and Lecturer experiences stay consistent and secure.",
-    icon: "🛡️",
-  },
-  {
-    title: "Student Portal (Read-Only)",
-    desc: "Students view their report without access to admin controls.",
-    icon: "🎓",
-  },
+  { icon: "🗺️", title: "Live Classroom Map", desc: "Track seat status & attendance in real time per classroom." },
+  { icon: "⚡", title: "Instant Incident Logging", desc: "Create a clean exam timeline with fast reporting." },
+  { icon: "🛡️", title: "Role-Based Dashboards", desc: "Supervisor and Lecturer flows stay consistent and secure." },
+  { icon: "🎓", title: "Student Portal (Read-Only)", desc: "Students view their report without admin controls." },
 ];
 
 export default function HomePage() {
@@ -43,7 +27,6 @@ export default function HomePage() {
 
       {/* ===== HERO ===== */}
       <section className="relative overflow-hidden">
-        {/* premium background */}
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-800 via-sky-700 to-cyan-500" />
         <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute -bottom-32 -right-32 w-[32rem] h-[32rem] rounded-full bg-white/10 blur-3xl" />
@@ -51,21 +34,35 @@ export default function HomePage() {
         <div className="relative mx-auto max-w-7xl px-6 py-16 md:py-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           {/* Text */}
           <div className="text-white">
-            <p className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-xs font-bold">
-              ✅ Production-style UI • Clean & Modern
-            </p>
+            <div className="inline-flex items-center gap-3 px-3 py-2 rounded-full bg-white/10 border border-white/20 text-xs font-bold">
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/15 border border-white/20">
+                ✅
+              </span>
+              Production-style UI • Clean • Modern
+            </div>
 
-            <h1 className="mt-4 text-4xl md:text-5xl font-extrabold leading-tight">
-              Real-Time Exam Monitoring <br className="hidden sm:block" />
-              Built for Academic Integrity
-            </h1>
+            <div className="mt-6 flex items-center gap-4">
+              <img
+                src="/system_logo.png"
+                alt="System Logo"
+                className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 object-contain shadow-lg"
+              />
+              <div>
+                <h1 className="text-4xl md:text-5xl font-extrabold leading-tight">
+                  Exam Monitoring App
+                </h1>
+                <p className="text-white/85 mt-1">
+                  Real-time supervision • Attendance • Integrity
+                </p>
+              </div>
+            </div>
 
-            <p className="mt-4 text-white/90 text-lg max-w-xl">
+            <p className="mt-5 text-white/90 text-lg max-w-xl">
               A smart web platform for live exam supervision, attendance tracking,
               incident reporting, and structured exam management.
             </p>
 
-            {/* ✅ No login/register buttons here (no duplicates) */}
+            {/* ✅ no login/register here (no duplicates) */}
             <div className="mt-8 flex flex-wrap gap-3">
               <button
                 type="button"
@@ -84,7 +81,6 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* micro trust row */}
             <div className="mt-10 grid grid-cols-3 gap-3 max-w-xl">
               {STATS.map((s) => (
                 <div
@@ -98,7 +94,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Image */}
+          {/* Hero image */}
           <div className="flex justify-center lg:justify-end">
             <div className="relative w-full max-w-xl">
               <div className="absolute -inset-3 rounded-[2rem] bg-white/10 blur-xl" />
@@ -125,19 +121,18 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ===== OVERVIEW / FEATURES ===== */}
+      {/* ===== FEATURES ===== */}
       <section id="overview" className="bg-white">
         <div className="mx-auto max-w-7xl px-6 py-16">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
             <div>
               <h2 className="text-3xl font-extrabold text-slate-900">
-                Designed like a real product
+                Built like a real product
               </h2>
               <p className="mt-2 text-slate-600 max-w-2xl">
-                Clean workflow, real-time monitoring, and a structured experience for staff and students.
+                Fast workflow, clear UX, and a consistent design language across the system.
               </p>
             </div>
-
             <div className="inline-flex items-center gap-2 text-xs font-bold text-slate-600">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
               Stable UI • Consistent Design
@@ -157,7 +152,6 @@ export default function HomePage() {
                   {f.title}
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">{f.desc}</p>
-
                 <div className="mt-4 h-1 w-10 rounded-full bg-indigo-600/80 group-hover:w-16 transition-all" />
               </div>
             ))}
@@ -170,7 +164,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-6 py-16 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div>
             <h2 className="text-3xl font-extrabold text-slate-900">
-              Real-Time Dashboard Preview
+              Dashboard Preview
             </h2>
             <p className="mt-3 text-slate-600 max-w-xl">
               A single place to monitor classrooms, manage attendance states, and take actions quickly.
@@ -179,15 +173,11 @@ export default function HomePage() {
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
                 <div className="text-sm font-extrabold text-slate-900">Fast Actions</div>
-                <div className="text-xs text-slate-600 mt-1">
-                  One-click seat actions and updates.
-                </div>
+                <div className="text-xs text-slate-600 mt-1">One-click updates and consistent UI feedback.</div>
               </div>
               <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
                 <div className="text-sm font-extrabold text-slate-900">Clear Visibility</div>
-                <div className="text-xs text-slate-600 mt-1">
-                  Organized panels and live status indicators.
-                </div>
+                <div className="text-xs text-slate-600 mt-1">Organized panels with live indicators.</div>
               </div>
             </div>
           </div>
@@ -205,6 +195,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ✅ Footer only (social + contact) */}
       <Footer />
     </div>
   );
