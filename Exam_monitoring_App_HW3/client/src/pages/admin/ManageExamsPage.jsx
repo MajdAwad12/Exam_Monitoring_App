@@ -11,6 +11,11 @@ import RocketLoader from "../../components/loading/RocketLoader.jsx";
 /* =========================
    Utils
 ========================= */
+function toNonNegInt(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+}
+
 function safeArr(x, fallback = []) {
   return Array.isArray(x) ? x : fallback;
 }
@@ -288,8 +293,9 @@ export default function ManageExamsPage() {
   const [rooms, setRooms] = useState(() => []);
 
   // ✅ Create-only: draft state
-  const [totalStudentsDraft, setTotalStudentsDraft] = useState(0);
-  const [requestedRoomsDraft, setRequestedRoomsDraft] = useState(0);
+  const [totalStudentsDraft, setTotalStudentsDraft] = useState("");      
+  const [requestedRoomsDraft, setRequestedRoomsDraft] = useState("");   
+
 
   const [draftBusy, setDraftBusy] = useState(false);
   const [draftMeta, setDraftMeta] = useState(null);
@@ -336,6 +342,7 @@ export default function ManageExamsPage() {
         if (silent) setRefreshing(false);
         else setInitialLoading(false);
       }
+
     },
     [lecturerId]
   );
@@ -364,14 +371,17 @@ export default function ManageExamsPage() {
     setStartAt(toLocalInputValue(new Date(Date.now() + 60 * 60 * 1000)));
     setEndAt(toLocalInputValue(new Date(Date.now() + 2 * 60 * 60 * 1000)));
 
-    setTotalStudentsDraft(0);
-    setRequestedRoomsDraft(0);
+    setTotalStudentsDraft("");
+    setRequestedRoomsDraft("");
+
 
     setDraftMeta(null);
     setDraftLecturer(null);
     setDraftCoLecturers([]);
 
     setRooms([]);
+    roomUidRef.current = 0;
+
   }
 
   function openCreate() {
@@ -385,6 +395,7 @@ export default function ManageExamsPage() {
   function openEdit(exam) {
     setMsg(null);
     setError(null);
+    roomUidRef.current = 0;
     setDraftMeta(null);
     setDraftLecturer(null);
     setDraftCoLecturers([]);
@@ -396,7 +407,7 @@ export default function ManageExamsPage() {
     setStartAt(toLocalInputValue(exam?.startAt || exam?.examDate || Date.now()));
     setEndAt(toLocalInputValue(exam?.endAt || Date.now() + 60 * 60 * 1000));
 
-    const lec = exam?.lecturer?.id || exam?.lecturerId || "";
+    const lec = exam?.lecturer?.id || exam?.lecturer?._id || exam?.lecturerId || "";
     setLecturerId(String(lec || ""));
 
     const cls = safeArr(exam?.classrooms, []).map((r) => ({
@@ -646,14 +657,15 @@ export default function ManageExamsPage() {
         throw new Error("End time must be after Start time.");
       }
 
-      const requestedRoomsFinal = Math.max(0, Number(requestedRoomsDraft || 0));
+      const requestedRoomsFinal = toNonNegInt(requestedRoomsDraft);
 
       const res = await autoAssignDraft({
         examDate: start.toISOString(),
         startAt: start.toISOString(),
         endAt: end.toISOString(),
-        totalStudents: Math.max(0, Number(totalStudentsDraft || 0)),
+        totalStudents: toNonNegInt(totalStudentsDraft),
         requestedRooms: requestedRoomsFinal,
+
       });
 
       const draft = res?.draft || res?.data?.draft;
@@ -1168,11 +1180,23 @@ export default function ManageExamsPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <Field label="Total students" hint="Auto decides rooms">
-                <input type="number" min={0} value={totalStudentsDraft} onChange={(e) => setTotalStudentsDraft(Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2" />
+              <input
+                type="number"
+                min={0}
+                value={totalStudentsDraft}
+                onChange={(e) => setTotalStudentsDraft(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              />
               </Field>
 
               <Field label="Requested rooms (min)" hint="0 = AUTO">
-                <input type="number" min={0} value={requestedRoomsDraft} onChange={(e) => setRequestedRoomsDraft(Number(e.target.value))} className="w-full rounded-xl border border-slate-200 px-3 py-2" />
+              <input
+                type="number"
+                min={0}
+                value={requestedRoomsDraft}
+                onChange={(e) => setRequestedRoomsDraft(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              />
               </Field>
 
               <Field label="Draft result">
@@ -1273,7 +1297,12 @@ export default function ManageExamsPage() {
                     </div>
 
                     <div className="md:col-span-1 flex justify-end">
-                      <Btn onClick={() => removeRoom(idx)} className="border border-rose-200 text-rose-700 hover:bg-rose-50" title="Remove room" disabled={rooms.length <= 1}>
+                      <Btn
+                        onClick={() => removeRoom(idx)}
+                        className="border border-rose-200 text-rose-700 hover:bg-rose-50"
+                        title="Remove room"
+                        disabled={saving || draftBusy}
+                      >
                         ✕
                       </Btn>
                     </div>
@@ -1413,7 +1442,12 @@ export default function ManageExamsPage() {
                     </div>
 
                     <div className="md:col-span-1 flex justify-end">
-                      <Btn onClick={() => removeRoom(idx)} className="border border-rose-200 text-rose-700 hover:bg-rose-50" title="Remove room" disabled={rooms.length <= 1}>
+                      <Btn
+                        onClick={() => removeRoom(idx)}
+                        className="border border-rose-200 text-rose-700 hover:bg-rose-50"
+                        title="Remove room"
+                        disabled={saving}
+                      >
                         ✕
                       </Btn>
                     </div>
