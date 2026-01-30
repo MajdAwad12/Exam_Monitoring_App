@@ -10,18 +10,31 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
+/**
+ * Live dashboard data (polling-based, but can be set to pollMs=0 when WS is used)
+ * @param {object} params
+ * @param {string|null} params.examId - (Admin only) selected running exam id
+ * @param {string|null} params.roomId - (Client-side only) selected room for filtering UI
+ * @param {number} params.pollMs
+ */
+export function useDashboardLive({ examId = null, roomId, pollMs = 6000 } = {}) {
   const [raw, setRaw] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  //  keep latest roomId without restarting polling
+  // keep latest examId without restarting polling
+  const examIdRef = useRef(examId);
+  useEffect(() => {
+    examIdRef.current = examId;
+  }, [examId]);
+
+  // keep latest roomId without restarting polling
   const roomIdRef = useRef(roomId);
   useEffect(() => {
     roomIdRef.current = roomId;
   }, [roomId]);
 
-  //  keep latest pollMs without restarting polling
+  // keep latest pollMs without restarting polling
   const pollMsRef = useRef(pollMs);
   useEffect(() => {
     pollMsRef.current = pollMs;
@@ -29,16 +42,14 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
 
   const aliveRef = useRef(true);
   const inFlightRef = useRef(false);
-  const pendingForceRef = useRef(false); // if a forced refresh happens during an in-flight fetch, run again after it finishes
+  const pendingForceRef = useRef(false);
   const reqIdRef = useRef(0);
-
   const timerRef = useRef(null);
 
   // backoff on errors (prevents spam + improves UX)
-  const backoffRef = useRef(1); // 1x, 2x, 4x...
-  const MAX_BACKOFF = 6; // up to 6x
+  const backoffRef = useRef(1);
+  const MAX_BACKOFF = 6;
 
-  // we keep a stable "tick" ref so scheduleNext can call it
   const tickRef = useRef(null);
 
   const clearTimer = useCallback(() => {
@@ -49,7 +60,6 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
   }, []);
 
   const shouldPause = useCallback(() => {
-    // Pause polling when tab is hidden to avoid unnecessary network & CPU
     return typeof document !== "undefined" && document.hidden;
   }, []);
 
@@ -59,7 +69,7 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
 
       const base = Number(pollMsRef.current);
 
-      // ✅ Polling disabled if pollMs <= 0 (or invalid)
+      // Polling disabled if pollMs <= 0 (or invalid)
       if (!Number.isFinite(base) || base <= 0) return;
 
       const wait = clamp(base * multiplier, 1500, 60000);
@@ -75,9 +85,8 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
     async (opts = { force: false }) => {
       if (!aliveRef.current) return;
       if (shouldPause() && !opts.force) return;
+
       if (inFlightRef.current) {
-        // If user explicitly requested refresh (force) while a poll is already fetching,
-        // queue another fetch immediately after the current one completes.
         if (opts.force) pendingForceRef.current = true;
         return;
       }
@@ -88,7 +97,7 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
       try {
         setError("");
 
-        const snap = await getDashboardSnapshot(); // server decides visibility by role
+        const snap = await getDashboardSnapshot({ examId: examIdRef.current });
 
         if (!aliveRef.current) return;
         if (myReqId !== reqIdRef.current) return;
@@ -96,7 +105,6 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
         setRaw(snap);
         setLoading(false);
 
-        // ✅ success => reset backoff
         backoffRef.current = 1;
       } catch (e) {
         if (!aliveRef.current) return;
@@ -105,7 +113,6 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
         setError(e?.message || "Failed to load dashboard");
         setLoading(false);
 
-        // ✅ error => increase backoff (up to MAX_BACKOFF)
         backoffRef.current = clamp(backoffRef.current * 2, 1, MAX_BACKOFF);
       } finally {
         inFlightRef.current = false;
@@ -118,6 +125,15 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
     [shouldPause]
   );
 
+  // restart the "session" when examId changes (avoid showing old exam briefly)
+  useEffect(() => {
+    setLoading(true);
+    setRaw(null);
+    setError("");
+    reqIdRef.current += 1;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examId]);
+
   useEffect(() => {
     aliveRef.current = true;
     setLoading(true);
@@ -128,7 +144,6 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
     const tick = async () => {
       if (cancelled || !aliveRef.current) return;
 
-      // if tab hidden => re-schedule (don’t fetch)
       if (shouldPause()) {
         scheduleNext(1);
         return;
@@ -137,16 +152,14 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
       await fetchOnce();
       if (cancelled || !aliveRef.current) return;
 
-      // schedule using current backoff (may do nothing if pollMs <= 0)
       scheduleNext(backoffRef.current);
     };
 
     tickRef.current = tick;
 
-    // start immediately (one initial snapshot)
+    // initial
     tick();
 
-    // also: when tab becomes visible, fetch immediately
     const onVis = () => {
       if (!aliveRef.current) return;
       if (!document.hidden) {
@@ -169,19 +182,21 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
   const derived = useMemo(() => {
     const me = raw?.me || null;
     const exam = raw?.exam || null;
-    const classrooms = exam?.classrooms || exam?.rooms || [];
 
+    const classrooms = exam?.classrooms || exam?.rooms || [];
     const rooms = (Array.isArray(classrooms) ? classrooms : [])
       .map((c) => ({
         id: normalizeRoomId(c?.id || c?.roomId || c?.name || c),
         name: normalizeRoomId(c?.name || c?.id || c?.roomId || c),
         rows: Number(c?.rows || 0),
         cols: Number(c?.cols || 0),
+        assignedSupervisorId: c?.assignedSupervisorId || null,
+        assignedSupervisorName: String(c?.assignedSupervisorName || ""),
       }))
       .filter((r) => r.id);
 
     const firstRoomId = normalizeRoomId(rooms?.[0]?.id || rooms?.[0]?.name || "");
-    const requestedRoomId = normalizeRoomId(roomId);
+    const requestedRoomId = normalizeRoomId(roomIdRef.current);
 
     const effectiveRoomId =
       requestedRoomId || normalizeRoomId(me?.assignedRoomId) || firstRoomId || "";
@@ -204,9 +219,8 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
       inbox: raw?.inbox || { unread: 0, recent: [] },
       events: raw?.events || [],
     };
-    }, [raw, roomId]);
+  }, [raw]);
 
-  // ✅ manual refetch (instant + reset backoff)
   const refetch = useCallback(async () => {
     backoffRef.current = 1;
     await fetchOnce({ force: true });

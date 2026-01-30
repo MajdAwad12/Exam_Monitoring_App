@@ -34,18 +34,29 @@ function isRecipient(msg, user) {
   return false;
 }
 
-async function findRunningExamForUser(user) {
-  if (String(user.role).toLowerCase() === "admin") {
+async function findRunningExamForUser(user, { examId } = {}) {
+  const role = String(user?.role || "").toLowerCase();
+  const requestedId = examId ? String(examId) : "";
+
+  // Admin can pick a specific RUNNING exam
+  if (role === "admin") {
+    if (requestedId) {
+      return Exam.findOne({ _id: requestedId, status: "running" }).sort({ startAt: 1 });
+    }
     return Exam.findOne({ status: "running" }).sort({ startAt: 1 });
   }
 
   const examQuery = { status: "running" };
 
-  if (user.role === "lecturer") {
+  if (requestedId) {
+    examQuery._id = requestedId;
+  }
+
+  if (role === "lecturer") {
     examQuery["$or"] = [{ "lecturer.id": user._id }, { "coLecturers.id": user._id }];
   }
 
-  if (user.role === "supervisor") {
+  if (role === "supervisor") {
     examQuery["supervisors.id"] = user._id;
   }
 
@@ -227,7 +238,9 @@ export async function getClock(req, res) {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const exam = await findRunningExamForUser(user);
+    const requestedExamId = req.query?.examId ? String(req.query.examId) : "";
+
+    const exam = await findRunningExamForUser(user, { examId: requestedExamId });
     return res.json({
       simNow: new Date().toISOString(),
       simExamId: exam ? String(exam._id) : null,
@@ -245,7 +258,9 @@ export async function getDashboardSnapshot(req, res) {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const exam = await findRunningExamForUser(user);
+    const requestedExamId = req.query?.examId ? String(req.query.examId) : "";
+
+    const exam = await findRunningExamForUser(user, { examId: requestedExamId });
 
     if (!exam) {
       return res.json({

@@ -42,10 +42,16 @@ async function http(url, options = {}) {
   return handle(res);
 }
 
-// ✅ IMPORTANT: server decides visibility by role/assignedRoomId, not by roomId query.
-// ✅ So we never send roomId to the server here.
-export function getDashboardSnapshot() {
-  return http(`/api/dashboard/snapshot`, { method: "GET" });
+/**
+ * Dashboard snapshot
+ * - Server decides visibility by role/permissions
+ * - Admin can optionally choose a specific running exam via ?examId=
+ */
+export function getDashboardSnapshot({ examId } = {}) {
+  const usp = new URLSearchParams();
+  if (examId) usp.set("examId", String(examId));
+  const qs = usp.toString() ? `?${usp.toString()}` : "";
+  return http(`/api/dashboard/snapshot${qs}`, { method: "GET" });
 }
 
 export function getClock() {
