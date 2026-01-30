@@ -478,7 +478,7 @@ export default function ReportsPage() {
         <Card
           title="Cheating per Supervisor"
           subtitle="X: supervisors • Y: cheating/copy/phone incidents (top supervisors)"
-          right={`Shown: ${cheatingSeries.length}`}
+          right={`Shown Top : ${cheatingSeries.length}`}
         >
           <div className="h-72">
             <Bar data={cheatingChartData} options={cheatingOptions} />
