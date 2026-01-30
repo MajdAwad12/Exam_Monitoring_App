@@ -2,7 +2,7 @@
 export default function AuthFooter() {
   return (
     <footer className="text-center text-xs text-white font-semibold">
-      Braude College • Web Course • Exam Monitoring Project
+      Braude College  • Exam Monitoring App
     </footer>
   );
 }
