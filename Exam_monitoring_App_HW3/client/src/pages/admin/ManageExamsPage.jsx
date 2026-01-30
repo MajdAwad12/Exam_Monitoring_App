@@ -491,61 +491,74 @@ export default function ManageExamsPage() {
      Create / Edit submit
   ========================= */
   async function submitCreateOrEdit({ isEdit }) {
-    setSaving(true);
-    setMsg(null);
-    setError(null);
+  setSaving(true);
+  setMsg(null);
+  setError(null);
 
-    try {
-      const { start, end, cleanRooms } = validateCommon();
+  try {
+    const { start, end, cleanRooms } = validateCommon();
 
-      const payload = {
-        courseName: courseName.trim(),
-        examMode,
-        examDate: start.toISOString(),
-        startAt: start.toISOString(),
-        endAt: end.toISOString(),
-        lecturerId,
-        supervisorIds: roomsToSupervisorIds(cleanRooms),
-        classrooms: cleanRooms.map((r) => {
-          const { _uid, ...rest } = r;
-          return rest;
-        }),
-      };
+    const payload = {
+      courseName: courseName.trim(),
+      examMode,
+      examDate: start.toISOString(),
+      startAt: start.toISOString(),
+      endAt: end.toISOString(),
+      lecturerId,
+      supervisorIds: roomsToSupervisorIds(cleanRooms),
+      classrooms: cleanRooms.map((r) => {
+        const { _uid, ...rest } = r;
+        return rest;
+      }),
+    };
 
-      if (!isEdit && draftLecturer) {
-        payload.lecturer = draftLecturer;
-        payload.coLecturers = safeArr(draftCoLecturers, []);
-      }
-
-      if (!isEdit) {
-        const res = await createExam(payload);
-        const created = res?.exam || res?.data?.exam;
-        if (created) upsertExamLocal(created);
-
-        showMsg("Exam created successfully.", 2500);
-        setCreateOpen(false);
-        setEditExam(null);
-      } else {
-        const examId = getId(editExam);
-        if (!examId) throw new Error("Missing exam id");
-
-        const res = await updateExamAdmin(examId, payload);
-        const updated = res?.exam || res?.data?.exam;
-        if (updated) upsertExamLocal(updated);
-
-        showMsg("Exam updated successfully.", 2500);
-        setEditOpen(false);
-        setEditExam(null);
-      }
-
-      await refresh({ silent: true });
-    } catch (e) {
-      setError(e?.message || "Failed to save exam");
-      throw e;
-    } finally {
-      setSaving(false);
+    if (!isEdit && draftLecturer) {
+      payload.lecturer = draftLecturer;
+      payload.coLecturers = safeArr(draftCoLecturers, []);
     }
+
+    if (!isEdit) {
+      const res = await createExam(payload);
+      const created = res?.exam || res?.data?.exam;
+      if (created) upsertExamLocal(created);
+
+      showMsg("Exam created successfully.", 2500);
+      setCreateOpen(false);
+      setEditExam(null);
+    } else {
+      const examId = getId(editExam);
+      if (!examId) throw new Error("Missing exam id");
+
+      const res = await updateExamAdmin(examId, payload);
+      const updated = res?.exam || res?.data?.exam;
+      if (updated) upsertExamLocal(updated);
+
+      showMsg("Exam updated successfully.", 2500);
+      setEditOpen(false);
+      setEditExam(null);
+    }
+
+    await refresh({ silent: true });
+  } catch (e) {
+    // ✅ show detailed schedule conflict info from server
+    if (e?.status === 409 && Array.isArray(e?.data?.conflicts) && e.data.conflicts.length) {
+      const lines = e.data.conflicts.map((c) => {
+        const rooms = (c.sharedRooms || []).join(", ");
+        const time = `${fmtDT(c.startAt)} → ${fmtDT(c.endAt)}`;
+        return `• ${c.courseName || "Other exam"} (${time}) | shared rooms: ${rooms}`;
+      });
+
+      setError(`Schedule conflict: same classroom(s) used in overlapping time.\n\n${lines.join("\n")}`);
+    } else {
+      setError(e?.message || "Failed to save exam");
+    }
+
+    throw e;
+  } finally {
+    setSaving(false);
   }
+}
+
 
   async function onDeleteExam(exam) {
     const examId = getId(exam);
@@ -1006,6 +1019,13 @@ export default function ManageExamsPage() {
                 const windowActive = ws.active;
                 const windowFuture = ws.future;
 
+                const isRunning = String(e?.status || "").toLowerCase() === "running";
+                // Admin can end a running exam even outside the time window (forced end)
+                const canEnd = isRunning && (windowActive || me?.role === "admin");
+                // Start is allowed only inside window (unless already running)
+                const canStart = windowActive || isRunning;
+
+
                 const dbStatus = String(e?.status || "scheduled").toLowerCase();
                 const displayStatus =
                   dbStatus === "ended" || dbStatus === "running"
@@ -1028,11 +1048,14 @@ export default function ManageExamsPage() {
                   ? "Cannot start yet (before start time)"
                   : "Cannot start (time window ended)";
 
-                const endTitle = windowActive
-                  ? "End exam now (within real time window)"
-                  : String(e?.status || "").toLowerCase() === "running"
-                  ? "End exam now (forced)"
-                  : "Cannot end outside exam time window";
+                const endTitle = !isRunning
+                ? "Cannot end (exam is not running)"
+                : windowActive
+                ? "End exam now (within real time window)"
+                : me?.role === "admin"
+                ? "End exam now (forced by admin)"
+                : "Cannot end outside exam time window";
+
 
                 return (
                   <tr key={String(examId)} className="border-t border-slate-100">
@@ -1089,7 +1112,7 @@ export default function ManageExamsPage() {
                               action: () => onStartExam(e),
                             })
                           }
-                          disabled={isWorking || (!windowActive && String(e?.status || "").toLowerCase() !== "running")}
+                          disabled={isWorking || !canStart}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white"
                           title={startTitle}
                         >
@@ -1104,7 +1127,7 @@ export default function ManageExamsPage() {
                               action: () => onEndExam(e),
                             })
                           }
-                          disabled={isWorking || !windowActive}
+                          disabled={isWorking || !canEnd}
                           className="bg-rose-600 hover:bg-rose-700 text-white"
                           title={endTitle}
                         >

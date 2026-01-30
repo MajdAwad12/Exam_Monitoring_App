@@ -1,13 +1,18 @@
 // client/src/services/exams.service.js
 
 async function handle(res) {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data?.message || `HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-  return data;
+  if (res.ok) return res.json();
+
+  let data = null;
+  try { data = await res.json(); } catch {}
+
+  const msg = data?.message || `Request failed (${res.status})`;
+  const err = new Error(msg);
+  err.status = res.status;
+  err.data = data;           // ✅ keep conflicts, details, etc.
+  throw err;
 }
+
 
 // =========================
 // Exams
@@ -79,13 +84,6 @@ export async function updateExamAdmin(examId, payload) {
   return handle(res);
 }
 
-export async function deleteExamAdmin(examId) {
-  const res = await fetch(`/api/admin/exams/${examId}`, {
-    method: "DELETE",
-    credentials: "include",
-  });
-  return handle(res);
-}
 
 export async function getMyReport(examId) {
   const res = await fetch(`/api/exams/${examId}/my-report`, {

@@ -46,33 +46,26 @@ function pushExamEvent(exam, ev) {
  * Always re-fetch latest doc inside retries, mutate, then save.
  */
 async function updateExamWithRetry(examId, mutator, retries = 6) {
-  // ✅ Atomic optimistic update (no exam.save()) to avoid VersionError under rapid multi-click
   for (let i = 0; i < retries; i++) {
     const exam = await Exam.findById(examId);
     if (!exam) return { exam: null, notFound: true };
 
     await mutator(exam);
 
-    // Convert to plain objects so $set works reliably (Maps -> Objects, Dates preserved)
+    // toObject -> plain JS, safe for $set
     const next = exam.toObject({ depopulate: true, getters: false, virtuals: false });
 
-    // Atomic write only if __v is still the same (optimistic CAS)
+    // IMPORTANT: set ALL fields (except _id and __v)
+    const { _id, __v, ...setDoc } = next;
+
     const updated = await Exam.findOneAndUpdate(
       { _id: examId, __v: exam.__v },
-      {
-        $set: {
-          attendance: next.attendance,
-          report: next.report,
-          events: next.events,
-        },
-        $inc: { __v: 1 },
-      },
+      { $set: setDoc, $inc: { __v: 1 } },
       { new: true }
     );
 
     if (updated) return { exam: updated, notFound: false };
 
-    // version mismatch -> retry with small backoff
     await new Promise((r) => setTimeout(r, 25 * (i + 1)));
   }
 
@@ -80,6 +73,7 @@ async function updateExamWithRetry(examId, mutator, retries = 6) {
   err.statusCode = 409;
   throw err;
 }
+
 
 
 function toOut(doc) {
