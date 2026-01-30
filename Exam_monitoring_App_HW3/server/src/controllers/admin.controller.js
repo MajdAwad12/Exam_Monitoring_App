@@ -469,6 +469,9 @@ export async function deleteExamAdmin(req, res) {
    POST /api/admin/exams/auto-assign-draft
    - Does NOT save anything
 ========================= */
+// VALIDATION_GUARD
+function bad(res, msg, code=400){ return res.status(code).json({ ok:false, message:msg }); }
+
 export async function autoAssignDraft(req, res) {
   try {
     if (!ensureAdmin(req, res)) return;

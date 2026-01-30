@@ -659,11 +659,16 @@ export default function ManageExamsPage() {
 
       const requestedRoomsFinal = toNonNegInt(requestedRoomsDraft);
 
+      const totalStudentsFinal = toNonNegInt(totalStudentsDraft);
+      if (totalStudentsFinal <= 0) {
+        throw new Error('Total students must be at least 1 for Auto-Assign.');
+      }
+
       const res = await autoAssignDraft({
         examDate: start.toISOString(),
         startAt: start.toISOString(),
         endAt: end.toISOString(),
-        totalStudents: toNonNegInt(totalStudentsDraft),
+        totalStudents: totalStudentsFinal,
         requestedRooms: requestedRoomsFinal,
 
       });
