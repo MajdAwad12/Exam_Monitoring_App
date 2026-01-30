@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import ModalUI from "./Modal.UI.jsx";
 
 export default function EditExamModal({
@@ -7,7 +8,7 @@ export default function EditExamModal({
   onSave,
   onDelete,
 
-  // form state
+  // form state (from page)
   courseName,
   setCourseName,
   examMode,
@@ -27,17 +28,70 @@ export default function EditExamModal({
   setRoomField,
   onSelectSupervisorForRoom,
 }) {
+  const [localError, setLocalError] = useState(null);
+  const [localSuccess, setLocalSuccess] = useState(null);
+
+  // reset messages when modal opens
+  useEffect(() => {
+    if (open) {
+      setLocalError(null);
+      setLocalSuccess(null);
+    }
+  }, [open]);
+
+  function handleSave() {
+    try {
+      setLocalError(null);
+
+      if (!courseName.trim()) {
+        throw new Error("Course name is required.");
+      }
+      if (!lecturerId) {
+        throw new Error("Please select a lecturer.");
+      }
+      if (!rooms || rooms.length === 0) {
+        throw new Error("This exam has no classrooms.");
+      }
+
+      onSave();
+      setLocalSuccess("Exam updated successfully.");
+
+      // auto close after success
+      setTimeout(() => {
+        setLocalSuccess(null);
+        onClose();
+      }, 1500);
+    } catch (e) {
+      setLocalError(e?.message || "Failed to update exam.");
+    }
+  }
+
+  function handleDelete() {
+    try {
+      setLocalError(null);
+      onDelete();
+      setLocalSuccess("Exam deleted successfully.");
+
+      setTimeout(() => {
+        setLocalSuccess(null);
+        onClose();
+      }, 1200);
+    } catch (e) {
+      setLocalError(e?.message || "Failed to delete exam.");
+    }
+  }
+
   return (
     <ModalUI
       open={open}
       title="Edit Exam"
-      subtitle="Update details, rooms and supervisors"
+      subtitle="Update exam details, rooms and supervisors"
       onClose={onClose}
       maxWidth="max-w-3xl"
       footer={
         <div className="flex items-center justify-between gap-3">
           <button
-            onClick={onDelete}
+            onClick={handleDelete}
             disabled={saving}
             className="border border-rose-200 text-rose-700 rounded-xl px-4 py-2 font-semibold hover:bg-rose-50 disabled:opacity-50"
           >
@@ -45,7 +99,7 @@ export default function EditExamModal({
           </button>
 
           <button
-            onClick={onSave}
+            onClick={handleSave}
             disabled={saving}
             className="bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-6 py-2 font-semibold disabled:opacity-50"
           >
@@ -54,9 +108,20 @@ export default function EditExamModal({
         </div>
       }
     >
-      {/* =========================
-          Exam Details
-      ========================= */}
+      {/* ===== Local messages ===== */}
+      {localError ? (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          {localError}
+        </div>
+      ) : null}
+
+      {localSuccess ? (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {localSuccess}
+        </div>
+      ) : null}
+
+      {/* ===== Exam Details ===== */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="text-sm font-extrabold text-slate-900 mb-3">
           Exam Details
@@ -107,9 +172,7 @@ export default function EditExamModal({
         </div>
       </div>
 
-      {/* =========================
-          Rooms & Supervisors
-      ========================= */}
+      {/* ===== Rooms ===== */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 mt-4">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-extrabold text-slate-900">
@@ -124,38 +187,23 @@ export default function EditExamModal({
           </button>
         </div>
 
-        {rooms.length === 0 ? (
-          <div className="text-sm text-slate-600">
-            No classrooms found in this exam.
-          </div>
-        ) : null}
-
         {rooms.map((r, idx) => (
-          <div key={r._uid || idx} className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-3">
+          <div
+            key={r._uid || idx}
+            className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-3"
+          >
             <input
               value={r.name}
               onChange={(e) => setRoomField(idx, "name", e.target.value)}
               className="md:col-span-3 rounded-xl border border-slate-200 px-3 py-2"
             />
 
-            <input
-              type="number"
-              value={r.rows}
-              onChange={(e) => setRoomField(idx, "rows", Number(e.target.value))}
-              className="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2"
-            />
-
-            <input
-              type="number"
-              value={r.cols}
-              onChange={(e) => setRoomField(idx, "cols", Number(e.target.value))}
-              className="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2"
-            />
-
             <select
               value={r.assignedSupervisorId || ""}
-              onChange={(e) => onSelectSupervisorForRoom(idx, e.target.value)}
-              className="md:col-span-4 rounded-xl border border-slate-200 px-3 py-2"
+              onChange={(e) =>
+                onSelectSupervisorForRoom(idx, e.target.value)
+              }
+              className="md:col-span-7 rounded-xl border border-slate-200 px-3 py-2"
             >
               <option value="">-- choose supervisor --</option>
               {supervisors.map((s) => (
@@ -168,7 +216,7 @@ export default function EditExamModal({
             <button
               onClick={() => removeRoom(idx)}
               disabled={saving}
-              className="md:col-span-1 border border-rose-200 text-rose-700 rounded-xl px-3 py-2 hover:bg-rose-50 disabled:opacity-50"
+              className="md:col-span-2 border border-rose-200 text-rose-700 rounded-xl px-3 py-2 hover:bg-rose-50 disabled:opacity-50"
             >
               ✕
             </button>

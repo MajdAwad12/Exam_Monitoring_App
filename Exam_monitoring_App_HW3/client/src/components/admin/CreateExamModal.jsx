@@ -1,4 +1,10 @@
+import { useEffect, useState } from "react";
 import ModalUI from "./Modal.UI.jsx";
+
+function toNonNegInt(v) {
+  const n = Number(String(v || "").trim());
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+}
 
 export default function CreateExamModal({
   open,
@@ -8,7 +14,7 @@ export default function CreateExamModal({
   onCreate,
   onAutoAssign,
 
-  // form state
+  // form state (from page)
   courseName,
   setCourseName,
   examMode,
@@ -36,11 +42,75 @@ export default function CreateExamModal({
   setRoomField,
   onSelectSupervisorForRoom,
 }) {
+  const [localError, setLocalError] = useState(null);
+  const [localSuccess, setLocalSuccess] = useState(null);
+
+  // reset messages when modal opens
+  useEffect(() => {
+    if (open) {
+      setLocalError(null);
+      setLocalSuccess(null);
+    }
+  }, [open]);
+
+  function validateAutoAssign() {
+    const students = toNonNegInt(totalStudentsDraft);
+    const roomsReq = toNonNegInt(requestedRoomsDraft);
+
+    if (students <= 0) {
+      throw new Error("Total students must be greater than 0.");
+    }
+    if (roomsReq < 0) {
+      throw new Error("Requested rooms cannot be negative.");
+    }
+    if (roomsReq > 0 && roomsReq > students) {
+      throw new Error("Requested rooms cannot exceed total students.");
+    }
+  }
+
+  async function handleAutoAssign() {
+    try {
+      setLocalError(null);
+      validateAutoAssign();
+      await onAutoAssign();
+      setLocalSuccess("Auto-Assign draft created successfully.");
+    } catch (e) {
+      setLocalError(e?.message || "Auto-Assign failed.");
+    }
+  }
+
+  function handleCreate() {
+    try {
+      setLocalError(null);
+
+      if (!courseName.trim()) {
+        throw new Error("Course name is required.");
+      }
+      if (!lecturerId) {
+        throw new Error("Please select a lecturer.");
+      }
+      if (!rooms || rooms.length === 0) {
+        throw new Error("Please add at least one classroom.");
+      }
+
+      onCreate();
+      setLocalSuccess("Exam created successfully.");
+
+      // auto close after success
+      setTimeout(() => {
+        setLocalSuccess(null);
+        onClose();
+      }, 1500);
+    } catch (e) {
+      setLocalError(e?.message || "Failed to create exam.");
+    }
+  }
+
   return (
     <ModalUI
       open={open}
       title="Create New Exam"
-      subtitle="Clear flow: ① Details → ② Auto-Assign (optional) → ③ Review rooms → Create"
+      subtitle="① Details → ② Auto-Assign (optional) → ③ Review rooms → Create"
       onClose={onClose}
       maxWidth="max-w-3xl"
       footer={
@@ -54,7 +124,7 @@ export default function CreateExamModal({
           </button>
 
           <button
-            onClick={onCreate}
+            onClick={handleCreate}
             disabled={saving || draftBusy}
             className="bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-6 py-2 font-semibold disabled:opacity-50"
           >
@@ -63,11 +133,24 @@ export default function CreateExamModal({
         </div>
       }
     >
-      {/* =========================
-          ① Exam Details
-      ========================= */}
+      {/* ===== Local messages ===== */}
+      {localError ? (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          {localError}
+        </div>
+      ) : null}
+
+      {localSuccess ? (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {localSuccess}
+        </div>
+      ) : null}
+
+      {/* ===== Exam Details ===== */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="text-sm font-extrabold text-slate-900 mb-3">① Exam Details</div>
+        <div className="text-sm font-extrabold text-slate-900 mb-3">
+          ① Exam Details
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <input
@@ -114,9 +197,7 @@ export default function CreateExamModal({
         </div>
       </div>
 
-      {/* =========================
-          ② Auto Assign
-      ========================= */}
+      {/* ===== Auto Assign ===== */}
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 mt-4">
         <div className="text-sm font-extrabold text-slate-900 mb-3">
           ② Auto-Assign (optional)
@@ -148,7 +229,7 @@ export default function CreateExamModal({
           </div>
 
           <button
-            onClick={onAutoAssign}
+            onClick={handleAutoAssign}
             disabled={saving || draftBusy}
             className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-2 font-semibold disabled:opacity-50"
           >
@@ -157,9 +238,7 @@ export default function CreateExamModal({
         </div>
       </div>
 
-      {/* =========================
-          ③ Rooms & Supervisors
-      ========================= */}
+      {/* ===== Rooms ===== */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 mt-4">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-extrabold text-slate-900">
@@ -182,24 +261,12 @@ export default function CreateExamModal({
               className="md:col-span-3 rounded-xl border border-slate-200 px-3 py-2"
             />
 
-            <input
-              type="number"
-              value={r.rows}
-              onChange={(e) => setRoomField(idx, "rows", Number(e.target.value))}
-              className="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2"
-            />
-
-            <input
-              type="number"
-              value={r.cols}
-              onChange={(e) => setRoomField(idx, "cols", Number(e.target.value))}
-              className="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2"
-            />
-
             <select
               value={r.assignedSupervisorId || ""}
-              onChange={(e) => onSelectSupervisorForRoom(idx, e.target.value)}
-              className="md:col-span-4 rounded-xl border border-slate-200 px-3 py-2"
+              onChange={(e) =>
+                onSelectSupervisorForRoom(idx, e.target.value)
+              }
+              className="md:col-span-7 rounded-xl border border-slate-200 px-3 py-2"
             >
               <option value="">-- choose supervisor --</option>
               {supervisors.map((s) => (
@@ -211,7 +278,7 @@ export default function CreateExamModal({
 
             <button
               onClick={() => removeRoom(idx)}
-              className="md:col-span-1 border border-rose-200 text-rose-700 rounded-xl px-3 py-2 hover:bg-rose-50"
+              className="md:col-span-2 border border-rose-200 text-rose-700 rounded-xl px-3 py-2 hover:bg-rose-50"
             >
               ✕
             </button>

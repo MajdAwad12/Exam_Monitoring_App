@@ -23,7 +23,7 @@ import EditExamModal from "../../components/admin/EditExamModal.jsx";
 import ModalUI from "../../components/admin/Modal.UI.jsx";
 
 /* =========================
-   Utils (UNCHANGED)
+   Utils
 ========================= */
 function toNonNegInt(v) {
   const n = Number(v);
@@ -56,16 +56,6 @@ function toLocalInputValue(dateLike) {
     d.getMinutes()
   )}`;
 }
-function fmtDT(dateLike) {
-  const d = new Date(dateLike);
-  if (Number.isNaN(d.getTime())) return "--";
-  return d.toLocaleString();
-}
-function fmtShort(dateLike) {
-  const d = new Date(dateLike);
-  if (Number.isNaN(d.getTime())) return "--";
-  return d.toLocaleDateString();
-}
 function getId(x) {
   return x?._id || x?.id;
 }
@@ -87,52 +77,38 @@ function uniq(arr) {
 export default function ManageExamsPage() {
   const { me } = useOutletContext();
 
-  /* =========================
-     State (UNCHANGED)
-  ========================= */
+  /* ===== lists ===== */
   const [lecturers, setLecturers] = useState([]);
   const [supervisors, setSupervisors] = useState([]);
   const [exams, setExams] = useState([]);
 
+  /* ===== ui ===== */
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
   const [saving, setSaving] = useState(false);
-  const [workingId, setWorkingId] = useState(null);
-
-  const [error, setError] = useState(null);
-  const [msg, setMsg] = useState(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editExam, setEditExam] = useState(null);
 
+  /* ===== confirm modal ===== */
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [confirmText, setConfirmText] = useState("");
   const [confirmAction, setConfirmAction] = useState(null);
-
-  const msgTimerRef = useRef(null);
-
-  function showMsg(text, ms = 2500) {
-    setMsg(text);
-    if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
-    msgTimerRef.current = setTimeout(() => {
-      setMsg(null);
-      msgTimerRef.current = null;
-    }, ms);
-  }
+  const [confirmError, setConfirmError] = useState(null);
+  const [confirmSuccess, setConfirmSuccess] = useState(null);
 
   function openConfirm({ title, text, action }) {
     setConfirmTitle(title);
     setConfirmText(text);
+    setConfirmError(null);
+    setConfirmSuccess(null);
     setConfirmAction(() => action);
     setConfirmOpen(true);
   }
 
-  /* =========================
-     Form state (UNCHANGED)
-  ========================= */
+  /* ===== form (shared) ===== */
   const [courseName, setCourseName] = useState("Introduction to Web Systems");
   const [examMode, setExamMode] = useState("onsite");
   const [startAt, setStartAt] = useState(
@@ -143,11 +119,12 @@ export default function ManageExamsPage() {
   );
   const [lecturerId, setLecturerId] = useState("");
 
+  /* ===== rooms ===== */
   const roomUidRef = useRef(0);
   const nextRoomUid = () => ++roomUidRef.current;
-
   const [rooms, setRooms] = useState([]);
 
+  /* ===== auto assign ===== */
   const [totalStudentsDraft, setTotalStudentsDraft] = useState("");
   const [requestedRoomsDraft, setRequestedRoomsDraft] = useState("");
   const [draftBusy, setDraftBusy] = useState(false);
@@ -156,60 +133,155 @@ export default function ManageExamsPage() {
   const [draftCoLecturers, setDraftCoLecturers] = useState([]);
 
   /* =========================
-     Data loading (UNCHANGED)
+     Data load
   ========================= */
-  const refresh = useCallback(
-    async ({ silent = false } = {}) => {
-      if (silent) setRefreshing(true);
-      else setInitialLoading(true);
+  const refresh = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      const [lsRes, ssRes, exRes] = await Promise.all([
+        listUsers("lecturer"),
+        listUsers("supervisor"),
+        getAdminExams(),
+      ]);
 
-      try {
-        const [lsRes, ssRes, exRes] = await Promise.all([
-          listUsers("lecturer"),
-          listUsers("supervisor"),
-          getAdminExams(),
-        ]);
+      const ls = unwrapUsers(lsRes);
+      const ss = unwrapUsers(ssRes);
+      const list = unwrapExams(exRes);
 
-        const ls = unwrapUsers(lsRes);
-        const ss = unwrapUsers(ssRes);
-        const list = unwrapExams(exRes);
+      setLecturers(ls);
+      setSupervisors(ss);
+      setExams(list);
 
-        setLecturers(ls);
-        setSupervisors(ss);
-        setExams(list);
-
-        if (!lecturerId && ls.length) setLecturerId(String(getId(ls[0])));
-      } catch (e) {
-        setError(e?.message || "Failed to load admin data");
-      } finally {
-        if (silent) setRefreshing(false);
-        else setInitialLoading(false);
-      }
-    },
-    [lecturerId]
-  );
+      if (!lecturerId && ls.length) setLecturerId(String(getId(ls[0])));
+    } finally {
+      setRefreshing(false);
+      setInitialLoading(false);
+    }
+  }, [lecturerId]);
 
   useEffect(() => {
-    refresh({ silent: false });
+    refresh();
   }, [refresh]);
 
   if (initialLoading) return <RocketLoader />;
 
   /* =========================
-     RENDER
+     Helpers
+  ========================= */
+  function addRoom() {
+    const uid = nextRoomUid();
+    setRooms((prev) => [
+      ...prev,
+      {
+        _uid: uid,
+        id: `Room-${uid}`,
+        name: `Room-${uid}`,
+        rows: 5,
+        cols: 5,
+        assignedSupervisorId: "",
+      },
+    ]);
+  }
+
+  function removeRoom(idx) {
+    setRooms((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function setRoomField(idx, key, value) {
+    setRooms((prev) => {
+      const copy = [...prev];
+      copy[idx] = { ...copy[idx], [key]: value };
+      return copy;
+    });
+  }
+
+  function onSelectSupervisorForRoom(idx, supId) {
+    setRooms((prev) => {
+      const copy = [...prev];
+      copy[idx] = { ...copy[idx], assignedSupervisorId: supId };
+      return copy;
+    });
+  }
+
+  /* =========================
+     Actions
+  ========================= */
+  async function onAutoAssignDraft() {
+    setDraftBusy(true);
+    try {
+      const res = await autoAssignDraft({
+        startAt,
+        endAt,
+        totalStudents: toNonNegInt(totalStudentsDraft),
+        requestedRooms: toNonNegInt(requestedRoomsDraft),
+      });
+
+      const draft = res?.draft || res?.data?.draft;
+      const cls = safeArr(draft?.classrooms).map((r) => ({
+        _uid: nextRoomUid(),
+        id: r.id,
+        name: r.name,
+        rows: r.rows,
+        cols: r.cols,
+        assignedSupervisorId: r.assignedSupervisorId || "",
+      }));
+
+      setRooms(cls);
+      setDraftMeta(draft?.meta || null);
+      setDraftLecturer(draft?.lecturer || null);
+      setDraftCoLecturers(safeArr(draft?.coLecturers));
+    } finally {
+      setDraftBusy(false);
+    }
+  }
+
+  async function submitCreateOrEdit({ isEdit }) {
+    setSaving(true);
+    try {
+      const payload = {
+        courseName,
+        examMode,
+        startAt: new Date(startAt).toISOString(),
+        endAt: new Date(endAt).toISOString(),
+        lecturerId,
+        supervisorIds: uniq(rooms.map((r) => r.assignedSupervisorId)),
+        classrooms: rooms.map(({ _uid, ...r }) => r),
+      };
+
+      if (!isEdit) {
+        await createExam(payload);
+        setCreateOpen(false);
+      } else {
+        await updateExamAdmin(getId(editExam), payload);
+        setEditOpen(false);
+      }
+
+      await refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onDeleteExam(id) {
+    await deleteExamAdmin(id);
+    setEditOpen(false);
+    await refresh();
+  }
+
+  /* =========================
+     Render
   ========================= */
   return (
     <>
-      {/* ================= Create Modal ================= */}
       <CreateExamModal
         open={createOpen}
         saving={saving}
         draftBusy={draftBusy}
-        onClose={() => (!saving ? setCreateOpen(false) : null)}
+        onClose={() => setCreateOpen(false)}
         onCreate={() =>
           openConfirm({
             title: "Create exam?",
-            text: "Do you want to create this exam with the selected rooms and supervisors?",
+            text: "Create this exam?",
             action: () => submitCreateOrEdit({ isEdit: false }),
           })
         }
@@ -242,26 +314,24 @@ export default function ManageExamsPage() {
         onSelectSupervisorForRoom={onSelectSupervisorForRoom}
       />
 
-      {/* ================= Edit Modal ================= */}
       <EditExamModal
         open={editOpen}
         saving={saving}
-        onClose={() => (!saving ? setEditOpen(false) : null)}
+        onClose={() => setEditOpen(false)}
         onSave={() =>
           openConfirm({
             title: "Update exam?",
-            text: "Are you sure you want to save these changes?",
+            text: "Save changes?",
             action: () => submitCreateOrEdit({ isEdit: true }),
           })
         }
-        onDelete={() => {
-          const id = getId(editExam);
+        onDelete={() =>
           openConfirm({
             title: "Delete exam?",
-            text: "This action cannot be undone.",
-            action: () => onDeleteExam(id),
-          });
-        }}
+            text: "This cannot be undone.",
+            action: () => onDeleteExam(getId(editExam)),
+          })
+        }
         {...{
           courseName,
           setCourseName,
@@ -283,16 +353,50 @@ export default function ManageExamsPage() {
         onSelectSupervisorForRoom={onSelectSupervisorForRoom}
       />
 
-      {/* ================= Confirm Modal ================= */}
       <ModalUI
         open={confirmOpen}
         title={confirmTitle}
+        subtitle={null}
         onClose={() => setConfirmOpen(false)}
-        footer={null}
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setConfirmOpen(false)}
+              className="border px-4 py-2 rounded-xl"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  setSaving(true);
+                  await confirmAction();
+                  setConfirmSuccess("Action completed successfully.");
+                  setTimeout(() => setConfirmOpen(false), 1200);
+                } catch (e) {
+                  setConfirmError(e?.message || "Action failed.");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              className="bg-sky-600 text-white px-5 py-2 rounded-xl"
+            >
+              Yes
+            </button>
+          </div>
+        }
       >
-        <div className="text-sm text-slate-700 whitespace-pre-line">
-          {confirmText}
-        </div>
+        {confirmError && (
+          <div className="mb-3 bg-rose-50 border border-rose-200 p-3 rounded-xl">
+            {confirmError}
+          </div>
+        )}
+        {confirmSuccess && (
+          <div className="mb-3 bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
+            {confirmSuccess}
+          </div>
+        )}
+        <div className="text-sm whitespace-pre-line">{confirmText}</div>
       </ModalUI>
     </>
   );
