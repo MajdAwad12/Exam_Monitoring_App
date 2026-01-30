@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useDashboardLive } from "../../hooks/useDashboardLive";
 import { useSimClock } from "../../hooks/useSimClock";
-import { getAdminExams } from "../../services/exams.service.js";
 import RocketLoader from "../../components/loading/RocketLoader.jsx";
 
 import RoomTabs from "../../components/dashboard/RoomTabs";
@@ -24,11 +23,6 @@ export default function DashboardPage() {
   // ✅ Only lecturer/admin uses this to switch rooms manually.
   const [roomId, setRoomId] = useState(null);
 
-  // ✅ Admin can switch between multiple running exams
-  const [runningExams, setRunningExams] = useState([]);
-  const [selectedExamId, setSelectedExamId] = useState(null);
-
-
   const { simNow, simNowMs } = useSimClock();
 
   // ✅ Turn polling OFF because WS will trigger refetch()
@@ -46,45 +40,11 @@ export default function DashboardPage() {
     transfers,
     alerts,
     inbox,
-  } = useDashboardLive({ roomId, examId: selectedExamId, pollMs: 0 });
+  } = useDashboardLive({ roomId, pollMs: 0 });
 
   const meRole = String(me?.role || "").toLowerCase();
   const canLecturerUX = meRole === "lecturer" || meRole === "admin";
   const canManageStudents = canLecturerUX;
-
-
-  // Load running exams list (admin only) to enable switching between active exams
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      if (meRole !== "admin") return;
-      try {
-        const res = await getAdminExams({ status: "running" });
-        const list = Array.isArray(res?.exams) ? res.exams : Array.isArray(res) ? res : [];
-        if (!alive) return;
-        setRunningExams(list);
-      } catch {
-        // ignore - dashboard still works with the "default" running exam
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [meRole]);
-
-  // Sync selected exam with the snapshot exam (first load / after refresh)
-  useEffect(() => {
-    if (meRole !== "admin") return;
-    const eid = String(exam?._id || exam?.id || "").trim();
-    if (!eid) return;
-    setSelectedExamId((prev) => prev || eid);
-  }, [meRole, exam]);
-
-  // When switching exam, reset manual room selection (so tabs follow the new exam)
-  useEffect(() => {
-    if (meRole !== "admin") return;
-    setRoomId(null);
-  }, [meRole, selectedExamId]);
 
   const activeRoomId = useMemo(() => {
     return String(activeRoom?.id || activeRoom?.name || "").trim();
@@ -332,32 +292,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        
-        {/* ✅ Admin can switch between running exams */}
-        {meRole === "admin" && (runningExams || []).length > 1 ? (
-          <div className="mb-3 rounded-2xl border border-slate-200 bg-white p-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-sm font-extrabold text-slate-900">Active Exam</div>
-                <div className="text-xs text-slate-600">Choose which running exam to view in the dashboard.</div>
-              </div>
-
-              <select
-                value={selectedExamId || ""}
-                onChange={(e) => setSelectedExamId(e.target.value || null)}
-                className="w-full sm:w-[420px] rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-200"
-              >
-                {(runningExams || []).map((x) => (
-                  <option key={String(x?._id || x?.id)} value={String(x?._id || x?.id)}>
-                    {String(x?.title || x?.name || "Exam")} • {String(x?.course || x?.courseName || "").trim() || "—"}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        ) : null}
-
-{/* ✅ Only lecturer/admin can switch rooms */}
+        {/* ✅ Only lecturer/admin can switch rooms */}
         {canLecturerUX ? (
           <RoomTabs
             rooms={rooms}

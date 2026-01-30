@@ -28,30 +28,17 @@ function buildRoomList(exam, attendance) {
   return set.size ? Array.from(set) : ["A-101"];
 }
 
-function getRoomSpec(exam, roomId, allRooms) {
-  const rid = String(roomId || "").trim();
+function getRoomSpec5x5() {
+  return { rows: 5, cols: 5 };
+}
 
-  // Prefer allRooms (already normalized in useDashboardLive)
-  const fromAll = Array.isArray(allRooms) ? allRooms : [];
-  const hitAll = rid ? fromAll.find((r) => String(r?.id || r?.name || "").trim() === rid) : null;
-  const rowsAll = Number(hitAll?.rows || 0);
-  const colsAll = Number(hitAll?.cols || 0);
-  if (rowsAll > 0 && colsAll > 0) return { rows: rowsAll, cols: colsAll };
-
-  // Fallback to exam.classrooms
-  const cls = Array.isArray(exam?.classrooms) ? exam.classrooms : [];
-  const hit =
-    rid
-      ? cls.find(
-          (c) =>
-            String(c?.id || c?.name || "").trim() === rid ||
-            String(c?.name || "").trim() === rid
-        )
-      : null;
-
-  const rows = Number(hit?.rows || 0) || 5;
-  const cols = Number(hit?.cols || 0) || 5;
-  return { rows, cols };
+function colToGridCol(c) {
+  if (c === 1) return 1;
+  if (c === 2) return 2;
+  if (c === 3) return 4;
+  if (c === 4) return 6;
+  if (c === 5) return 7;
+  return 1;
 }
 
 function normRoom(x) {
@@ -402,7 +389,7 @@ useEffect(() => {
     setMapGuideOpen(false); // ✅ close guide when switching rooms
   }, [activeRoom]);
 
-  const spec = useMemo(() => getRoomSpec(exam, activeRoom, allRooms), [exam, activeRoom, allRooms]);
+  const spec = useMemo(() => getRoomSpec5x5(), []);
 
   const seatMap = useMemo(() => {
     const map = new Map();
@@ -983,14 +970,16 @@ useEffect(() => {
               <div
                 className="grid"
                 style={{
-                  gridTemplateColumns: `repeat(${Math.max(1, spec.cols)}, minmax(0, 1fr))`,
-                  gridTemplateRows: `repeat(${Math.max(1, spec.rows)}, minmax(0, 1fr))`,
+                  gridTemplateColumns: "1fr 1fr 0.6fr 1fr 0.6fr 1fr 1fr",
+                  gridTemplateRows: "repeat(5, 1fr)",
                   gap: "18px",
                 }}
               >
-                {Array.from({ length: Math.max(1, spec.rows) * Math.max(1, spec.cols) }).map((_, idx) => {
-                  const r = Math.floor(idx / Math.max(1, spec.cols)) + 1;
-                  const c = (idx % Math.max(1, spec.cols)) + 1;
+                {Array.from({ length: 25 }).map((_, idx) => {
+                  const r = Math.floor(idx / 5) + 1;
+                  const c = (idx % 5) + 1;
+
+                  const gridCol = colToGridCol(c);
                   const key = `${r}-${c}`;
                   const a = seatMap.get(key);
 
@@ -998,7 +987,7 @@ useEffect(() => {
                   const toiletCount = Number(sf?.toiletCount || 0);
 
                   return (
-                    <div key={`seat-${key}`} style={{ gridColumn: c, gridRow: r, height: "86px", minWidth: 0 }}>
+                    <div key={`seat-${key}`} style={{ gridColumn: gridCol, gridRow: r, height: "86px", minWidth: 0 }}>
                       {a ? (
                         <SeatCard
                           a={a}
