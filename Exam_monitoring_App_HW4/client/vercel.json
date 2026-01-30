@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://exam-monitoring-server.onrender.com/api/:path*" },
+    { "source": "/ws", "destination": "https://exam-monitoring-server.onrender.com/ws" },
+    { "source": "/(.*)", "destination": "/" }
+  ]
+}
