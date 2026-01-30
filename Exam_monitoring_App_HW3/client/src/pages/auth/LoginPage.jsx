@@ -213,7 +213,7 @@ export default function LoginPage() {
                 <h1 className="text-white text-4xl font-extrabold tracking-tight">
                   Login Page
                 </h1>
-                <p className="text-indigo-100 mt-3 leading-relaxed">
+                <p className="text-indigo-100 mt-10 leading-relaxed">
                   Staff: username + password. Students: Student ID + Email + OTP.
                 </p>
 
