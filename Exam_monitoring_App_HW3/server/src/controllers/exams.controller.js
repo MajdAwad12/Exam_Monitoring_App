@@ -1247,6 +1247,7 @@ export async function startExam(req, res) {
 export async function endExam(req, res) {
   try {
     const { examId } = req.params;
+    const force = String(req.query.force || "") === "1" || Boolean(req.body?.force);
 
     const now = new Date();
     const actor = actorFromReq(req);
@@ -1261,9 +1262,14 @@ export async function endExam(req, res) {
         throw err;
       }
       if (!ws.active) {
-        const err = new Error(ws.future ? "EXAM_NOT_STARTED_YET" : "EXAM_TIME_WINDOW_ENDED");
-        err.statusCode = 400;
-        throw err;
+        const isAdmin = String(actor?.role || "").toLowerCase() === "admin";
+        if (!isAdmin) {
+          const err = new Error(ws.future ? "EXAM_NOT_STARTED_YET" : "EXAM_TIME_WINDOW_ENDED");
+          err.statusCode = 400;
+          throw err;
+        }
+        // ✅ Admin can end outside the window when using force=1 (and also if the window already passed)
+        // (client may send force=1; we still allow admin even without it)
       }
 
       exam.status = "ended";
@@ -1300,7 +1306,7 @@ export async function endExam(req, res) {
 export async function createExam(req, res) {
   try {
     const me = req.user || {};
-    if (String(me.role || "") !== "admin") {
+    if (String(me.role || "").toLowerCase() !== "admin") {
       return res.status(403).json({ message: "Admin only" });
     }
 

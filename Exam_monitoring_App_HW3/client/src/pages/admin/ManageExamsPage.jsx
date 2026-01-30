@@ -604,21 +604,19 @@ export default function ManageExamsPage() {
     if (!id) return;
 
     const ws = windowState(exam);
-    if (!ws.active) {
-      const msg2 = "Cannot end exam outside its real time window.";
-      setError(msg2);
-      throw new Error(msg2);
-    }
 
     setWorkingId(id);
     setMsg(null);
     setError(null);
 
     try {
-      await endExam(id);
+      // ✅ Allow admin to end even if the real-time window already passed
+      // (server enforces admin-only for force endings)
+      await endExam(id, { force: !ws.active });
+
       upsertExamLocal({ ...exam, status: "ended" });
 
-      showMsg("Exam ended (status set to ended).", 2500);
+      showMsg(ws.active ? "Exam ended." : "Exam ended (forced).", 2500);
       await refresh({ silent: true });
     } catch (e) {
       setError(e?.message || "Failed to end exam");

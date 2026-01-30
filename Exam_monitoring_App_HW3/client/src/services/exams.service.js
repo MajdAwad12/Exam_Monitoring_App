@@ -52,10 +52,18 @@ export async function startExam(examId, { force = false } = {}) {
  * - POST /api/exams/:id/end
  * Server now allows end ONLY if exam is ACTIVE in real time window.
  */
-export async function endExam(examId) {
-  const res = await fetch(`/api/exams/${examId}/end`, {
+/**
+ * End exam
+ * - Normal: POST /api/exams/:id/end
+ * - Force (admin): POST /api/exams/:id/end?force=1 (also body {force:true})
+ */
+export async function endExam(examId, { force = false } = {}) {
+  const qs = force ? "?force=1" : "";
+  const res = await fetch(`/api/exams/${examId}/end${qs}`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     credentials: "include",
+    body: JSON.stringify({ force: Boolean(force) }),
   });
   return handle(res);
 }

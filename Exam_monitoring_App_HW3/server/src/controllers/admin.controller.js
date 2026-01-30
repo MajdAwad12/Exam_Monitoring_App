@@ -4,7 +4,8 @@ import Exam from "../models/Exam.js";
 
 function ensureAdmin(req, res) {
   const actor = req.user;
-  if (!actor || actor.role !== "admin") {
+  const role = String(actor?.role || "").toLowerCase();
+  if (!actor || role !== "admin") {
     res.status(403).json({ message: "Admin only" });
     return false;
   }
