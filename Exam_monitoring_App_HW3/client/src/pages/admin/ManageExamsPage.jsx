@@ -547,17 +547,21 @@ export default function ManageExamsPage() {
     }
   }
 
-  async function onDeleteExam(examId) {
+  async function onDeleteExam(exam) {
+    const examId = getId(exam);
     if (!examId) return;
+
+    const isRunning = String(exam?.status || "").toLowerCase() === "running";
+
     setSaving(true);
     setMsg(null);
     setError(null);
 
     try {
-      await deleteExamAdmin(examId);
+      await deleteExamAdmin(examId, { force: isRunning });
       removeExamLocal(examId);
 
-      showMsg("Exam deleted successfully.", 2500);
+      showMsg(isRunning ? "Exam deleted (forced)." : "Exam deleted successfully.", 2500);
       setEditOpen(false);
       setEditExam(null);
 
@@ -1026,6 +1030,8 @@ export default function ManageExamsPage() {
 
                 const endTitle = windowActive
                   ? "End exam now (within real time window)"
+                  : String(e?.status || "").toLowerCase() === "running"
+                  ? "End exam now (forced)"
                   : "Cannot end outside exam time window";
 
                 return (
@@ -1083,7 +1089,7 @@ export default function ManageExamsPage() {
                               action: () => onStartExam(e),
                             })
                           }
-                          disabled={isWorking || !windowActive}
+                          disabled={isWorking || (!windowActive && String(e?.status || "").toLowerCase() !== "running")}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white"
                           title={startTitle}
                         >
@@ -1182,7 +1188,7 @@ export default function ManageExamsPage() {
           openConfirm({
             title: "Delete exam?",
             text: `You are about to delete this exam:\n\nCourse: ${course}\nID: ${String(id || "--")}\n\nThis action cannot be undone.`,
-            action: () => onDeleteExam(id),
+            action: () => onDeleteExam(editExam),
           });
         }}
         {...{

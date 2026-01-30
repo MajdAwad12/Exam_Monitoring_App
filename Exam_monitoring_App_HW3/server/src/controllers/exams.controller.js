@@ -361,6 +361,54 @@ function isSeatTaken(exam, roomId, seat) {
 }
 
 /* =========================
+   Schedule conflict checks (time + classrooms)
+========================= */
+function roomIdsFromClassrooms(classrooms) {
+  return (Array.isArray(classrooms) ? classrooms : [])
+    .map((r) => String(r?.id || "").trim())
+    .filter(Boolean);
+}
+
+function intersect(a, b) {
+  const setB = new Set((b || []).map(String));
+  return (a || []).map(String).filter((x) => setB.has(String(x)));
+}
+
+async function findScheduleConflicts({ startAt, endAt, roomIds, excludeExamId } = {}) {
+  const s = startAt instanceof Date ? startAt : new Date(startAt || 0);
+  const e = endAt instanceof Date ? endAt : new Date(endAt || 0);
+
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e.getTime() <= s.getTime()) return [];
+  if (!Array.isArray(roomIds) || roomIds.length === 0) return [];
+
+  const query = {
+    startAt: { $lt: e },
+    endAt: { $gt: s },
+    "classrooms.id": { $in: roomIds },
+  };
+
+  if (excludeExamId) {
+    query._id = { $ne: excludeExamId };
+  }
+
+  const docs = await Exam.find(query)
+    .select("_id courseName startAt endAt status classrooms")
+    .lean();
+
+  return (docs || []).map((x) => {
+    const otherRooms = roomIdsFromClassrooms(x?.classrooms);
+    return {
+      examId: String(x?._id || ""),
+      courseName: String(x?.courseName || ""),
+      status: String(x?.status || ""),
+      startAt: x?.startAt,
+      endAt: x?.endAt,
+      sharedRooms: intersect(roomIds, otherRooms),
+    };
+  });
+}
+
+/* =========================
    Exam window helpers
 ========================= */
 function getExamWindowMs(exam) {
@@ -1337,7 +1385,21 @@ export async function createExam(req, res) {
         assignedSupervisorName: r?.assignedSupervisorName ?? "",
       }))
       .filter((r) => r.id);
+      if (!cleanRooms.length) {
+      return res.status(400).json({ message: "At least one classroom is required." });
+    }
 
+    
+
+    // ✅ Prevent time+classroom overlaps (same classroom(s) + overlapping time window)
+    const roomIds = roomIdsFromClassrooms(cleanRooms);
+    const conflicts = await findScheduleConflicts({ startAt, endAt, roomIds });
+    if (conflicts.length) {
+      return res.status(409).json({
+        message: "Schedule conflict: another exam overlaps in time and shares at least one classroom.",
+        conflicts,
+      });
+    }
     const lecturerId = body.lecturerId ? String(body.lecturerId) : "";
     if (!lecturerId) return res.status(400).json({ message: "lecturerId is required" });
 

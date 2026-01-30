@@ -26,8 +26,10 @@ export async function updateExamAdmin(examId, payload) {
   return handle(res);
 }
 
-export async function deleteExamAdmin(examId) {
-  const res = await fetch(`/api/admin/exams/${examId}`, {
+export async function deleteExamAdmin(examId, opts = {}) {
+  const force = Boolean(opts?.force);
+  const q = force ? `?force=1` : "";
+  const res = await fetch(`/api/admin/exams/${examId}${q}`, {
     method: "DELETE",
     credentials: "include",
   });
