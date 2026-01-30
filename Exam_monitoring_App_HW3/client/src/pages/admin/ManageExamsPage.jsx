@@ -89,7 +89,6 @@ function modeBadge(mode) {
 function normalizeIntInput(raw) {
   const s = String(raw ?? "").trim();
   if (!s) return 0;
-  // allow leading zeros, only digits
   if (!/^\d+$/.test(s)) return NaN;
   const n = Number(s);
   if (!Number.isFinite(n)) return NaN;
@@ -109,7 +108,13 @@ function windowState(exam) {
   const { startMs, endMs } = examTimes(exam);
   const nowMs = Date.now();
 
-  const valid = Number.isFinite(startMs) && Number.isFinite(endMs) && startMs > 0 && endMs > 0 && endMs > startMs;
+  const valid =
+    Number.isFinite(startMs) &&
+    Number.isFinite(endMs) &&
+    startMs > 0 &&
+    endMs > 0 &&
+    endMs > startMs;
+
   if (!valid) return { valid: false, active: false, future: false, past: false, nowMs };
 
   const active = nowMs >= startMs && nowMs <= endMs;
@@ -135,7 +140,7 @@ function buildRoomDraft(uid, id) {
 }
 
 /* =========================
-   Small UI primitives (same style as before)
+   Small UI primitives
 ========================= */
 function Card({ children, className = "" }) {
   return <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm ${className}`}>{children}</div>;
@@ -267,7 +272,12 @@ export default function ManageExamsPage() {
       setError(null);
 
       try {
-        const [lsRes, ssRes, exRes] = await Promise.all([listUsers("lecturer"), listUsers("supervisor"), getAdminExams()]);
+        const [lsRes, ssRes, exRes] = await Promise.all([
+          listUsers("lecturer"),
+          listUsers("supervisor"),
+          getAdminExams(),
+        ]);
+
         const ls = unwrapUsers(lsRes);
         const ss = unwrapUsers(ssRes);
         const list = unwrapExams(exRes);
@@ -291,22 +301,6 @@ export default function ManageExamsPage() {
     refresh({ silent: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  /* =========================
-     Admin gate
-  ========================= */
-  if (initialLoading) return <RocketLoader />;
-
-  if (me?.role !== "admin") {
-    return (
-      <Card className="p-6">
-        <div className="text-xl font-extrabold text-slate-900">Exam Management</div>
-        <div className="mt-2 text-slate-600">
-          This page is available for <span className="font-semibold">Admin</span> only.
-        </div>
-      </Card>
-    );
-  }
 
   /* =========================
      Local optimistic helpers
@@ -386,7 +380,6 @@ export default function ManageExamsPage() {
       assignedSupervisorName: String(r?.assignedSupervisorName || ""),
     }));
 
-    // merge supervisor assignment if server stores it also in exam.supervisors[]
     const supByRoom = new Map(
       safeArr(exam?.supervisors, [])
         .map((s) => [String(s?.roomId || "").trim(), { id: String(s?.id || ""), name: String(s?.name || "") }])
@@ -548,7 +541,7 @@ export default function ManageExamsPage() {
       await refresh({ silent: true });
     } catch (e) {
       setError(e?.message || "Failed to save exam");
-      throw e; // so Confirm modal can show error too if needed
+      throw e;
     } finally {
       setSaving(false);
     }
@@ -710,7 +703,7 @@ export default function ManageExamsPage() {
   }
 
   /* =========================
-     Derived UI lists
+     ✅ Derived UI lists (MUST be before any conditional return)
   ========================= */
   const stats = useMemo(() => {
     const list = safeArr(exams, []);
@@ -773,6 +766,22 @@ export default function ManageExamsPage() {
   useEffect(() => {
     setPage(1);
   }, [q, statusFilter, modeFilter, fromDate, toDate, pageSize]);
+
+  /* =========================
+     Admin gate (AFTER hooks)
+  ========================= */
+  if (initialLoading) return <RocketLoader />;
+
+  if (me?.role !== "admin") {
+    return (
+      <Card className="p-6">
+        <div className="text-xl font-extrabold text-slate-900">Exam Management</div>
+        <div className="mt-2 text-slate-600">
+          This page is available for <span className="font-semibold">Admin</span> only.
+        </div>
+      </Card>
+    );
+  }
 
   /* =========================
      Render
@@ -858,7 +867,11 @@ export default function ManageExamsPage() {
 
           <div className="lg:col-span-2">
             <Field label="Status">
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              >
                 <option value="all">All</option>
                 <option value="scheduled">Scheduled</option>
                 <option value="running">Running</option>
@@ -869,7 +882,11 @@ export default function ManageExamsPage() {
 
           <div className="lg:col-span-2">
             <Field label="Mode">
-              <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2">
+              <select
+                value={modeFilter}
+                onChange={(e) => setModeFilter(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              >
                 <option value="all">All</option>
                 <option value="onsite">Onsite</option>
                 <option value="online">Online</option>
@@ -879,13 +896,23 @@ export default function ManageExamsPage() {
 
           <div className="lg:col-span-2">
             <Field label="From">
-              <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2" />
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              />
             </Field>
           </div>
 
           <div className="lg:col-span-2">
             <Field label="To">
-              <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2" />
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              />
             </Field>
           </div>
         </div>
@@ -908,7 +935,11 @@ export default function ManageExamsPage() {
 
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-600">Rows:</span>
-            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            >
               <option value={6}>6</option>
               <option value={8}>8</option>
               <option value={12}>12</option>
@@ -916,13 +947,21 @@ export default function ManageExamsPage() {
             </select>
 
             <div className="flex items-center gap-2">
-              <Btn onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="border border-slate-200 hover:bg-slate-50">
+              <Btn
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="border border-slate-200 hover:bg-slate-50"
+              >
                 Prev
               </Btn>
               <div className="text-sm text-slate-700">
                 Page <span className="font-bold">{page}</span> / {totalPages}
               </div>
-              <Btn onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="border border-slate-200 hover:bg-slate-50">
+              <Btn
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="border border-slate-200 hover:bg-slate-50"
+              >
                 Next
               </Btn>
             </div>
@@ -935,7 +974,9 @@ export default function ManageExamsPage() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-lg font-bold text-slate-900">Exams</div>
-            <div className="text-sm text-slate-600">Start/End work only during the real time window (startAt → endAt).</div>
+            <div className="text-sm text-slate-600">
+              Start/End work only during the real time window (startAt → endAt).
+            </div>
           </div>
           {refreshing ? <div className="text-sm text-slate-600">Loading…</div> : null}
         </div>
@@ -985,14 +1026,17 @@ export default function ManageExamsPage() {
                   ? "Cannot start yet (before start time)"
                   : "Cannot start (time window ended)";
 
-                const endTitle = windowActive ? "End exam now (within real time window)" : "Cannot end outside exam time window";
+                const endTitle = windowActive
+                  ? "End exam now (within real time window)"
+                  : "Cannot end outside exam time window";
 
                 return (
                   <tr key={String(examId)} className="border-t border-slate-100">
                     <td className="py-3 pr-3">
                       <div className="font-bold text-slate-900">{e.courseName || "--"}</div>
                       <div className="text-xs text-slate-500">
-                        {fmtShort(e.startAt || e.examDate)} • {Array.isArray(e?.supervisors) ? e.supervisors.length : 0} supervisors
+                        {fmtShort(e.startAt || e.examDate)} •{" "}
+                        {Array.isArray(e?.supervisors) ? e.supervisors.length : 0} supervisors
                       </div>
                     </td>
 
@@ -1004,11 +1048,19 @@ export default function ManageExamsPage() {
                     <td className="py-3 pr-3 text-slate-700">{roomsTxt}</td>
 
                     <td className="py-3 pr-3">
-                      <span className={`inline-flex items-center rounded-xl border px-2 py-1 ${modeBadge(e.examMode)}`}>{String(e.examMode || "onsite")}</span>
+                      <span
+                        className={`inline-flex items-center rounded-xl border px-2 py-1 ${modeBadge(e.examMode)}`}
+                      >
+                        {String(e.examMode || "onsite")}
+                      </span>
                     </td>
 
                     <td className="py-3 pr-3">
-                      <span className={`inline-flex items-center rounded-xl border px-2 py-1 ${statusBadge(displayStatus)}`}>{displayStatus}</span>
+                      <span
+                        className={`inline-flex items-center rounded-xl border px-2 py-1 ${statusBadge(displayStatus)}`}
+                      >
+                        {displayStatus}
+                      </span>
                     </td>
 
                     <td className="py-3 pr-3 text-xs text-slate-500">
@@ -1017,7 +1069,11 @@ export default function ManageExamsPage() {
 
                     <td className="py-3 text-right">
                       <div className="inline-flex flex-wrap justify-end gap-2">
-                        <Btn onClick={() => openEdit(e)} className="border border-slate-200 hover:bg-slate-50" title="Edit exam details">
+                        <Btn
+                          onClick={() => openEdit(e)}
+                          className="border border-slate-200 hover:bg-slate-50"
+                          title="Edit exam details"
+                        >
                           Edit
                         </Btn>
 
@@ -1068,9 +1124,7 @@ export default function ManageExamsPage() {
         </div>
       </Card>
 
-      {/* =========================
-          Create Modal
-      ========================= */}
+      {/* Create Modal */}
       <CreateExamModal
         open={createOpen}
         saving={saving}
@@ -1112,9 +1166,7 @@ export default function ManageExamsPage() {
         onSelectSupervisorForRoom={onSelectSupervisorForRoom}
       />
 
-      {/* =========================
-          Edit Modal
-      ========================= */}
+      {/* Edit Modal */}
       <EditExamModal
         open={editOpen}
         saving={saving}
@@ -1156,9 +1208,7 @@ export default function ManageExamsPage() {
         onSelectSupervisorForRoom={onSelectSupervisorForRoom}
       />
 
-      {/* =========================
-          Confirm Modal (ModalUI)
-      ========================= */}
+      {/* Confirm Modal */}
       <ModalUI
         open={confirmOpen}
         title={confirmTitle}
