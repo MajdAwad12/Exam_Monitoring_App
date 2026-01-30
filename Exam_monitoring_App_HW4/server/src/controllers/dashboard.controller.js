@@ -227,7 +227,22 @@ export async function getClock(req, res) {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const exam = await findRunningExamForUser(user);
+        // role already computed above
+    const requestedExamId = String(req.query?.examId || "").trim();
+
+    let exam = null;
+
+    // ✅ Admin can request a specific running exam by id (for dashboard switching)
+    if (requestedExamId) {
+      if (role !== "admin") {
+        return res.status(403).json({ message: "Only admin can switch exams" });
+      }
+      exam = await Exam.findOne({ _id: requestedExamId, status: "running" });
+    } else {
+      exam = await findRunningExamForUser(user);
+    }
+
+
     return res.json({
       simNow: new Date().toISOString(),
       simExamId: exam ? String(exam._id) : null,
@@ -245,7 +260,22 @@ export async function getDashboardSnapshot(req, res) {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const exam = await findRunningExamForUser(user);
+        // role already computed above
+    const requestedExamId = String(req.query?.examId || "").trim();
+
+    let exam = null;
+
+    // ✅ Admin can request a specific running exam by id (for dashboard switching)
+    if (requestedExamId) {
+      if (role !== "admin") {
+        return res.status(403).json({ message: "Only admin can switch exams" });
+      }
+      exam = await Exam.findOne({ _id: requestedExamId, status: "running" });
+    } else {
+      exam = await findRunningExamForUser(user);
+    }
+
+
 
     if (!exam) {
       return res.json({
@@ -268,7 +298,7 @@ export async function getDashboardSnapshot(req, res) {
       });
     }
 
-    const role = String(user.role || "").toLowerCase();
+    // role already computed above
     const isSupervisorRole = role === "supervisor";
     const isLecturerLike = role === "lecturer" || role === "admin";
 

@@ -10,7 +10,7 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
+export function useDashboardLive({ roomId, examId = null, pollMs = 6000 } = {}) {
   const [raw, setRaw] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -20,6 +20,12 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
   useEffect(() => {
     roomIdRef.current = roomId;
   }, [roomId]);
+  // keep latest examId (admin can switch running exams)
+  const examIdRef = useRef(examId);
+  useEffect(() => {
+    examIdRef.current = examId;
+  }, [examId]);
+
 
   //  keep latest pollMs without restarting polling
   const pollMsRef = useRef(pollMs);
@@ -88,7 +94,7 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
       try {
         setError("");
 
-        const snap = await getDashboardSnapshot(); // server decides visibility by role
+        const snap = await getDashboardSnapshot({ examId: examIdRef.current }); // server decides visibility by role (+ optional examId for admin)
 
         if (!aliveRef.current) return;
         if (myReqId !== reqIdRef.current) return;
@@ -212,6 +218,14 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
     await fetchOnce({ force: true });
     scheduleNext(1);
   }, [fetchOnce, scheduleNext]);
+
+  // ✅ when admin switches examId, refetch immediately
+  useEffect(() => {
+    if (!examId) return;
+    refetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examId]);
+
 
   return { ...derived, raw, loading, error, refetch };
 }
