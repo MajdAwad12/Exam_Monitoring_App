@@ -48,31 +48,6 @@ function escapeRegex(str) {
   return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function normalizeStudentId(v) {
-  return String(v ?? "").trim();
-}
-
-async function findStudentByEmailAndId(email, studentIdRaw) {
-  const cleanEmail = String(email || "").trim().toLowerCase();
-  const sid = normalizeStudentId(studentIdRaw);
-
-  const emailRegex = new RegExp(`^${escapeRegex(cleanEmail)}$`, "i");
-
-  // studentId in DB may be stored as string or number (depending on seeds/imports)
-  const sidNum = Number.isFinite(Number(sid)) ? Number(sid) : null;
-
-  const query = {
-    role: "student",
-    email: emailRegex,
-    $or: [
-      { studentId: sid },
-      ...(sidNum !== null ? [{ studentId: sidNum }] : []),
-    ],
-  };
-
-  return User.findOne(query);
-}
-
 /* =========================
    STAFF LOGIN (username+password)
    + lockout policy
@@ -240,7 +215,8 @@ export async function studentRequestOtp(req, res) {
       return res.status(400).json({ message: "Missing email or studentId" });
     }
 
-    const user = await findStudentByEmailAndId(email, studentId);
+    const emailRegex = new RegExp(`^${escapeRegex(email)}$`, "i");
+    const user = await User.findOne({ role: "student", email: emailRegex, studentId });
     if (!user) return res.status(404).json({ message: "Student not found" });
 
     const code = genOtp6();
@@ -280,7 +256,8 @@ export async function studentVerifyOtp(req, res) {
       return res.status(400).json({ message: "Missing fields" });
     }
 
-    const user = await findStudentByEmailAndId(email, studentId);
+    const emailRegex = new RegExp(`^${escapeRegex(email)}$`, "i");
+    const user = await User.findOne({ role: "student", email: emailRegex, studentId });
     if (!user) return res.status(404).json({ message: "Student not found" });
 
     if (!user.otpHash || !user.otpExpiresAt) {
