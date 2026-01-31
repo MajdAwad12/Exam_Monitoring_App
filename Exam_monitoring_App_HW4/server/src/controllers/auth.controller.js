@@ -217,7 +217,9 @@ export async function studentRequestOtp(req, res) {
       email,
       $or: [{ studentId: studentIdRaw }, { studentId: studentIdClean }],
     });
+
     if (!user) return res.status(404).json({ message: "Student not found" });
+
 
     const code = genOtp6();
     user.otpHash = hashOtp(code);
