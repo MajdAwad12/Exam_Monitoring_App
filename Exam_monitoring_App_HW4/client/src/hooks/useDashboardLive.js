@@ -1,6 +1,6 @@
 // client/src/hooks/useDashboardLive.js
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getDashboardSnapshot } from "../services/dashboard.service";
+import { getDashboardSnapshotLite, getDashboardSnapshot } from "../services/dashboard.service";
 
 function normalizeRoomId(v) {
   return String(v || "").trim();
@@ -17,7 +17,7 @@ function clamp(n, min, max) {
  * @param {string|null} params.roomId - (Client-side only) selected room for filtering UI
  * @param {number} params.pollMs
  */
-export function useDashboardLive({ examId = null, roomId, pollMs = 6000 } = {}) {
+export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite = true } = {}) {
   const [raw, setRaw] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -39,6 +39,51 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 6000 } = {}) 
   useEffect(() => {
     pollMsRef.current = pollMs;
   }, [pollMs]);
+
+  // ---- WS awareness (reduces loading + avoids extra polling) ----
+  const [wsConnected, setWsConnected] = useState(false);
+  const lastWsAtRef = useRef(0);
+
+  useEffect(() => {
+    const onStatus = (e) => {
+      const st = String(e?.detail?.status || "").toLowerCase();
+      if (st === "connected") setWsConnected(true);
+      if (st === "disconnected") setWsConnected(false);
+    };
+
+    const onWs = (e) => {
+      // any WS message keeps the connection "fresh"
+      lastWsAtRef.current = Date.now();
+      const msg = e?.detail || {};
+      const t = String(msg?.type || "").toUpperCase();
+
+      // These are the types your server broadcasts today (exams.controller.js)
+      if (t === "EXAM_UPDATED" || t === "EXAM_STARTED" || t === "EXAM_ENDED") {
+        // Debounced force-refresh (prevents request storms)
+        scheduleWsRefresh();
+      }
+    };
+
+    window.addEventListener("ws:status", onStatus);
+    window.addEventListener("ws:event", onWs);
+
+    return () => {
+      window.removeEventListener("ws:status", onStatus);
+      window.removeEventListener("ws:event", onWs);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const wsRefreshTimerRef = useRef(null);
+  const scheduleWsRefresh = useCallback(() => {
+    // If polling is disabled (pollMs<=0), WS refresh is our main mechanism
+    clearTimeout(wsRefreshTimerRef.current);
+    wsRefreshTimerRef.current = setTimeout(() => {
+      backoffRef.current = 1;
+      fetchOnce({ force: true });
+    }, 250);
+  }, [fetchOnce]);
+
 
   const aliveRef = useRef(true);
   const inFlightRef = useRef(false);
@@ -69,6 +114,10 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 6000 } = {}) 
 
       const base = Number(pollMsRef.current);
 
+      // If WS is connected and recently active, avoid redundant polling.
+      const WS_FRESH_MS = 20000;
+      if (wsConnected && Date.now() - (lastWsAtRef.current || 0) < WS_FRESH_MS) return;
+
       // Polling disabled if pollMs <= 0 (or invalid)
       if (!Number.isFinite(base) || base <= 0) return;
 
@@ -78,7 +127,7 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 6000 } = {}) 
         tickRef.current?.();
       }, wait);
     },
-    [clearTimer]
+    [clearTimer, wsConnected]
   );
 
   const fetchOnce = useCallback(
@@ -97,7 +146,7 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 6000 } = {}) 
       try {
         setError("");
 
-        const snap = await getDashboardSnapshot({ examId: examIdRef.current });
+        const snap = await (lite ? getDashboardSnapshotLite : getDashboardSnapshot)({ examId: examIdRef.current });
 
         if (!aliveRef.current) return;
         if (myReqId !== reqIdRef.current) return;
@@ -227,5 +276,5 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 6000 } = {}) 
     scheduleNext(1);
   }, [fetchOnce, scheduleNext]);
 
-  return { ...derived, raw, loading, error, refetch };
+  return { ...derived, raw, loading, error, refetch, wsConnected };
 }

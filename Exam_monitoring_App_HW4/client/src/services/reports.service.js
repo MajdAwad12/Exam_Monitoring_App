@@ -1,3 +1,4 @@
+import { fetchWithCache } from "./_cache.js";
 // client/src/services/reports.service.js
 
 
@@ -12,21 +13,40 @@ async function handle(res) {
   return data;
 }
 
-export async function getReportsList() {
-  const res = await fetch(`/api/reports`, {
-    method: "GET",
-    credentials: "include",
-  });
-  return handle(res);
+export async function getReportsList({ page = 1, limit = 100, force = false } = {}) {
+  const usp = new URLSearchParams();
+  if (page) usp.set("page", String(page));
+  if (limit) usp.set("limit", String(limit));
+  const qs = usp.toString() ? `?${usp.toString()}` : "";
+  const key = `reports:list:${qs}`;
+  return fetchWithCache(
+    key,
+    async () => {
+      const res = await fetch(`/api/reports${qs}`, {
+        method: "GET",
+        credentials: "include",
+      });
+      return handle(res);
+    },
+    { ttlMs: 60_000, force }
+  );
 }
 
-export async function getReportsAnalytics() {
-  const res = await fetch(`/api/reports/analytics`, {
-    method: "GET",
-    credentials: "include",
-  });
-  return handle(res);
+
+export async function getReportsAnalytics({ force = false } = {}) {
+  return fetchWithCache(
+    "reports:analytics",
+    async () => {
+      const res = await fetch(`/api/reports/analytics`, {
+        method: "GET",
+        credentials: "include",
+      });
+      return handle(res);
+    },
+    { ttlMs: 60_000, force }
+  );
 }
+
 
 export async function getReportDetails(examId) {
   const res = await fetch(`/api/reports/${examId}`, {

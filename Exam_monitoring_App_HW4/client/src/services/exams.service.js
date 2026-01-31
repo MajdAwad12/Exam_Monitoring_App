@@ -1,5 +1,7 @@
 // client/src/services/exams.service.js
 
+import { fetchWithCache, cacheDel } from "./_cache.js";
+
 async function handle(res) {
   if (res.ok) return res.json();
 
@@ -18,12 +20,18 @@ async function handle(res) {
 // Exams
 // =========================
 
-export async function getExams() {
-  const res = await fetch(`/api/exams`, {
-    method: "GET",
-    credentials: "include",
-  });
-  return handle(res);
+export async function getExams({ force = false } = {}) {
+  return fetchWithCache(
+    "exams:list",
+    async () => {
+      const res = await fetch(`/api/exams`, {
+        method: "GET",
+        credentials: "include",
+      });
+      return handle(res);
+    },
+    { ttlMs: 30_000, force }
+  );
 }
 
 export async function createExam(payload) {
@@ -33,7 +41,10 @@ export async function createExam(payload) {
     credentials: "include",
     body: JSON.stringify(payload),
   });
-  return handle(res);
+  const data = await handle(res);
+  cacheDel("exams:list");
+  cacheDel("admin:exams:");
+  return data;
 }
 
 /**
@@ -49,7 +60,10 @@ export async function startExam(examId, { force = false } = {}) {
     credentials: "include",
     body: JSON.stringify({ force: Boolean(force) }), // ✅ supports server body.force as well
   });
-  return handle(res);
+  const data = await handle(res);
+  cacheDel("exams:list");
+  cacheDel("admin:exams:");
+  return data;
 }
 
 /**
@@ -107,18 +121,32 @@ export async function updateAttendance({ examId, studentId, patch }) {
   return handle(res);
 }
 
-export async function getAdminExams(params = {}) {
+export async function getAdminExams(params = {}, { force = false } = {}) {
   const usp = new URLSearchParams();
   if (params.q) usp.set("q", params.q);
   if (params.status && params.status !== "all") usp.set("status", params.status);
   if (params.mode && params.mode !== "all") usp.set("mode", params.mode);
   if (params.from) usp.set("from", params.from);
   if (params.to) usp.set("to", params.to);
+  if (params.page) usp.set("page", params.page);
+  if (params.limit) usp.set("limit", params.limit);
 
   const qs = usp.toString() ? `?${usp.toString()}` : "";
-  const res = await fetch(`/api/admin/exams${qs}`, {
-    method: "GET",
-    credentials: "include",
-  });
-  return handle(res);
+  const key = `admin:exams:${qs}`;
+
+  return fetchWithCache(
+    key,
+    async () => {
+      const res = await fetch(`/api/admin/exams${qs}`, {
+        method: "GET",
+        credentials: "include",
+      });
+      return handle(res);
+    },
+    { ttlMs: 20_000, force }
+  );
+}
+
+export function invalidateAdminExamsCache() {
+  cacheDel("admin:exams:");
 }
