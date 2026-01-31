@@ -44,46 +44,8 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
   const [wsConnected, setWsConnected] = useState(false);
   const lastWsAtRef = useRef(0);
 
-  useEffect(() => {
-    const onStatus = (e) => {
-      const st = String(e?.detail?.status || "").toLowerCase();
-      if (st === "connected") setWsConnected(true);
-      if (st === "disconnected") setWsConnected(false);
-    };
-
-    const onWs = (e) => {
-      // any WS message keeps the connection "fresh"
-      lastWsAtRef.current = Date.now();
-      const msg = e?.detail || {};
-      const t = String(msg?.type || "").toUpperCase();
-
-      // These are the types your server broadcasts today (exams.controller.js)
-      if (t === "EXAM_UPDATED" || t === "EXAM_STARTED" || t === "EXAM_ENDED") {
-        // Debounced force-refresh (prevents request storms)
-        scheduleWsRefresh();
-      }
-    };
-
-    window.addEventListener("ws:status", onStatus);
-    window.addEventListener("ws:event", onWs);
-
-    return () => {
-      window.removeEventListener("ws:status", onStatus);
-      window.removeEventListener("ws:event", onWs);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // timers/refs
   const wsRefreshTimerRef = useRef(null);
-  const scheduleWsRefresh = useCallback(() => {
-    // If polling is disabled (pollMs<=0), WS refresh is our main mechanism
-    clearTimeout(wsRefreshTimerRef.current);
-    wsRefreshTimerRef.current = setTimeout(() => {
-      backoffRef.current = 1;
-      fetchOnce({ force: true });
-    }, 250);
-  }, [fetchOnce]);
-
 
   const aliveRef = useRef(true);
   const inFlightRef = useRef(false);
@@ -130,6 +92,7 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
     [clearTimer, wsConnected]
   );
 
+  // ✅ define fetchOnce BEFORE scheduleWsRefresh (fix TDZ / "Cannot access before initialization")
   const fetchOnce = useCallback(
     async (opts = { force: false }) => {
       if (!aliveRef.current) return;
@@ -146,7 +109,9 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
       try {
         setError("");
 
-        const snap = await (lite ? getDashboardSnapshotLite : getDashboardSnapshot)({ examId: examIdRef.current });
+        const snap = await (lite ? getDashboardSnapshotLite : getDashboardSnapshot)({
+          examId: examIdRef.current,
+        });
 
         if (!aliveRef.current) return;
         if (myReqId !== reqIdRef.current) return;
@@ -165,14 +130,52 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
         backoffRef.current = clamp(backoffRef.current * 2, 1, MAX_BACKOFF);
       } finally {
         inFlightRef.current = false;
+
         if (pendingForceRef.current) {
           pendingForceRef.current = false;
           setTimeout(() => fetchOnce({ force: true }), 0);
         }
       }
     },
-    [shouldPause]
+    [shouldPause, lite]
   );
+
+  // ✅ now scheduleWsRefresh can safely depend on fetchOnce
+  const scheduleWsRefresh = useCallback(() => {
+    clearTimeout(wsRefreshTimerRef.current);
+    wsRefreshTimerRef.current = setTimeout(() => {
+      backoffRef.current = 1;
+      fetchOnce({ force: true });
+    }, 250);
+  }, [fetchOnce]);
+
+  useEffect(() => {
+    const onStatus = (e) => {
+      const st = String(e?.detail?.status || "").toLowerCase();
+      if (st === "connected") setWsConnected(true);
+      if (st === "disconnected") setWsConnected(false);
+    };
+
+    const onWs = (e) => {
+      lastWsAtRef.current = Date.now();
+
+      const msg = e?.detail || {};
+      const t = String(msg?.type || "").toUpperCase();
+
+      if (t === "EXAM_UPDATED" || t === "EXAM_STARTED" || t === "EXAM_ENDED") {
+        scheduleWsRefresh();
+      }
+    };
+
+    window.addEventListener("ws:status", onStatus);
+    window.addEventListener("ws:event", onWs);
+
+    return () => {
+      window.removeEventListener("ws:status", onStatus);
+      window.removeEventListener("ws:event", onWs);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // restart the "session" when examId changes (avoid showing old exam briefly)
   useEffect(() => {
@@ -206,7 +209,6 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
 
     tickRef.current = tick;
 
-    // initial
     tick();
 
     const onVis = () => {
@@ -225,6 +227,7 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
       aliveRef.current = false;
       document.removeEventListener("visibilitychange", onVis);
       clearTimer();
+      clearTimeout(wsRefreshTimerRef.current);
     };
   }, [fetchOnce, clearTimer, scheduleNext, shouldPause]);
 
