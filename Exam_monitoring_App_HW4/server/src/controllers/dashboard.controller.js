@@ -363,8 +363,8 @@ export async function getDashboardSnapshot(req, res) {
           type: "EXAM_TIME_LEFT_30M",
           severity: "low",
           description: "Exam has 30 minutes remaining.",
-          at: new Date().toISOString(),
-          roomId: myRoomId || "",
+          at: new Date(endMs - 30 * 60 * 1000).toISOString(),
+          roomId: "",
           remainingMs,
         });
       }
@@ -374,8 +374,8 @@ export async function getDashboardSnapshot(req, res) {
           type: "EXAM_TIME_LEFT_10M",
           severity: "medium",
           description: "Exam has 10 minutes remaining.",
-          at: new Date().toISOString(),
-          roomId: myRoomId || "",
+          at: new Date(endMs - 10 * 60 * 1000).toISOString(),
+          roomId: "",
           remainingMs,
         });
       }
@@ -683,6 +683,7 @@ export async function getDashboardSnapshotLite(req, res) {
       if (!v || typeof v !== "object") return {};
       return {
         toiletCount: Number(v.toiletCount || 0) || 0,
+        totalToiletMs: Number(v.totalToiletMs || 0) || 0,
         activeToilet: v.activeToilet || null,
       };
     };

@@ -142,6 +142,7 @@ export default function EventsFeed({
   events = [],
   alerts = [],
   activeRoomId = "",
+  canFilterRoom = true,
   onNewEvent, // ✅ callback when a new important newest item arrives
 }) {
   const [q, setQ] = useState("");
@@ -190,7 +191,9 @@ export default function EventsFeed({
     const query = q.trim().toLowerCase();
     return merged.filter((it) => {
       if (onlyThisRoom && activeRoomId) {
-        if (String(it.roomId) !== String(activeRoomId)) return false;
+        const rid = String(it.roomId || "");
+        // keep global items visible even when filtering a room
+        if (rid && rid !== String(activeRoomId)) return false;
       }
       if (!query) return true;
 
@@ -222,7 +225,8 @@ export default function EventsFeed({
             className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-200"
           />
 
-          <button
+          {canFilterRoom ? (
+<button
             type="button"
             onClick={() => setOnlyThisRoom((v) => !v)}
             disabled={!activeRoomId}
@@ -235,6 +239,7 @@ export default function EventsFeed({
           >
             {onlyThisRoom ? `Filtered: Room ${activeRoomId}` : "Filter: This room"}
           </button>
+          ) : null}
         </div>
       </div>
 

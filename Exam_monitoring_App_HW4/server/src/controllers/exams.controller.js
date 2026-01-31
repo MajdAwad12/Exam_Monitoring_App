@@ -836,7 +836,7 @@ export async function updateAttendance(req, res) {
               details: { toiletCount: ss.toiletCount },
             });
 
-            if (ss.toiletCount === 3) {
+            if (ss.toiletCount >= 3) {
               pushExamTimeline(exam, {
                 kind: "TOO_MANY_TOILET_EXITS",
                 at: leftAt,
@@ -851,7 +851,7 @@ export async function updateAttendance(req, res) {
                 type: "TOO_MANY_TOILET_EXITS",
                 timestamp: leftAt,
                 severity: "medium",
-                description: `${att.name} (${att.studentNumber || "—"}) exceeded toilet exits (${ss.toiletCount}).`,
+                description: `${att.name} (${att.studentNumber || "—"}) exceeded 3 toilet exits (${ss.toiletCount}).`,
                 classroom: att.classroom || "",
                 seat: att.seat || "",
                 studentNumber: String(att.studentNumber || ""),
@@ -879,9 +879,32 @@ export async function updateAttendance(req, res) {
           if (prevStatus === "temp_out" && nextStatus === "present") {
             const leftAt = att.outStartedAt ? new Date(att.outStartedAt) : null;
 
+            let deltaMs = 0;
             if (leftAt && !Number.isNaN(leftAt.getTime())) {
-              const deltaMs = now.getTime() - leftAt.getTime();
+              deltaMs = now.getTime() - leftAt.getTime();
               ss.totalToiletMs = (Number(ss.totalToiletMs) || 0) + Math.max(0, deltaMs);
+            }
+
+            // If a single toilet exit lasted > 5 minutes, record an event (not the sum)
+            if (deltaMs >= 5 * 60 * 1000) {
+              const mins = Math.round((deltaMs / 60000) * 10) / 10;
+              pushExamEvent(exam, {
+                type: "TOILET_TOO_LONG_SINGLE",
+                timestamp: now,
+                severity: "high",
+                description: `${att.name} (${att.studentNumber || "—"}) stayed out for ${mins} minutes in a single toilet exit (> 5).`,
+                classroom: att.classroom || "",
+                seat: att.seat || "",
+                studentNumber: String(att.studentNumber || ""),
+                studentName: String(att.name || ""),
+                studentId: att.studentId || null,
+              });
+
+              // keep report counters consistent
+              ensureReport(exam);
+              const st = ensureStudentStat(exam, realStudentKey);
+              st.incidentCount = (Number(st.incidentCount) || 0) + 1;
+              st.lastIncidentAt = now;
             }
 
             // clear out state

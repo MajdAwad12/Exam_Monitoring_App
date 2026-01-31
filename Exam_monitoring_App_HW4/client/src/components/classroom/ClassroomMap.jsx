@@ -76,6 +76,9 @@ export default function ClassroomMap({
   const isSupervisor = meRole === "supervisor";
   const isLecturer = meRole === "lecturer";
   const isAdmin = meRole === "admin";
+
+  // ✅ exam id can be `_id` (mongo) or `id` (normalized)
+  const examId = exam?.id || exam?._id;
   const canCallLecturer = isSupervisor || isAdmin;
 
   // ✅ permissions (single source of truth)
@@ -470,7 +473,7 @@ useEffect(() => {
 
 
   async function patchStatus(studentId, patch) {
-    if (!exam?.id) return;
+    if (!examId) return;
     setLocalError("");
 
     const resolvedId = resolveStudentIdKey(studentId);
@@ -539,10 +542,10 @@ useEffect(() => {
   }
 
   async function callLecturerGlobal() {
-    if (!exam?.id) return;
+    if (!examId) return;
     try {
       setSaving(true);
-      await logIncident(exam.id, null, {
+      await logIncident(examId, null, {
         kind: "CALL_LECTURER",
         severity: "medium",
         note: `${isAdmin ? "Admin" : "Supervisor"} requested lecturer assistance in room ${activeRoom}`,
@@ -699,7 +702,7 @@ useEffect(() => {
 
     try {
       setSaving(true);
-      await logIncident(exam.id, studentKey, {
+      await logIncident(examId, studentKey, {
         kind: "CHEAT_NOTE",
         severity: "high",
         note: text,

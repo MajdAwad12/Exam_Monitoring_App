@@ -364,7 +364,12 @@ export default function DashboardPage() {
             </div>
 
             <div id="events-panel" className="col-span-12 lg:col-span-6">
-              <EventsFeed me={dashMe || me} items={eventsForRoom} alerts={alertsForRoom} loading={false} />
+              <EventsFeed
+              events={eventsForRoom}
+              alerts={alertsForRoom}
+              activeRoomId={selectedRoomId}
+              canFilterRoom={canLecturerUX}
+            />
             </div>
           </div>
         </div>
