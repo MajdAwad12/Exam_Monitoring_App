@@ -17,7 +17,8 @@ function clamp(n, min, max) {
  * @param {string|null} params.roomId - (Client-side only) selected room for filtering UI
  * @param {number} params.pollMs
  */
-export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite = true } = {}) {
+export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite = false } = {})
+ {
   const [raw, setRaw] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
