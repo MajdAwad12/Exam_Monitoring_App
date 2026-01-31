@@ -80,7 +80,7 @@ export default function DashboardPage() {
     transfers,
     alerts,
     inbox,
-  } = useDashboardLive({ examId: isAdmin ? selectedExamId : null, roomId, pollMs: 0, lite: true });
+  } = useDashboardLive({ examId: isAdmin ? selectedExamId : null, roomId, pollMs: 6000, lite: true });
 
   const activeRoomId = useMemo(() => {
     return String(activeRoom?.id || activeRoom?.name || "").trim();

@@ -63,10 +63,16 @@ async function findRunningExamForUser(user, { examId, lean = false, select = nul
   }
 
   if (role === "supervisor") {
-    examQuery["supervisors.id"] = user._id;
+    // Support BOTH assignment styles:
+    // 1) exam.supervisors[].id
+    // 2) exam.classrooms[].assignedSupervisorId
+    examQuery["$or"] = [
+      { "supervisors.id": user._id },
+      { "classrooms.assignedSupervisorId": user._id },
+    ];
   }
 
-  return applyExamQuery(Exam.findOne(examQuery).sort({ startAt: 1 }));
+return applyExamQuery(Exam.findOne(examQuery).sort({ startAt: 1 }));
 }
 
 function normalizeRoomId(v) {
