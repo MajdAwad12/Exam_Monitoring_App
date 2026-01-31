@@ -996,14 +996,14 @@ useEffect(() => {
                           onClick={() => setSelectedStudentId(String(a.studentId))}
                         />
                       ) : (
-                        <div
-                          className="w-full h-full rounded-2xl border border-slate-200 bg-white grid place-items-center shadow-sm"
-                          title={`Empty seat • ${key}`}
-                        >
-                          <div className="text-lg leading-none">🪑</div>
-                          <div className="text-[11px] font-extrabold text-slate-500 mt-1">{key}</div>
-                        </div>
-                      )}
+                      <div
+                        className="w-full h-full rounded-2xl border border-slate-200 bg-white grid place-items-center shadow-sm"
+                        title={`Empty • ${key}`}
+                      >
+                        <div className="text-sm font-extrabold text-slate-500">Empty</div>
+                      </div>
+                    )}
+
                     </div>
                   );
                 })}
