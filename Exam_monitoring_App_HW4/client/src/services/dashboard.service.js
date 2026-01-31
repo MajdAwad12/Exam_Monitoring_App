@@ -54,6 +54,19 @@ export function getDashboardSnapshot({ examId } = {}) {
   return http(`/api/dashboard/snapshot${qs}`, { method: "GET" });
 }
 
+
+/**
+ * Dashboard snapshot (lite)
+ * - Faster payload for the Dashboard UI
+ * - Excludes heavy report maps and large fields
+ */
+export function getDashboardSnapshotLite({ examId } = {}) {
+  const usp = new URLSearchParams();
+  if (examId) usp.set("examId", String(examId));
+  const qs = usp.toString() ? `?${usp.toString()}` : "";
+  return http(`/api/dashboard/snapshot-lite${qs}`, { method: "GET" });
+}
+
 export function getClock() {
   return http(`/api/dashboard/clock`, { method: "GET" });
 }

@@ -77,8 +77,9 @@ async function updateExamWithRetry(examId, mutator, retries = 6) {
 
 
 function toOut(doc) {
-  const o = doc.toObject({ getters: true });
-  return { ...o, id: String(o._id) };
+  const o = doc && typeof doc.toObject === "function" ? doc.toObject({ getters: true }) : (doc || {});
+  const _id = o._id || o.id;
+  return { ...o, id: String(_id || "") };
 }
 
 function slugCourseId(courseName) {
@@ -541,7 +542,10 @@ export async function getExams(req, res) {
     }
     // admin (and other roles) keep full access
 
-    const exams = await Exam.find(filter).sort({ startAt: -1 });
+    const exams = await Exam.find(filter)
+      .select("_id courseName examMode status startAt endAt classrooms lecturer coLecturers supervisors report.summary createdAt updatedAt")
+      .sort({ startAt: -1 })
+      .lean();
     return res.json({ ok: true, exams: exams.map(toOut) });
   } catch (e) {
     return res.status(500).json({ message: e.message || "Failed to load exams" });

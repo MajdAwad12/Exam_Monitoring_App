@@ -82,9 +82,11 @@ export default function AppLayout() {
 
       try {
         ws = new WebSocket(WS_URL);
+        window.dispatchEvent(new CustomEvent("ws:status", { detail: { status: "connecting", at: Date.now() } }));
         // setWsStatus("connecting");
 
         ws.onopen = () => {
+          window.dispatchEvent(new CustomEvent("ws:status", { detail: { status: "connected", at: Date.now() } }));
           attempts = 0;
           // setWsStatus("connected");
 
@@ -114,6 +116,7 @@ export default function AppLayout() {
         };
 
         ws.onclose = () => {
+          window.dispatchEvent(new CustomEvent("ws:status", { detail: { status: "disconnected", at: Date.now() } }));
           // setWsStatus("disconnected");
           clearInterval(pingTimer);
 
