@@ -1,5 +1,9 @@
 // client/src/services/admin.service.js
+import { fetchWithCache } from "./_cache";
 
+// ✅ Support Vercel/Render (prod) via VITE_API_BASE, and local via Vite proxy
+const API_BASE = String(import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
+const BASE = API_BASE ? `${API_BASE}/api` : "/api";
 
 async function handle(res) {
   const data = await res.json().catch(() => ({}));
@@ -9,15 +13,21 @@ async function handle(res) {
 
 export async function listUsers(role) {
   const q = role ? `?role=${encodeURIComponent(role)}` : "";
-  const res = await fetch(`/api/admin/users${q}`, {
+  const res = await fetch(`${BASE}/admin/users${q}`, {
     method: "GET",
     credentials: "include",
   });
   return handle(res);
 }
 
+// ✅ cached: helps speed up Admin flows (create exam modal, etc.)
+export function listUsersCached(role, { ttlMs = 20000 } = {}) {
+  const key = `admin:users:${role || "all"}`;
+  return fetchWithCache(key, () => listUsers(role), { ttlMs });
+}
+
 export async function updateExamAdmin(examId, payload) {
-  const res = await fetch(`/api/admin/exams/${examId}`, {
+  const res = await fetch(`${BASE}/admin/exams/${examId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -29,7 +39,7 @@ export async function updateExamAdmin(examId, payload) {
 export async function deleteExamAdmin(examId, opts = {}) {
   const force = Boolean(opts?.force);
   const q = force ? `?force=1` : "";
-  const res = await fetch(`/api/admin/exams/${examId}${q}`, {
+  const res = await fetch(`${BASE}/admin/exams/${examId}${q}`, {
     method: "DELETE",
     credentials: "include",
   });
@@ -38,7 +48,7 @@ export async function deleteExamAdmin(examId, opts = {}) {
 
 // ✅ Keep: Auto Assign (SERVER-SIDE apply on existing exam)
 export async function autoAssignExam(examId) {
-  const res = await fetch(`/api/admin/exams/${examId}/auto-assign`, {
+  const res = await fetch(`${BASE}/admin/exams/${examId}/auto-assign`, {
     method: "POST",
     credentials: "include",
   });
@@ -54,7 +64,7 @@ export async function autoAssignExam(examId) {
  * requestedRooms = 0 => AUTO (allow grow/shrink by students)
  */
 export async function autoAssignDraft(payload) {
-  const res = await fetch(`/api/admin/exams/auto-assign-draft`, {
+  const res = await fetch(`${BASE}/admin/exams/auto-assign-draft`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",

@@ -1,9 +1,9 @@
 // ===== file: client/src/services/dashboard.service.js =====
+import { fetchWithCache } from "./_cache";
 
 // ✅ Support Vercel (prod) via VITE_API_BASE
 const API_BASE = String(import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
 const BASE = API_BASE ? `${API_BASE}/api` : "/api";
-
 
 async function handle(res) {
   if (res.status === 204) return null;
@@ -38,9 +38,8 @@ async function http(url, options = {}) {
     headers["Content-Type"] = "application/json";
   }
 
-  // ✅ Avoid endless loading (Render may be waking up)
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 12000);
+  const id = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
 
   try {
     const res = await fetch(url, {
@@ -50,43 +49,39 @@ async function http(url, options = {}) {
       signal: controller.signal,
     });
 
-    return handle(res);
-  } catch (e) {
-    if (String(e?.name) === "AbortError") {
-      throw new Error("Server is taking too long (Render waking up). Please retry.");
+    return await handle(res);
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error("Request timeout (server may be waking up)");
     }
-    throw e;
+    throw err;
   } finally {
-    clearTimeout(t);
+    clearTimeout(id);
   }
 }
 
+// =========================
+// Dashboard
+// =========================
 
-/**
- * Dashboard snapshot
- * - Server decides visibility by role/permissions
- * - Admin can optionally choose a specific running exam via ?examId=
- */
-export function getDashboardSnapshot({ examId } = {}) {
-  const usp = new URLSearchParams();
-  if (examId) usp.set("examId", String(examId));
-  const qs = usp.toString() ? `?${usp.toString()}` : "";
-  return http(`${BASE}/dashboard/snapshot${qs}`, { method: "GET" });
+export function getDashboardSnapshot(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return http(`${BASE}/dashboard/snapshot${qs ? `?${qs}` : ""}`, {
+    method: "GET",
+    timeoutMs: 12000,
+  });
 }
 
-
-/**
- * Dashboard snapshot (lite)
- * - Faster payload for the Dashboard UI
- * - Excludes heavy report maps and large fields
- */
-export function getDashboardSnapshotLite({ examId } = {}) {
-  const usp = new URLSearchParams();
-  if (examId) usp.set("examId", String(examId));
-  const qs = usp.toString() ? `?${usp.toString()}` : "";
-  return http(`${BASE}/dashboard/snapshot-lite${qs}`, { method: "GET" });
+export function getDashboardSnapshotLite({ roomId } = {}) {
+  const qs = new URLSearchParams({ lite: "1", ...(roomId ? { roomId } : {}) }).toString();
+  return http(`${BASE}/dashboard/snapshot-lite?${qs}`, {
+    method: "GET",
+    timeoutMs: 12000,
+  });
 }
 
-export function getClock() {
-  return http(`${BASE}/dashboard/clock`, { method: "GET" });
+// ✅ Small TTL cache to avoid heavy reload when switching screens quickly
+export function getDashboardSnapshotLiteCached({ roomId } = {}, { ttlMs = 4000 } = {}) {
+  const key = `dash:lite:${roomId || "all"}`;
+  return fetchWithCache(key, () => getDashboardSnapshotLite({ roomId }), { ttlMs });
 }

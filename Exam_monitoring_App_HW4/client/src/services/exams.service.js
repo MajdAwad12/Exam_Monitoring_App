@@ -1,4 +1,9 @@
 // client/src/services/exams.service.js
+import { fetchWithCache } from "./_cache";
+
+// ✅ Support Vercel/Render (prod) via VITE_API_BASE, and local via Vite proxy
+const API_BASE = String(import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
+const BASE = API_BASE ? `${API_BASE}/api` : "/api";
 
 async function handle(res) {
   if (res.ok) return res.json();
@@ -13,21 +18,29 @@ async function handle(res) {
   throw err;
 }
 
-
 // =========================
-// Exams
+// Exams (public)
 // =========================
 
 export async function getExams() {
-  const res = await fetch(`/api/exams`, {
+  const res = await fetch(`${BASE}/exams`, {
     method: "GET",
     credentials: "include",
   });
   return handle(res);
 }
 
+// ✅ faster navigation (keeps UI responsive)
+export function getExamsCached() {
+  return fetchWithCache(
+    "exams:list",
+    () => getExams(),
+    { ttlMs: 15000 }
+  );
+}
+
 export async function createExam(payload) {
-  const res = await fetch(`/api/exams`, {
+  const res = await fetch(`${BASE}/exams`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -43,7 +56,7 @@ export async function createExam(payload) {
  */
 export async function startExam(examId, { force = false } = {}) {
   const qs = force ? "?force=1" : "";
-  const res = await fetch(`/api/exams/${examId}/start${qs}`, {
+  const res = await fetch(`${BASE}/exams/${examId}/start${qs}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" }, // ✅ so server can read body too
     credentials: "include",
@@ -54,17 +67,12 @@ export async function startExam(examId, { force = false } = {}) {
 
 /**
  * End exam
- * - POST /api/exams/:id/end
- * Server now allows end ONLY if exam is ACTIVE in real time window.
- */
-/**
- * End exam
  * - Normal: POST /api/exams/:id/end
  * - Force (admin): POST /api/exams/:id/end?force=1 (also body {force:true})
  */
 export async function endExam(examId, { force = false } = {}) {
   const qs = force ? "?force=1" : "";
-  const res = await fetch(`/api/exams/${examId}/end${qs}`, {
+  const res = await fetch(`${BASE}/exams/${examId}/end${qs}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -73,52 +81,21 @@ export async function endExam(examId, { force = false } = {}) {
   return handle(res);
 }
 
-// ✅ Admin Update/Delete
-export async function updateExamAdmin(examId, payload) {
-  const res = await fetch(`/api/admin/exams/${examId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(payload),
-  });
-  return handle(res);
-}
-
-
-export async function getMyReport(examId) {
-  const res = await fetch(`/api/exams/${examId}/my-report`, {
-    method: "GET",
-    credentials: "include",
-  });
-  return handle(res);
-}
-
 // =========================
-// Attendance
+// Exams (admin list)
 // =========================
 
-export async function updateAttendance({ examId, studentId, patch }) {
-  const res = await fetch(`/api/exams/${examId}/attendance/${studentId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(patch),
-  });
-  return handle(res);
-}
-
-export async function getAdminExams(params = {}) {
-  const usp = new URLSearchParams();
-  if (params.q) usp.set("q", params.q);
-  if (params.status && params.status !== "all") usp.set("status", params.status);
-  if (params.mode && params.mode !== "all") usp.set("mode", params.mode);
-  if (params.from) usp.set("from", params.from);
-  if (params.to) usp.set("to", params.to);
-
-  const qs = usp.toString() ? `?${usp.toString()}` : "";
-  const res = await fetch(`/api/admin/exams${qs}`, {
-    method: "GET",
-    credentials: "include",
-  });
-  return handle(res);
+/**
+ * Admin exams list (used in ManageExams)
+ * - cached to reduce reload delays between tabs / pages
+ */
+export function getAdminExams() {
+  return fetchWithCache(
+    "admin:exams",
+    async () => {
+      const res = await fetch(`${BASE}/exams/admin`, { credentials: "include" });
+      return handle(res);
+    },
+    { ttlMs: 15000 }
+  );
 }
