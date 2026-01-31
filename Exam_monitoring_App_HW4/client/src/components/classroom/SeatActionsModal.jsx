@@ -117,7 +117,7 @@ export default function SeatActionsModal({
     });
   }
 
-  async function setStatus(status, extra = {}) {
+ async function setStatus(status, extra = {}) {
   if (!canEditAttendance || lockedActions) return;
 
   const realStatus = String(status || "").trim();
@@ -138,26 +138,30 @@ export default function SeatActionsModal({
   }
 }
 
+async function setPresentOrBackToRoom() {
+  if (!canEditAttendance || lockedActions) return;
 
-    async function setPresentOrBackToRoom() {
-    if (!canEditAttendance || lockedActions) return;
+  setLocalErr("");
+  setActionBusy(true);
 
-    setLocalErr("");
-    setActionBusy(true);
+  const payload = isTempOutNow
+    ? { status: "present", outStartedAt: null }
+    : { status: "present" };
 
-    const payload = isTempOutNow ? { status: "present", outStartedAt: null } : { status: "present" };
-
-    try {
-      await onSetStatus?.(seat.studentId, payload);
-      onClose?.(); // ✅ close only after success
-    } catch (e) {
-      const msg = e?.message || String(e);
-      setLocalErr(msg);
-      onActionError?.(msg);
-    } finally {
-      setActionBusy(false);
-    }
+  try {
+    await onSetStatus?.(seat.studentId, payload);
+    onClose?.(); // ✅ close only after success
+  } catch (e) {
+    const msg = e?.message || String(e);
+    setLocalErr(msg);
+    if (typeof onActionError === "function") onActionError(msg);
+  } finally {
+    setActionBusy(false);
   }
+}
+
+
+    
 
 
   // Notes allowed for everyone (as requested)
