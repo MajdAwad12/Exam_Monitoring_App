@@ -19,8 +19,13 @@ export default function ExamTabs({ exams = [], selectedExamId = null, onSelect }
     <div className="w-full">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="text-sm font-extrabold text-slate-900">Active Exams</div>
-          <div className="text-xs text-slate-500 mt-0.5">Switch between running exams</div>
+          <div className="text-lg font-extrabold text-slate-900 tracking-tight">
+            Active Exams
+            </div>
+            <div className="text-sm text-slate-500 mt-1">
+            Switch between running exams
+            </div>
+
         </div>
 
         <div className="text-xs text-slate-500">{exams.length} running</div>
