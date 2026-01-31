@@ -1,10 +1,11 @@
 // client/src/pages/dashboard/DashboardPage.jsx
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useOutletContext } from "react-router-dom";
+
 import { useDashboardLive } from "../../hooks/useDashboardLive";
 import { useSimClock } from "../../hooks/useSimClock";
-import RocketLoader from "../../components/loading/RocketLoader.jsx";
 
+import RocketLoader from "../../components/loading/RocketLoader.jsx";
 import ExamTabs from "../../components/dashboard/ExamTabs.jsx";
 import RoomTabs from "../../components/dashboard/RoomTabs.jsx";
 import ExamOverviewCard from "../../components/dashboard/ExamOverviewCard.jsx";
@@ -20,53 +21,52 @@ function normRoom(x) {
   return String(x || "").trim();
 }
 
+const ALL_ROOMS = "__ALL__";
+
 export default function DashboardPage() {
   const { me, setChatContext } = useOutletContext();
-
   const { simNow, simNowMs } = useSimClock();
+  const meRole = String(me?.role || "").toLowerCase();
 
-  // ✅ Only lecturer/admin uses this to switch rooms manually.
-  const [roomId, setRoomId] = useState(null);
-
-  // ✅ Admin: choose which RUNNING exam is currently shown in the dashboard
-  const [runningExams, setRunningExams] = useState([]);
-  const [selectedExamId, setSelectedExamId] = useState(null);
-  const [examsLoading, setExamsLoading] = useState(false);
-
-  const meRole = useMemo(() => String(me?.role || "").toLowerCase(), [me]);
   const isAdmin = meRole === "admin";
-  const canLecturerUX = meRole === "lecturer" || isAdmin;
-  const canManageStudents = canLecturerUX;
+  const isLecturer = meRole === "lecturer";
+  const isSupervisor = meRole === "supervisor";
+  const canPickRooms = isAdmin || isLecturer;
 
-  const loadRunningExams = useCallback(async () => {
-    if (!isAdmin) return;
-    setExamsLoading(true);
-    try {
-      const res = await getAdminExams({ status: "running" });
-      const exams = Array.isArray(res?.exams) ? res.exams : Array.isArray(res) ? res : [];
-      setRunningExams(exams);
+  // Admin: choose which running exam to view
+  const [adminExams, setAdminExams] = useState([]);
+  const [selectedExamId, setSelectedExamId] = useState("");
 
-      // Keep current selection if still exists, otherwise auto-pick first
-      setSelectedExamId((prev) => {
-        const prevStr = String(prev || "");
-        const stillThere = exams.some((e) => String(e?._id || e?.id) === prevStr);
-        if (stillThere) return prev;
-        const firstId = exams?.[0]?._id || exams?.[0]?.id || null;
-        return firstId ? String(firstId) : null;
-      });
-    } catch {
-      // ignore list errors (dashboard snapshot will still show "first running exam")
-    } finally {
-      setExamsLoading(false);
-    }
-  }, [isAdmin]);
+  // Lecturer/Admin: choose room (or all)
+  const [pickedRoomId, setPickedRoomId] = useState(ALL_ROOMS);
 
-  // When role becomes admin, load running exams
+  // ---- load admin running exams list ----
   useEffect(() => {
-    if (isAdmin) loadRunningExams();
-  }, [isAdmin, loadRunningExams]);
+    let alive = true;
+    if (!isAdmin) return;
 
-  // ✅ Dashboard data (actual exam snapshot)
+    (async () => {
+      try {
+        const res = await getAdminExams();
+        if (!alive) return;
+        const list = Array.isArray(res) ? res : res?.exams || [];
+        setAdminExams(list);
+
+        // pick first running exam if none selected
+        if (!selectedExamId) {
+          const first = list?.[0]?.id || list?.[0]?._id || "";
+          if (first) setSelectedExamId(String(first));
+        }
+      } catch {
+        // ignore – dashboard hook will show empty
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [isAdmin, selectedExamId]);
+
   const {
     me: dashMe,
     exam,
@@ -81,293 +81,163 @@ export default function DashboardPage() {
     transfers,
     alerts,
     inbox,
-  } = useDashboardLive({ examId: isAdmin ? selectedExamId : null, roomId, pollMs: 6000, lite: true });
+  } = useDashboardLive({
+    examId: isAdmin ? selectedExamId : null,
+    pollMs: 4500,
+    lite: true,
+  });
+
+  const liveMe = dashMe || me;
+  const liveRole = String(liveMe?.role || meRole).toLowerCase();
+
+  // room list
+  const roomList = useMemo(() => {
+    const r = (rooms || []).map((x) => (typeof x === "string" ? { id: x, name: x } : x));
+    return r.filter((x) => Boolean(normRoom(x?.id || x?.name)));
+  }, [rooms]);
 
   const activeRoomId = useMemo(() => {
-    return String(activeRoom?.id || activeRoom?.name || "").trim();
+    return normRoom(activeRoom?.id || activeRoom?.name || activeRoom);
   }, [activeRoom]);
 
+  // Supervisor: fixed room (no room filter UI)
+  const supervisorRoomId = useMemo(() => {
+    return normRoom(liveMe?.assignedRoomId) || activeRoomId;
+  }, [liveMe?.assignedRoomId, activeRoomId]);
+
+  // For Events/Transfers filtering:
+  // - Supervisor -> always their room
+  // - Lecturer/Admin -> chosen room (or all)
   const selectedRoomId = useMemo(() => {
-    return String(roomId || activeRoomId || "").trim();
-  }, [roomId, activeRoomId]);
+    if (liveRole === "supervisor") return supervisorRoomId;
+    const v = normRoom(pickedRoomId);
+    if (!v) return ALL_ROOMS;
+    return v;
+  }, [liveRole, supervisorRoomId, pickedRoomId]);
+
+  // For ClassroomMap: needs a concrete room (can't show "All")
+  const mapRoomId = useMemo(() => {
+    if (liveRole === "supervisor") return supervisorRoomId;
+    if (selectedRoomId && selectedRoomId !== ALL_ROOMS) return selectedRoomId;
+    return activeRoomId || (roomList[0]?.id || "");
+  }, [liveRole, supervisorRoomId, selectedRoomId, activeRoomId, roomList]);
+
+  // keep picked room valid when rooms list changes
+  useEffect(() => {
+    if (!canPickRooms) return;
+
+    if (pickedRoomId !== ALL_ROOMS) {
+      const exists = roomList.some((r) => normRoom(r.id) === normRoom(pickedRoomId));
+      if (!exists) setPickedRoomId(ALL_ROOMS);
+    }
+  }, [canPickRooms, roomList, pickedRoomId]);
+
+  // chat context (so chatbot knows current exam)
+  useEffect(() => {
+    if (!setChatContext) return;
+    setChatContext({
+      examId: exam?.id || exam?._id || null,
+      roomId: mapRoomId || null,
+    });
+  }, [setChatContext, exam?.id, exam?._id, mapRoomId]);
 
   const transfersForRoom = useMemo(() => {
-    const rid = selectedRoomId;
-    if (!rid) return transfers || [];
+    const rid = normRoom(selectedRoomId);
+    if (!rid || rid === ALL_ROOMS) return transfers || [];
     return (transfers || []).filter(
       (t) => normRoom(t?.fromClassroom) === rid || normRoom(t?.toClassroom) === rid
     );
   }, [transfers, selectedRoomId]);
 
-  const eventsForRoom = useMemo(() => {
-    const rid = selectedRoomId;
-    if (!rid) return events || [];
-    return (events || []).filter((e) => normRoom(e?.classroom || e?.roomId || e?.room) === rid);
-  }, [events, selectedRoomId]);
-
-  const alertsForRoom = useMemo(() => {
-    const rid = selectedRoomId;
-    if (!rid) return alerts || [];
-    return (alerts || []).filter((a) => normRoom(a?.roomId || a?.classroom || a?.room) === rid);
-  }, [alerts, selectedRoomId]);
-
-  const examId = useMemo(() => {
-    return exam?.id || exam?._id || null;
-  }, [exam]);
-
-  const title = useMemo(() => {
-    if (!exam) return "Dashboard";
-    const r = selectedRoomId || activeRoomId;
-    return r ? `Dashboard • ${exam.courseName} • ${r}` : `Dashboard • ${exam.courseName}`;
-  }, [exam, selectedRoomId, activeRoomId]);
-
-  // ✅ Toast (only when we decide it's important)
-  const [toast, setToast] = useState(null);
-
-  function showToastFromItem(item) {
-    if (!item) return;
-
-    const sev = String(item.severity || "info").toLowerCase();
-    const type = String(item.type || item.raw?.type || "").toUpperCase();
-
-    const studentName = item.name || "Student";
-    const studentId = item.studentCode || item.studentNumber || "";
-    const room = item.roomId ? `Room ${item.roomId}` : "";
-
-    let tTitle = "New update";
-    let message = item.text || item.description || "A new event was recorded.";
-    let icon = "✅";
-
-    if (type.includes("STUDENT_ADDED") || type.includes("ADD_STUDENT")) {
-      tTitle = "Student Added";
-      icon = "➕";
-      message = `Student added to ${room} — ${studentName} • ${studentId}`;
-    } else if (type.includes("STUDENT_REMOVED") || type.includes("DELETE_STUDENT")) {
-      tTitle = "Student Removed";
-      icon = "🗑️";
-      message = `Student removed from the exam — ${studentName} • ${studentId}`;
-    } else if (type.includes("TOO_MANY_TOILET") || type.includes("TOILET_LIMIT")) {
-      tTitle = "Toilet Limit Reached";
-      icon = "🚻";
-      message = `${studentName} • ${studentId} exceeded the toilet exit limit (3+)`;
-    } else if (type.includes("INCIDENT")) {
-      tTitle = "Incident Reported";
-      icon = "⚠️";
-      message = item.text || "An incident was reported.";
-    } else if (type.includes("ALERT")) {
-      tTitle = "New Alert";
-      icon = "🔔";
-      message = item.text || "A new alert was triggered.";
-    } else if (type.includes("TRANSFER")) {
-      tTitle = "Transfer Update";
-      icon = "🔁";
-      message = item.text || "A transfer request was updated.";
-    }
-
-    setToast({
-      title: tTitle,
-      message,
-      severity: sev,
-      icon,
-    });
-  }
-
-  // ✅ Send context to chat widget
-  useEffect(() => {
-    const alertsCount = Array.isArray(alertsForRoom) ? alertsForRoom.length : 0;
-    const transfersCount = Array.isArray(transfersForRoom) ? transfersForRoom.length : 0;
-
-    setChatContext((prev) => ({
-      ...prev,
-      screen: "dashboard",
-      examId,
-      roomId: selectedRoomId || null,
-      stats: stats || null,
-      alertsCount,
-      transfersCount,
-    }));
-  }, [setChatContext, examId, selectedRoomId, stats, alertsForRoom, transfersForRoom]);
-
-  // ✅ Listen to global WS events from AppLayout and refresh dashboard data
-  useEffect(() => {
-    let debounceTimer = null;
-
-    const scheduleRefetch = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        refetch();
-      }, 150);
-    };
-
-    const onWs = (ev) => {
-      const msg = ev?.detail;
-      if (!msg || typeof msg !== "object") return;
-
-      // If WS payload has an examId, and admin selected another exam => ignore
-      const msgExamId = msg?.examId || msg?.payload?.examId || msg?.data?.examId;
-      if (isAdmin && selectedExamId && msgExamId && String(msgExamId) !== String(selectedExamId)) {
-        // but still update the running exams list on exam start/end
-        if (msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED") loadRunningExams();
-        return;
-      }
-
-      if (msg.type === "EXAM_UPDATED" || msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED") {
-        scheduleRefetch();
-        if (isAdmin && (msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED")) loadRunningExams();
-      }
-
-      const t = String(msg.type || "");
-
-      if (t.includes("TOO_MANY_TOILET") || t.includes("TOILET_LIMIT")) {
-        scheduleRefetch();
-        showToastFromItem({
-          type: "TOO_MANY_TOILET",
-          severity: "medium",
-          title: "Toilet limit reached (3+)",
-          description: "A student exceeded toilet exits.",
-        });
-        return;
-      }
-
-      if (t.includes("INCIDENT") || t.includes("ALERT") || t.includes("TRANSFER")) {
-        scheduleRefetch();
-      }
-    };
-
-    window.addEventListener("ws:event", onWs);
-    return () => {
-      window.removeEventListener("ws:event", onWs);
-      clearTimeout(debounceTimer);
-    };
-  }, [refetch, isAdmin, selectedExamId, loadRunningExams]);
-
-  // ✅ When admin switches exam => reset room selection (so we pick the best active room automatically)
-  useEffect(() => {
-    if (isAdmin) setRoomId(null);
-  }, [isAdmin, selectedExamId]);
-
-  if (loading) return <RocketLoader />;
-
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="rounded-3xl border border-red-200 bg-red-50 p-5">
-          <div className="font-extrabold text-red-700">Dashboard Error</div>
-          <div className="text-red-700/90 text-sm mt-1">{error}</div>
-          <button
-            onClick={refetch}
-            className="mt-3 px-4 py-2 rounded-2xl bg-red-600 text-white hover:bg-red-700 font-extrabold"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!exam) {
-    return (
-      <div className="p-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="text-xl font-extrabold text-slate-900">No running exam</div>
-          <div className="mt-1 text-sm text-slate-600">Start an exam to see live monitoring.</div>
-          <button
-            onClick={() => {
-              refetch();
-              if (isAdmin) loadRunningExams();
-            }}
-            className="mt-4 px-4 py-2 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 font-extrabold text-sm"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
-      <Toast toast={toast} onClose={() => setToast(null)} />
+      <Toast />
+      <div className="max-w-[1450px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {loading ? (
+          <div className="py-10">
+            <RocketLoader />
+          </div>
+        ) : null}
 
-      <div className="p-5 sm:p-6 space-y-5">
-        {/* Header */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div>
-              <div className="text-2xl font-black text-slate-900">{title}</div>
-              <div className="mt-1 text-sm text-slate-600">
-                Live monitoring • {exam.examMode || "onsite"} • {rooms?.length || 0} rooms
+        {error ? (
+          <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-900">
+            {String(error)}
+          </div>
+        ) : null}
+
+        {/* Admin exam selector */}
+        {isAdmin && adminExams?.length ? (
+          <div className="mb-4">
+            <ExamTabs
+              exams={adminExams}
+              selectedExamId={selectedExamId}
+              onChangeExam={(id) => {
+                setSelectedExamId(String(id || ""));
+                setPickedRoomId(ALL_ROOMS);
+              }}
+            />
+          </div>
+        ) : null}
+
+        {/* Lecturer/Admin room selector */}
+        {canPickRooms && roomList.length ? (
+          <div className="mb-4">
+            <RoomTabs
+              rooms={roomList}
+              roomId={selectedRoomId}
+              onChangeRoom={(id) => setPickedRoomId(String(id))}
+              attendance={attendance}
+              allowAll={true}
+            />
+          </div>
+        ) : null}
+
+        {!exam ? (
+          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 text-slate-700">
+            <div className="text-lg font-extrabold text-slate-900">No active exam</div>
+            <div className="mt-1 text-sm text-slate-600">
+              When an exam is running, the dashboard will show classrooms, transfers and events.
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-12 gap-5">
+            <div className="col-span-12 xl:col-span-7 space-y-5">
+              <ExamOverviewCard exam={exam} stats={stats} inbox={inbox} nowMs={simNowMs} />
+
+              {/* Admin tools */}
+              {isAdmin ? (
+                <DashboardAddDeleteStudentsCard exam={exam} onChanged={refetch} />
+              ) : null}
+
+              <ClassroomMap
+                exam={exam}
+                me={liveMe}
+                refreshNow={refetch}
+                nowMs={simNowMs}
+                forcedRoomId={mapRoomId}
+                forcedAttendance={attendance}
+                forcedTransfers={transfersForRoom}
+                allRooms={roomList}
+                hideRoomSwitcher={true}
+                reportStudentFiles={exam?.reportStudentFiles || exam?.report?.studentFiles || null}
+              />
+            </div>
+
+            <div className="col-span-12 xl:col-span-5 space-y-5">
+              <TransfersPanel me={liveMe} items={transfersForRoom} loading={false} error={""} onChanged={refetch} />
+
+              <div id="events-panel">
+                <EventsFeed
+                  title="Event Panel"
+                  events={events}
+                  alerts={alerts}
+                  selectedRoomId={selectedRoomId}
+                  allowAllRooms={canPickRooms}
+                />
               </div>
             </div>
           </div>
-
-          {/* ✅ Admin: exam selector tabs */}
-          {isAdmin ? (
-            <div className="mt-5">
-              <ExamTabs
-                exams={runningExams?.length ? runningExams : [exam]}
-                selectedExamId={selectedExamId || examId}
-                onSelect={(id) => {
-                  setSelectedExamId(String(id));
-                  setRoomId(null);
-                }}
-              />
-            </div>
-          ) : null}
-          {/* ✅ Lecturer/Admin: room selector */}
-          {canLecturerUX ? (
-            <div className="mt-5">
-              <RoomTabs
-                rooms={rooms}
-                roomId={selectedRoomId || activeRoomId || ""}
-                attendance={attendance}
-                onChangeRoom={(rid) => setRoomId(String(rid || "").trim() || null)}
-              />
-            </div>
-          ) : null}
-        </div>
-
-        <div className="grid grid-cols-12 gap-5">
-          <div className="col-span-12">
-            <ExamOverviewCard me={dashMe || me} exam={exam} stats={stats} inbox={inbox} simNow={simNow} loading={false} />
-          </div>
-
-          {/* ✅ Admin + Lecturer: Add/Delete Students */}
-          {canManageStudents ? (
-            <div className="col-span-12">
-              <DashboardAddDeleteStudentsCard
-                examId={examId}
-                currentRoomId={selectedRoomId || activeRoomId || ""}
-                rooms={rooms}
-                onChanged={refetch}
-              />
-            </div>
-          ) : null}
-
-          <div className="col-span-12">
-            <ClassroomMap
-              exam={exam}
-              me={dashMe || me}
-              refreshNow={refetch}
-              nowMs={simNowMs || Date.now()}
-              forcedRoomId={selectedRoomId}
-              forcedAttendance={attendance}
-              forcedTransfers={transfersForRoom}
-              allRooms={rooms}
-              hideRoomSwitcher={true}
-            />
-          </div>
-
-          <div className="col-span-12 grid grid-cols-12 gap-5">
-            <div className="col-span-12 lg:col-span-6">
-              <TransfersPanel me={dashMe || me} items={transfersForRoom} loading={false} error={""} onChanged={refetch} />
-            </div>
-
-            <div id="events-panel" className="col-span-12 lg:col-span-6">
-              <EventsFeed me={dashMe || me} items={eventsForRoom} alerts={alertsForRoom} loading={false} />
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </>
   );

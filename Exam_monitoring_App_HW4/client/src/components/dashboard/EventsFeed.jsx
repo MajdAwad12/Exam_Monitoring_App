@@ -1,5 +1,5 @@
 // client/src/components/dashboard/EventsFeed.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 
 function fmtTime(d) {
   const dt = new Date(d || Date.now());
@@ -9,292 +9,149 @@ function fmtTime(d) {
 
 function sevMeta(sev) {
   const s = String(sev || "low").toLowerCase();
-  if (s === "high" || s === "critical") {
-    return { pill: "bg-rose-600 text-white", row: "border-rose-200 bg-rose-50", dot: "bg-rose-500" };
+  if (s === "critical") return { dot: "bg-rose-600", pill: "bg-rose-50 text-rose-800 border-rose-200" };
+  if (s === "high") return { dot: "bg-rose-500", pill: "bg-rose-50 text-rose-800 border-rose-200" };
+  if (s === "medium") return { dot: "bg-amber-500", pill: "bg-amber-50 text-amber-800 border-amber-200" };
+  return { dot: "bg-slate-400", pill: "bg-slate-50 text-slate-700 border-slate-200" };
+}
+
+function normRoom(x) {
+  return String(x || "").trim();
+}
+
+function normalizeEventItem(x) {
+  if (!x) return null;
+
+  // event item (from exam.events)
+  if (x.timestamp || x.type) {
+    return {
+      kind: "event",
+      type: String(x.type || ""),
+      at: x.timestamp || x.at || x.time || new Date().toISOString(),
+      severity: x.severity || "low",
+      description: x.description || "",
+      roomId: normRoom(x.classroom || x.roomId || x.room),
+      classroom: normRoom(x.classroom || x.roomId || x.room),
+      seat: String(x.seat || ""),
+      studentId: x.studentId ? String(x.studentId) : "",
+      studentName: x.studentName || "",
+      studentNumber: x.studentNumber || "",
+    };
   }
-  if (s === "medium") {
-    return { pill: "bg-amber-500 text-white", row: "border-amber-200 bg-amber-50", dot: "bg-amber-500" };
+
+  // alert item (computed)
+  if (x.type && (x.at || x.elapsedMs != null)) {
+    return {
+      kind: "alert",
+      type: String(x.type || ""),
+      at: x.at || new Date().toISOString(),
+      severity: x.severity || "low",
+      description: x.description || "",
+      roomId: normRoom(x.roomId || x.classroom || x.room),
+      classroom: normRoom(x.roomId || x.classroom || x.room),
+      seat: String(x.seat || ""),
+      studentId: x.studentId ? String(x.studentId) : "",
+      studentName: x.name || "",
+      studentNumber: x.studentCode || "",
+      elapsedMs: x.elapsedMs,
+    };
   }
-  return { pill: "bg-slate-200 text-slate-900", row: "border-slate-200 bg-slate-50", dot: "bg-slate-400" };
-}
 
-function titleOf(item) {
-  const t = String(item?.type || item?.kind || item?.eventType || "EVENT").toUpperCase();
-
-  if (t === "EXAM_30_MIN_LEFT") return "⏰ 30 Minutes Left";
-  if (t === "EXAM_15_MIN_LEFT") return "⏰ 15 Minutes Left";
-  if (t === "EXAM_5_MIN_LEFT") return "⏰ 5 Minutes Left";
-
-  if (t.includes("TOILET_LONG")) return "Toilet too long";
-  if (t.includes("TOO_MANY_TOILET") || t.includes("TOILET_LIMIT")) return "Toilet limit reached (3+)";
-  if (t.includes("CALL_LECTURER")) return "Call lecturer";
-  if (t.includes("VIOLATION")) return "Violation";
-  if (t.includes("CHEAT")) return "Cheating note";
-  if (t.includes("TRANSFER")) return "Transfer";
-  if (t.includes("ALERT")) return "Alert";
-  if (t.includes("INCIDENT")) return "Incident";
-
-  return t.replaceAll("_", " ");
-}
-
-function pickText(item) {
-  const candidates = [
-    item?.text,
-    item?.note,
-    item?.message,
-    item?.content,
-    item?.description,
-    item?.title,
-    item?.details?.note,
-    item?.details?.text,
-    item?.details?.message,
-    item?.payload?.note,
-    item?.payload?.text,
-    item?.payload?.message,
-    item?.data?.note,
-    item?.data?.text,
-    item?.data?.message,
-    item?.meta?.note,
-    item?.meta?.text,
-    item?.meta?.message,
-  ];
-
-  for (const c of candidates) {
-    const s = typeof c === "string" ? c.trim() : "";
-    if (s) return s;
-  }
-  return "";
-}
-
-function normalize(item, source) {
-  const at = item?.at || item?.createdAt || item?.time || item?.timestamp || new Date().toISOString();
-  const severity = item?.severity || item?.level || (source === "alert" ? "medium" : "low");
-  const roomId = item?.roomId || item?.classroom || item?.room || "";
-  const seat = item?.seat || item?.seatId || "";
-  const studentCode = item?.studentCode || item?.studentNumber || "";
-  const name = item?.name || item?.student?.name || item?.studentName || "";
-
-  const text = pickText(item);
-  return { source, at, severity, roomId, seat, text, studentCode, name, raw: item };
-}
-
-// 🔥 helper: build a stable "signature" for newest item
-function sigOf(it) {
-  if (!it) return "";
-  const type = String(it?.raw?.type || it?.raw?.kind || it?.raw?.eventType || "");
-  return [
-    it.source,
-    String(it.at),
-    type,
-    String(it.severity || ""),
-    String(it.roomId || ""),
-    String(it.seat || ""),
-    String(it.studentCode || ""),
-    String(it.name || ""),
-    String(it.text || ""),
-  ].join("|");
-}
-
-/* =========================
-   ✅ Toast filtering logic
-   - Only notify parent on important, NEW, RECENT events
-========================= */
-function shouldNotifyToast(it) {
-  if (!it) return false;
-
-  const sev = String(it.severity || "low").toLowerCase();
-  const type = String(it.raw?.type || it.raw?.kind || it.raw?.eventType || "").toUpperCase();
-  const src = String(it.source || "").toLowerCase();
-
-  // ✅ Alerts always allowed
-  if (src === "alert") return true;
-
-  // ✅ Explicit important types
-  if (
-  type.includes("INCIDENT") ||
-  type.includes("ALERT") ||
-  type.includes("TRANSFER") ||
-  type.includes("STUDENT_ADDED") ||
-  type.includes("STUDENT_REMOVED") ||
-  type.includes("ADD_STUDENT") ||
-  type.includes("DELETE_STUDENT") ||
-  type.includes("ADD_DELETE_STUDENT")
-) return true;
-
-
-  // ✅ Toilet limit (3+): include 3 and above
-  if (type.includes("TOO_MANY_TOILET") || type.includes("TOILET_LIMIT")) return true;
-
-  // ✅ Severity medium+ (optional safety net)
-  if (sev === "medium" || sev === "high" || sev === "critical") return true;
-
-  // ❌ Everything else (like normal toilet exit) should not trigger toast
-  return false;
-}
-
-function isRecent(at, ms = 12000) {
-  const t = new Date(at || 0).getTime();
-  if (!Number.isFinite(t)) return false;
-  return Date.now() - t <= ms;
+  return null;
 }
 
 export default function EventsFeed({
   events = [],
   alerts = [],
-  activeRoomId = "",
-  onNewEvent, // ✅ callback when a new important newest item arrives
+  selectedRoomId = "__ALL__",
+  allowAllRooms = false,
+  title = "Events",
 }) {
-  const [q, setQ] = useState("");
-  const [onlyThisRoom, setOnlyThisRoom] = useState(false);
+  const ALL = "__ALL__";
+  const rid = normRoom(selectedRoomId);
 
-  const merged = useMemo(() => {
-    const a = (Array.isArray(alerts) ? alerts : []).map((x) => normalize(x, "alert"));
-    const e = (Array.isArray(events) ? events : []).map((x) => normalize(x, "event"));
-    const all = [...a, ...e];
-    all.sort((x, y) => new Date(y.at).getTime() - new Date(x.at).getTime());
-    return all.slice(0, 30);
-  }, [alerts, events]);
+  const items = useMemo(() => {
+    const ev = (events || []).map(normalizeEventItem).filter(Boolean);
+    const al = (alerts || []).map(normalizeEventItem).filter(Boolean);
 
-  // ✅ Detect new event (newest item changed)
-  const lastSigRef = useRef("");
-  const didMountRef = useRef(false);
+    const merged = [...ev, ...al];
 
-  const storageKey = useMemo(() => `EVENTS_FEED_LASTSIG::${String(activeRoomId || "all")}`, [activeRoomId]);
+    // filter by room if needed
+    const filtered =
+      allowAllRooms && (rid === "" || rid === ALL)
+        ? merged
+        : merged.filter((x) => {
+            const r = normRoom(x.roomId || x.classroom);
+            return r && r === rid;
+          });
 
-  useEffect(() => {
-    const newest = merged[0];
-    const sig = sigOf(newest);
-    if (!sig) return;
+    // newest first
+    filtered.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
-    if (!didMountRef.current) {
-      // First render: store but don't notify
-      didMountRef.current = true;
-      const stored = sessionStorage.getItem(storageKey);
-      lastSigRef.current = stored || sig;
-      sessionStorage.setItem(storageKey, lastSigRef.current);
-      return;
-    }
-
-    if (sig !== lastSigRef.current) {
-      lastSigRef.current = sig;
-      sessionStorage.setItem(storageKey, sig);
-
-      // ✅ Notify ONLY if important + recent
-      if (typeof onNewEvent === "function" && shouldNotifyToast(newest) && isRecent(newest.at, 12000)) {
-        onNewEvent(newest);
-      }
-    }
-  }, [merged, onNewEvent, storageKey]);
-
-  const filtered = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    return merged.filter((it) => {
-      if (onlyThisRoom && activeRoomId) {
-        if (String(it.roomId) !== String(activeRoomId)) return false;
-      }
-      if (!query) return true;
-
-      const head = titleOf(it.raw);
-      const hay = `${head} ${it.text} ${it.roomId} ${it.seat} ${it.studentCode} ${it.name}`.toLowerCase();
-      return hay.includes(query);
-    });
-  }, [merged, q, onlyThisRoom, activeRoomId]);
+    // keep reasonable size
+    return filtered.slice(0, 120);
+  }, [events, alerts, rid, allowAllRooms]);
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="p-5 border-b border-slate-200">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-xs text-slate-500">Live monitoring</div>
-            <div className="text-lg font-extrabold text-slate-900">Alerts & Events</div>
-            <div className="mt-1 text-xs text-slate-500">Alerts highlighted • Search + room filter</div>
-          </div>
-          <div className="text-xs text-slate-500 font-bold">
-            Showing <span className="text-slate-900">{filtered.length}</span>
-          </div>
+    <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-3">
+        <div className="text-sm font-extrabold text-slate-900">
+          {title}
+          {allowAllRooms ? (
+            <span className="ml-2 text-xs text-slate-500 font-bold">
+              {rid === ALL || rid === "" ? "• All rooms" : `• Room ${rid}`}
+            </span>
+          ) : rid ? (
+            <span className="ml-2 text-xs text-slate-500 font-bold">• Room {rid}</span>
+          ) : null}
         </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-3">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search: toilet, message, seat, ID..."
-            className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-200"
-          />
-
-          <button
-            type="button"
-            onClick={() => setOnlyThisRoom((v) => !v)}
-            disabled={!activeRoomId}
-            className={`rounded-2xl border px-3 py-2 text-sm font-extrabold ${
-              onlyThisRoom
-                ? "bg-sky-600 border-sky-600 text-white"
-                : "bg-white border-slate-200 text-slate-900 hover:bg-slate-50"
-            } disabled:opacity-50`}
-            title={activeRoomId ? `Filter Room ${activeRoomId}` : "No active room"}
-          >
-            {onlyThisRoom ? `Filtered: Room ${activeRoomId}` : "Filter: This room"}
-          </button>
-        </div>
+        <div className="text-xs text-slate-500 font-bold">{items.length}</div>
       </div>
 
-      <div className="p-5 bg-slate-50">
-        {filtered.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-            No alerts/events.
-          </div>
+      <div className="p-4 space-y-2 max-h-[420px] overflow-auto">
+        {items.length === 0 ? (
+          <div className="text-sm text-slate-600">No events yet.</div>
         ) : (
-          <div className="space-y-3">
-            {filtered.map((it, idx) => {
-              const sev = sevMeta(it.severity);
-              const head = titleOf(it.raw);
+          items.map((it, idx) => {
+            const meta = sevMeta(it.severity);
+            const label = String(it.type || "").replaceAll("_", " ");
+            const who =
+              it.studentName || it.studentNumber
+                ? `${it.studentName || "Student"}${it.studentNumber ? ` (${it.studentNumber})` : ""}`
+                : "";
+            const room = it.roomId ? `Room ${it.roomId}` : "";
+            const where = [room, it.seat ? `Seat ${it.seat}` : ""].filter(Boolean).join(" • ");
 
-              const shownText = it.text?.trim()
-                ? it.text
-                : it.source === "alert"
-                  ? "Alert received (no details provided)."
-                  : "—";
-
-              return (
-                <div key={`${idx}-${String(it.at)}`} className={`rounded-3xl border p-4 shadow-sm ${sev.row}`}>
-                  <div className="flex items-start justify-between gap-3">
+            return (
+              <div key={`${it.kind}-${it.type}-${it.at}-${idx}`} className="flex items-start gap-3">
+                <span className={`mt-1.5 w-2.5 h-2.5 rounded-full ${meta.dot}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`w-2.5 h-2.5 rounded-full ${sev.dot}`} />
-                        <span className="text-xs font-extrabold text-slate-900">{head}</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${sev.pill}`}>
-                          {String(it.severity || "low").toUpperCase()}
-                        </span>
-
-                        {it.roomId ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-200 bg-white/70 text-slate-700 font-extrabold">
-                            Room {it.roomId}
-                          </span>
-                        ) : null}
-                        {it.seat ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-200 bg-white/70 text-slate-700 font-extrabold">
-                            Seat {it.seat}
-                          </span>
-                        ) : null}
-                        {it.studentCode ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-200 bg-white/70 text-slate-700 font-extrabold">
-                            ID {it.studentCode}
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-2 text-sm font-bold text-slate-900 break-words">{shownText}</div>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-xl border text-[11px] font-extrabold ${meta.pill}`}>
+                        {it.kind === "alert" ? "ALERT" : "EVENT"}
+                      </span>
+                      <span className="ml-2 text-sm font-extrabold text-slate-900">{label || "Event"}</span>
                     </div>
-
-                    <div className="shrink-0 text-right">
-                      <div className="text-xs font-extrabold text-slate-700">{fmtTime(it.at)}</div>
-                      <div className="mt-1 text-[10px] text-slate-500 uppercase font-extrabold">{it.source}</div>
-                    </div>
+                    <div className="text-xs text-slate-500 font-bold">{fmtTime(it.at)}</div>
                   </div>
+
+                  {who ? <div className="text-xs text-slate-600 font-semibold mt-0.5">{who}</div> : null}
+                  {where ? <div className="text-[11px] text-slate-500 font-semibold mt-0.5">{where}</div> : null}
+
+                  {it.description ? (
+                    <div className="text-sm text-slate-700 mt-1 whitespace-pre-wrap break-words">{it.description}</div>
+                  ) : null}
+
+                  {typeof it.elapsedMs === "number" ? (
+                    <div className="text-[11px] text-slate-500 font-bold mt-1">
+                      Elapsed: {Math.floor(it.elapsedMs / 60000)}m {Math.floor((it.elapsedMs % 60000) / 1000)}s
+                    </div>
+                  ) : null}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })
         )}
       </div>
     </div>

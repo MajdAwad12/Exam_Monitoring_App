@@ -210,6 +210,9 @@ export async function logIncident(req, res) {
 
     await saveWithRetry(exam);
 
+    // notify dashboards to refresh instantly
+    wsBroadcast({ type: "EXAM_UPDATED", examId: String(exam._id), at: new Date().toISOString(), reason: "incident_logged" });
+
     const out = exam.toObject({ getters: true });
     return res.json({ ok: true, exam: { ...out, id: String(out._id) } });
   } catch (err) {
