@@ -19,6 +19,7 @@
     "@google/genai": "^1.34.0",
     "@google/generative-ai": "^0.24.1",
     "@types/morgan": "^1.9.10",
+    "compression": "^1.8.1",
     "connect-mongo": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
