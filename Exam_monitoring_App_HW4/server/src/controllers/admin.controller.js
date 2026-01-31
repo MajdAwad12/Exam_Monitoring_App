@@ -236,7 +236,7 @@ async function pickLecturersForRooms({ rooms, preferredMainLecturerId }) {
     main: { id: main._id, name: main.fullName || "", roomIds: mainRoomIds },
     co: coAssignments.map((x) => ({ id: x.lec._id, name: x.lec.fullName || "", roomIds: x.roomIds })),
   };
-
+}
 
 /* =========================
    Schedule conflict checks (time + classrooms)
@@ -284,7 +284,6 @@ async function findScheduleConflicts({ startAt, endAt, roomIds, excludeExamId } 
       sharedRooms: intersect(roomIds, otherRooms),
     };
   });
-}
 }
 
 /* =========================
@@ -481,8 +480,6 @@ export async function updateExamAdmin(req, res) {
         // keep ended as ended
       }
     }
-
-
 
     // ✅ Prevent time+classroom overlaps (same classroom(s) + overlapping time window)
     if (exam.startAt && exam.endAt) {
