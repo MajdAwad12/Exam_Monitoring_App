@@ -1,5 +1,6 @@
 // client/src/components/dashboard/EventsFeed.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+import { markCallLecturerSeen } from "../../services/incidents.service.js";
 
 function fmtTime(d) {
   const dt = new Date(d || Date.now());
@@ -139,11 +140,13 @@ function isRecent(at, ms = 12000) {
 }
 
 export default function EventsFeed({
+  examId,
+  meRole,
   events = [],
   alerts = [],
   activeRoomId = "",
   canFilterRoom = true,
-  onNewEvent, // ✅ callback when a new important newest item arrives
+  onNewEvent,
 }) {
   const [q, setQ] = useState("");
   const [onlyThisRoom, setOnlyThisRoom] = useState(false);
@@ -165,7 +168,7 @@ export default function EventsFeed({
     const e = (Array.isArray(events) ? events : []).map((x) => normalize(x, "event"));
     const all = [...a, ...e];
     all.sort((x, y) => new Date(y.at).getTime() - new Date(x.at).getTime());
-    return all.slice(0, 200);
+    return all.slice(0, 500);
   }, [alerts, events]);
 
   // ✅ Detect new event (newest item changed)
@@ -215,7 +218,32 @@ export default function EventsFeed({
     });
   }, [merged, q, onlyThisRoom, activeRoomId]);
 
-  return (
+  
+  async function handleSeen(it) {
+    try {
+      const role = String(meRole || "").toLowerCase();
+      if (role !== "lecturer") return;
+      const t = String(it?.raw?.type || "").toUpperCase();
+      if (t !== "CALL_LECTURER") return;
+
+      const eventId = String(it?.raw?.eventId || "").trim();
+      if (!examId || !eventId) return;
+
+      setSeenBusyId(eventId);
+      await markCallLecturerSeen(examId, eventId);
+      // UI will update via polling / WS; keep a tiny optimistic mark
+      it.raw.seenByLecturer = true;
+      it.raw.seenText = it.raw.seenText || "Lecturer saw this call and will respond soon.";
+      it.raw.severity = it.raw.severity || "high";
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || String(e));
+    } finally {
+      setSeenBusyId("");
+    }
+  }
+
+return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-5 border-b border-slate-200">
         <div className="flex items-start justify-between gap-3">
@@ -307,7 +335,26 @@ export default function EventsFeed({
 
                     <div className="shrink-0 text-right">
                       <div className="text-xs font-extrabold text-slate-700">{fmtTime(it.at)}</div>
+                      
                       <div className="mt-1 text-[10px] text-slate-500 uppercase font-extrabold">{it.source}</div>
+
+                      {String(meRole || "").toLowerCase() === "lecturer" &&
+                      String(it.raw?.type || "").toUpperCase() === "CALL_LECTURER" &&
+                      !it.raw?.seenByLecturer ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSeen(it)}
+                          disabled={seenBusyId === String(it.raw?.eventId || "")}
+                          className={[
+                            "mt-2 w-full rounded-xl px-3 py-1.5 text-xs font-extrabold",
+                            "bg-sky-700 text-white hover:bg-sky-800",
+                            "disabled:opacity-60 disabled:cursor-not-allowed",
+                          ].join(" ")}
+                        >
+                          {seenBusyId === String(it.raw?.eventId || "") ? "Saving..." : "Seen"}
+                        </button>
+                      ) : null}
+
                     </div>
                   </div>
                 </div>

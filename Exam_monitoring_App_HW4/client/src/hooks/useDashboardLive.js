@@ -34,6 +34,12 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
+  const rawRef = useRef(cacheOk ? __dashCache.raw : null);
+  useEffect(() => {
+    rawRef.current = raw;
+  }, [raw]);
+
+
   // keep latest examId without restarting polling
   const examIdRef = useRef(examId);
   useEffect(() => {
@@ -208,7 +214,7 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
   useEffect(() => {
     aliveRef.current = true;
 
-    if (!raw) setLoading(true);
+    if (!rawRef.current) setLoading(true);
     reqIdRef.current += 1;
 
     let cancelled = false;
@@ -249,7 +255,7 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
       clearTimer();
       clearTimeout(wsRefreshTimerRef.current);
     };
-  }, [fetchOnce, clearTimer, scheduleNext, shouldPause, raw]);
+  }, [fetchOnce, clearTimer, scheduleNext, shouldPause]);
 
   const derived = useMemo(() => {
     const me = raw?.me || null;
