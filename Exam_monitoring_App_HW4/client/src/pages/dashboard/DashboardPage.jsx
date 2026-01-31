@@ -301,31 +301,6 @@ export default function DashboardPage() {
                 Live monitoring • {exam.examMode || "onsite"} • {rooms?.length || 0} rooms
               </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              {isAdmin ? (
-                <button
-                  onClick={loadRunningExams}
-                  disabled={examsLoading}
-                  className={[
-                    "px-4 py-2 rounded-2xl border text-sm font-extrabold transition",
-                    examsLoading
-                      ? "border-slate-200 bg-slate-100 text-slate-500"
-                      : "border-slate-200 bg-white hover:bg-slate-50 text-slate-800",
-                  ].join(" ")}
-                  title="Refresh active exams list"
-                >
-                  {examsLoading ? "Refreshing…" : "Refresh exams"}
-                </button>
-              ) : null}
-
-              <button
-                onClick={refetch}
-                className="px-4 py-2 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 font-extrabold text-sm"
-              >
-                Refresh
-              </button>
-            </div>
           </div>
 
           {/* ✅ Admin: exam selector tabs */}
