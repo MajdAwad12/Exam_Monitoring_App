@@ -6,7 +6,6 @@ import { useSimClock } from "../../hooks/useSimClock";
 import RocketLoader from "../../components/loading/RocketLoader.jsx";
 
 import ExamTabs from "../../components/dashboard/ExamTabs.jsx";
-import ActiveClassroomsTabs from "../../components/dashboard/ActiveClassroomsTabs.jsx";
 import RoomTabs from "../../components/dashboard/RoomTabs.jsx";
 import ExamOverviewCard from "../../components/dashboard/ExamOverviewCard.jsx";
 import DashboardAddDeleteStudentsCard from "../../components/dashboard/DashboardAddDeleteStudentsCard.jsx";
@@ -314,22 +313,6 @@ export default function DashboardPage() {
               />
             </div>
           ) : null}
-
-          {/* ✅ Admin: quick switch across ALL active classrooms (all running exams) */}
-          {isAdmin && (runningExams?.length || 0) > 1 ? (
-            <div className="mt-4">
-              <ActiveClassroomsTabs
-                runningExams={runningExams}
-                selectedExamId={selectedExamId || examId}
-                selectedRoomId={selectedRoomId || activeRoomId || ""}
-                onPick={(eid, rid) => {
-                  setSelectedExamId(String(eid));
-                  setRoomId(String(rid || "").trim() || null);
-                }}
-              />
-            </div>
-          ) : null}
-
           {/* ✅ Lecturer/Admin: room selector */}
           {canLecturerUX ? (
             <div className="mt-5">
