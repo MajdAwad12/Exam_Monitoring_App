@@ -488,7 +488,7 @@ useEffect(() => {
 
     try {
       setSaving(true);
-      await updateAttendance({ examId: exam.id, studentId: resolvedId, patch: safePatch });
+      await updateAttendance({ examId, studentId: resolvedId, patch: safePatch });
       refreshNow?.();
     } catch (e) {
       pendingRef.current.delete(String(resolvedId));
@@ -561,7 +561,7 @@ useEffect(() => {
   }
 
   async function requestTransfer(seat, toRoom) {
-    if (!exam?.id || !seat) return;
+    if (!examId || !seat) return;
     setLocalError("");
 
     const sid = String(seat.studentId || "").trim();
@@ -598,7 +598,7 @@ useEffect(() => {
       setSaving(true);
 
       await createTransfer({
-        examId: exam.id,
+        examId: examId,
         studentId: sid,
         toClassroom: toRoom,
         toSeat: "AUTO",
@@ -638,7 +638,7 @@ useEffect(() => {
   }
 
   async function cancelPendingTransfer(seat) {
-    if (!exam?.id || !seat) return;
+    if (!examId || !seat) return;
     setLocalError("");
 
     const sid = String(seat.studentId || "").trim();
@@ -690,7 +690,7 @@ useEffect(() => {
   }
 
   async function submitCheatNote(seat, text) {
-    if (!exam?.id || !seat || !text) return;
+    if (!examId || !seat || !text) return;
 
     const studentKey = safeStudentKey(seat);
     if (!studentKey) {

@@ -148,12 +148,24 @@ export default function EventsFeed({
   const [q, setQ] = useState("");
   const [onlyThisRoom, setOnlyThisRoom] = useState(false);
 
+  // scroll container
+  const listRef = useRef(null);
+  const scrollToTop = () => {
+    const el = listRef.current;
+    if (el) el.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const scrollToBottom = () => {
+    const el = listRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
+
+
   const merged = useMemo(() => {
     const a = (Array.isArray(alerts) ? alerts : []).map((x) => normalize(x, "alert"));
     const e = (Array.isArray(events) ? events : []).map((x) => normalize(x, "event"));
     const all = [...a, ...e];
     all.sort((x, y) => new Date(y.at).getTime() - new Date(x.at).getTime());
-    return all.slice(0, 30);
+    return all.slice(0, 200);
   }, [alerts, events]);
 
   // ✅ Detect new event (newest item changed)
@@ -212,8 +224,10 @@ export default function EventsFeed({
             <div className="text-lg font-extrabold text-slate-900">Alerts & Events</div>
             <div className="mt-1 text-xs text-slate-500">Alerts highlighted • Search + room filter</div>
           </div>
-          <div className="text-xs text-slate-500 font-bold">
-            Showing <span className="text-slate-900">{filtered.length}</span>
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-bold">
+            <span>Showing <span className="text-slate-900">{filtered.length}</span></span>
+            <button type="button" onClick={scrollToTop} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-extrabold text-slate-700 hover:bg-slate-50">Top</button>
+            <button type="button" onClick={scrollToBottom} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-extrabold text-slate-700 hover:bg-slate-50">Bottom</button>
           </div>
         </div>
 
@@ -249,7 +263,7 @@ export default function EventsFeed({
             No alerts/events.
           </div>
         ) : (
-          <div className="space-y-3">
+          <div ref={listRef} className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
             {filtered.map((it, idx) => {
               const sev = sevMeta(it.severity);
               const head = titleOf(it.raw);

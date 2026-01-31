@@ -46,6 +46,20 @@ const eventSchema = new mongoose.Schema(
     classroom: { type: String, default: "" },
     seat: { type: String, default: "" },
     studentId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    actor: {
+      id: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      name: { type: String, default: "" },
+      role: { type: String, default: "" },
+    },
+    eventId: { type: String, default: "" },
+
+    // Lecturer acknowledgement for CALL_LECTURER
+    seenByLecturer: { type: Boolean, default: false },
+    seenAt: { type: Date, default: null },
+    seenText: { type: String, default: "" },
+
+    // Optional: limit who can see this event (e.g., CALL_LECTURER)
+    visibilityRoles: { type: [String], default: null },
   },
   { _id: false }
 );

@@ -579,12 +579,24 @@ export async function getDashboardSnapshot(req, res) {
     });
 
     // ---------------- Events visibility ----------------
-    const rawEvents = (exam.events || []).slice(-30).reverse();
+    const rawEvents = (exam.events || []).slice(-500).reverse();
+
+    const roleStr = String(role || "").toLowerCase();
+
+    const canSeeEvent = (e) => {
+      const vis = e?.visibilityRoles;
+      if (!Array.isArray(vis) || vis.length === 0) return true;
+      return vis.map((x) => String(x).toLowerCase()).includes(roleStr);
+    };
 
     const visibleEvents =
       isSupervisorRole && myRoomId
-        ? rawEvents.filter((e) => !e.classroom || normalizeRoomId(e.classroom) === normalizeRoomId(myRoomId))
-        : rawEvents;
+        ? rawEvents.filter(
+            (e) =>
+              canSeeEvent(e) &&
+              (!e.classroom || normalizeRoomId(e.classroom) === normalizeRoomId(myRoomId))
+          )
+        : rawEvents.filter(canSeeEvent);
 
     const examPayload = {
       id: String(exam._id),

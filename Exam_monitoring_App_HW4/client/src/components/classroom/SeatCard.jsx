@@ -51,6 +51,7 @@ export default function SeatCard({ a, elapsedMs = 0, toiletCount = 0, onClick })
   const seatTxt = seatLabel(a?.seat);
 
   const overToiletLimit = Number(toiletCount) >= 3;
+  const overToiletLong = rawStatus === "temp_out" && Number(elapsedMs || 0) >= 5 * 60 * 1000;
 
   return (
     <button
@@ -94,7 +95,7 @@ export default function SeatCard({ a, elapsedMs = 0, toiletCount = 0, onClick })
               {Number(toiletCount) > 0 ? (
                 <div className="flex items-center gap-1 text-[10px] font-extrabold whitespace-nowrap">
                   <span className="text-amber-900">🚻 {Number(toiletCount)}</span>
-                  {overToiletLimit ? (
+                  {(overToiletLimit || overToiletLong) ? (
                     <span className="text-rose-600" title="Too many toilet breaks">
                       ⚠️
                     </span>

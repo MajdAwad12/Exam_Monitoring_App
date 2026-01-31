@@ -81,7 +81,7 @@ export default function DashboardPage() {
     transfers,
     alerts,
     inbox,
-  } = useDashboardLive({ examId: isAdmin ? selectedExamId : null, roomId, pollMs: 6000, lite: true });
+  } = useDashboardLive({ examId: isAdmin ? selectedExamId : null, roomId, pollMs: 10000, lite: true });
 
   const activeRoomId = useMemo(() => {
     return String(activeRoom?.id || activeRoom?.name || "").trim();
@@ -365,6 +365,8 @@ export default function DashboardPage() {
 
             <div id="events-panel" className="col-span-12 lg:col-span-6">
               <EventsFeed
+              examId={exam?.id || exam?._id || selectedExamId}
+              meRole={meRole}
               events={eventsForRoom}
               alerts={alertsForRoom}
               activeRoomId={selectedRoomId}
