@@ -1471,6 +1471,24 @@ export async function createExam(req, res) {
 
     const supervisorsObj = await buildSupervisorsFromClassrooms(cleanRooms);
 
+// Keep supervisor user profiles in sync (assignedRoomId) to enable transfer approvals
+// (Some older DB states may have assignedRoomId=null even though exam.supervisors has roomId.)
+try {
+  if (Array.isArray(supervisorsObj) && supervisorsObj.length) {
+    const ops = supervisorsObj
+      .filter((s) => s?.id && s?.roomId)
+      .map((s) => ({
+        updateOne: {
+          filter: { _id: s.id, role: "supervisor" },
+          update: { $set: { assignedRoomId: String(s.roomId) } },
+        },
+      }));
+    if (ops.length) await User.bulkWrite(ops, { ordered: false });
+  }
+} catch (e) {
+  // non-fatal: exam creation should still succeed
+}
+
     let coLecturersObj = [];
     if (Array.isArray(body.coLecturers)) {
       const ids = body.coLecturers.map((x) => String(x?.id || x)).filter(Boolean);

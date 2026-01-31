@@ -258,7 +258,7 @@ export async function getClock(req, res) {
 
     const requestedExamId = req.query?.examId ? String(req.query.examId) : "";
 
-    const exam = await findRunningExamForUser(user, { examId: requestedExamId });
+    const exam = await findRunningExamForUser(user, { examId: requestedExamId, lean: true, select: '-__v' });
     return res.json({
       simNow: new Date().toISOString(),
       simExamId: exam ? String(exam._id) : null,
@@ -278,7 +278,7 @@ export async function getDashboardSnapshot(req, res) {
 
     const requestedExamId = req.query?.examId ? String(req.query.examId) : "";
 
-    const exam = await findRunningExamForUser(user, { examId: requestedExamId });
+    const exam = await findRunningExamForUser(user, { examId: requestedExamId, lean: true, select: '-__v' });
 
     if (!exam) {
       return res.json({
@@ -287,7 +287,7 @@ export async function getDashboardSnapshot(req, res) {
           role: user.role,
           username: user.username,
           fullName: user.fullName,
-          assignedRoomId: user.assignedRoomId || null,
+          assignedRoomId: user.assignedRoomId || (String(user?.role||'').toLowerCase()==='supervisor' ? (()=>{ const uid=String(user._id); const sup=(exam?.supervisors||[]).find(s=>String(s?.id)==uid); return sup?.roomId || null; })() : null),
         },
         exam: null,
         attendance: [],
@@ -651,7 +651,7 @@ export async function getDashboardSnapshotLite(req, res) {
           role: user.role,
           username: user.username,
           fullName: user.fullName,
-          assignedRoomId: user.assignedRoomId || null,
+          assignedRoomId: user.assignedRoomId || (String(user?.role||'').toLowerCase()==='supervisor' ? (()=>{ const uid=String(user._id); const sup=(exam?.supervisors||[]).find(s=>String(s?.id)==uid); return sup?.roomId || null; })() : null),
         },
         exam: null,
         attendance: [],
