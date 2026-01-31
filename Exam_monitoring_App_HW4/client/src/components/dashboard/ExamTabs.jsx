@@ -23,7 +23,7 @@ export default function ExamTabs({ exams = [], selectedExamId = null, onSelect }
             Active Exams
             </div>
             <div className="text-base font-semibold text-red-600 mt-1">
-            Click in Tabs to Switch between running exams 
+            Click on Tabs to Switch between running exams 
             </div>
 
         </div>
