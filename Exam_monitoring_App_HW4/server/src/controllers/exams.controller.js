@@ -522,28 +522,32 @@ async function resolveStudentUser(studentIdOrNumber) {
 export async function getExams(req, res) {
   try {
     const me = req.user || {};
-    const role = String(me.role || "");
+    const role = String(me.role || "").toLowerCase();
+    const myId = me._id || me.id;
 
-    const exams = await Exam.find({}).sort({ startAt: -1 });
-    let filtered = exams;
+    // ✅ Security: do NOT return all exams to lecturer/supervisor/student.
+    // Build a DB-side filter to return only the exams the user is related to.
+    const filter = {};
 
     if (role === "supervisor") {
-      filtered = exams.filter((e) =>
-        (e.supervisors || []).some((s) => String(s?.id) === String(me.id || me._id))
-      );
+      filter.supervisors = { $elemMatch: { id: myId } };
+    } else if (role === "student") {
+      filter.attendance = { $elemMatch: { studentId: myId } };
+    } else if (role === "lecturer") {
+      filter.$or = [
+        { "lecturer.id": myId },
+        { coLecturers: { $elemMatch: { id: myId } } },
+      ];
     }
+    // admin (and other roles) keep full access
 
-    if (role === "student") {
-      filtered = exams.filter((e) =>
-        (e.attendance || []).some((a) => String(a?.studentId) === String(me.id || me._id))
-      );
-    }
-
-    return res.json({ ok: true, exams: filtered.map(toOut) });
+    const exams = await Exam.find(filter).sort({ startAt: -1 });
+    return res.json({ ok: true, exams: exams.map(toOut) });
   } catch (e) {
     return res.status(500).json({ message: e.message || "Failed to load exams" });
   }
 }
+
 
 // ✅ GET /api/exams/:examId
 export async function getExamById(req, res) {

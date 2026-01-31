@@ -1,290 +1,108 @@
-// client/src/components/dashboard/DashboardAddDeleteStudentsCard.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  addStudentToExam,
-  deleteStudentFromExam,
-} from "../../services/dashboard.ADD.DELETE.Students.service.js";
+// client/src/components/dashboard/ActiveClassroomsTabs.jsx
+import { useMemo } from "react";
 
-function normalizeRoomId(v) {
-  return String(v ?? "").trim();
+function norm(v) {
+  return String(v || "").trim();
 }
 
-export default function DashboardAddDeleteStudentsCard({
-  examId = null,
-  currentRoomId = "",
-  rooms = [],
-  onChanged,
+function makeKey(examId, roomId) {
+  return `${norm(examId)}::${norm(roomId)}`;
+}
+
+/**
+ * Admin helper: quick navigation across ALL active classrooms across ALL running exams.
+ * - runningExams: array of exams (each should include classrooms + courseName)
+ * - selectedExamId / selectedRoomId: current selection
+ * - onPick(examId, roomId): callback when user selects a classroom
+ */
+export default function ActiveClassroomsTabs({
+  runningExams = [],
+  selectedExamId = "",
+  selectedRoomId = "",
+  onPick,
 }) {
-  const roomOptions = useMemo(() => {
-    return (rooms || [])
-      .map((r) => ({
-        id: String(r?.id || r?.roomId || r?.name || "").trim(),
-        label: String(r?.name || r?.id || r?.roomId || "").trim(),
-      }))
-      .filter((x) => x.id);
-  }, [rooms]);
+  const items = useMemo(() => {
+    const out = [];
+    for (const ex of runningExams || []) {
+      const eid = ex?._id || ex?.id;
+      const courseName = ex?.courseName || "Exam";
 
-  const initialRoom = useMemo(() => {
-    const rid = normalizeRoomId(currentRoomId);
-    if (rid) return rid;
-    return roomOptions[0]?.id || "";
-  }, [currentRoomId, roomOptions]);
-
-  // -------- Add form state --------
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [studentIdAdd, setStudentIdAdd] = useState("");
-  const [roomId, setRoomId] = useState(initialRoom);
-
-  // keep roomId synced if rooms/currentRoomId change
-  useEffect(() => {
-    if (!roomId && initialRoom) setRoomId(initialRoom);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialRoom]);
-
-  // -------- Delete form state --------
-  const [studentIdDel, setStudentIdDel] = useState("");
-
-  // -------- UI state (separate per tab) --------
-  const [addBusy, setAddBusy] = useState(false);
-  const [delBusy, setDelBusy] = useState(false);
-
-  const [addMsg, setAddMsg] = useState({ type: "", text: "" });
-  const [delMsg, setDelMsg] = useState({ type: "", text: "" });
-
-  const addTimerRef = useRef(null);
-  const delTimerRef = useRef(null);
-
-  // auto-dismiss helper (per tab)
-  function showAddMsg(type, text) {
-    if (addTimerRef.current) clearTimeout(addTimerRef.current);
-    setAddMsg({ type, text: String(text || "") });
-    addTimerRef.current = setTimeout(() => {
-      setAddMsg({ type: "", text: "" });
-      addTimerRef.current = null;
-    }, 1600);
-  }
-
-  function showDelMsg(type, text) {
-    if (delTimerRef.current) clearTimeout(delTimerRef.current);
-    setDelMsg({ type, text: String(text || "") });
-    delTimerRef.current = setTimeout(() => {
-      setDelMsg({ type: "", text: "" });
-      delTimerRef.current = null;
-    }, 1600);
-  }
-
-  useEffect(() => {
-    return () => {
-      if (addTimerRef.current) clearTimeout(addTimerRef.current);
-      if (delTimerRef.current) clearTimeout(delTimerRef.current);
-    };
-  }, []);
-
-  async function onAdd() {
-    try {
-      setAddBusy(true);
-      setAddMsg({ type: "", text: "" });
-
-      const res = await addStudentToExam({
-        examId,
-        firstName,
-        lastName,
-        studentId: studentIdAdd,
-        roomId,
-      });
-
-      showAddMsg(
-        "success",
-        `Added: ${res?.student?.fullName || "Student"} (${
-          res?.student?.studentId || studentIdAdd
-        }) • Room ${res?.student?.roomId || roomId} • Seat ${res?.student?.seat || "?"}`
-      );
-
-      // reset fields (keep room)
-      setFirstName("");
-      setLastName("");
-      setStudentIdAdd("");
-
-      if (typeof onChanged === "function") onChanged();
-    } catch (e) {
-      showAddMsg("error", e?.message || "Something went wrong");
-    } finally {
-      setAddBusy(false);
+      const rooms = Array.isArray(ex?.classrooms) ? ex.classrooms : [];
+      for (const r of rooms) {
+        const rid = r?.id || r?.name;
+        const roomId = norm(rid);
+        if (!roomId || !eid) continue;
+        out.push({
+          key: makeKey(eid, roomId),
+          examId: String(eid),
+          roomId,
+          label: roomId,
+          sub: courseName,
+        });
+      }
     }
-  }
 
-  async function onDelete() {
-    try {
-      setDelBusy(true);
-      setDelMsg({ type: "", text: "" });
-
-      const res = await deleteStudentFromExam({
-        examId,
-        studentId: studentIdDel,
-      });
-
-      showDelMsg(
-        "success",
-        `Deleted: ${res?.removed?.name || ""} (${res?.removed?.studentId || studentIdDel}) from ${
-          res?.removed?.roomId || ""
-        }`
-      );
-
-      setStudentIdDel("");
-
-      if (typeof onChanged === "function") onChanged();
-    } catch (e) {
-      showDelMsg("error", e?.message || "Something went wrong");
-    } finally {
-      setDelBusy(false);
+    // unique + stable ordering
+    const seen = new Set();
+    const unique = [];
+    for (const it of out) {
+      if (seen.has(it.key)) continue;
+      seen.add(it.key);
+      unique.push(it);
     }
-  }
 
-  const MsgBox = ({ msg }) => {
-    if (!msg?.text) return null;
-    const ok = msg.type === "success";
-    return (
-      <div
-        className={`mt-3 rounded-2xl border p-3 text-sm font-bold ${
-          ok
-            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-            : "border-red-200 bg-red-50 text-red-700"
-        }`}
-      >
-        {msg.text}
-      </div>
-    );
-  };
+    unique.sort((a, b) => {
+      if (a.sub !== b.sub) return a.sub.localeCompare(b.sub);
+      return a.label.localeCompare(b.label);
+    });
+
+    return unique;
+  }, [runningExams]);
+
+  if (!items.length) return null;
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-lg font-extrabold text-slate-900">Manage Students</div>
-       
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-extrabold text-slate-900">Active Classrooms</div>
+        <div className="text-[11px] font-semibold text-slate-500">
+          Quick switch across all running exams
         </div>
-
       </div>
 
-      <div className="mt-5 grid grid-cols-12 gap-4">
-        {/* -------- Add -------- */}
-        <div className="col-span-12 lg:col-span-7 rounded-3xl border border-slate-200 p-4">
-          <div className="font-extrabold text-slate-600">Add Student</div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {items.map((it) => {
+          const isActive =
+            String(selectedExamId || "") === String(it.examId) &&
+            norm(selectedRoomId) === norm(it.roomId);
 
-          <MsgBox msg={addMsg} />
-
-          <div className="mt-3 grid grid-cols-12 gap-3">
-            <div className="col-span-12 md:col-span-4">
-              <label className="text-xs font-extrabold text-slate-600">First name</label>
-              <input
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
-                placeholder="Olivia"
-              />
-            </div>
-
-            <div className="col-span-12 md:col-span-4">
-              <label className="text-xs font-extrabold text-slate-600">Last name</label>
-              <input
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
-                placeholder="Martin"
-              />
-            </div>
-
-            <div className="col-span-12 md:col-span-4">
-              <label className="text-xs font-extrabold text-slate-600">Student ID</label>
-              <input
-                value={studentIdAdd}
-                onChange={(e) => setStudentIdAdd(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
-                placeholder="000000000"
-              />
-            </div>
-
-            <div className="col-span-12 md:col-span-6">
-              <label className="text-xs font-extrabold text-slate-600">Room</label>
-              <select
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm bg-white"
-              >
-                {roomOptions.length ? (
-                  roomOptions.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.label}
-                    </option>
-                  ))
-                ) : (
-                  <option value="">No rooms</option>
-                )}
-              </select>
-            </div>
-
-            <div className="col-span-12 md:col-span-6 flex items-end">
-              <button
-                  disabled={addBusy}
-                  onClick={onAdd}
-                  className={[
-                    "inline-flex items-center gap-2",
-                    "rounded-xl px-5 py-2",
-                    "text-sm font-bold",
-                    "border border-emerald-200 bg-emerald-50 text-emerald-700",
-                    "hover:bg-emerald-100",
-                    "focus:outline-none focus:ring-2 focus:ring-emerald-200",
-                    "disabled:opacity-60 disabled:cursor-not-allowed",
-                    "shadow-sm hover:shadow-md transition-all",
-                  ].join(" ")}
-                >
-                  <span className="text-base leading-none">{addBusy ? "⏳" : "➕"}</span>
-                  <span>{addBusy ? "Adding..." : "Add Student"}</span>
-                </button>
-
-            </div>
-          </div>
-        </div>
-
-        {/* -------- Delete -------- */}
-        <div className="col-span-12 lg:col-span-5 rounded-3xl border border-slate-200 p-4">
-          <div className="font-extrabold text-slate-900">Delete Student</div>
-
-          <MsgBox msg={delMsg} />
-
-          <div className="mt-3">
-            <label className="text-xs font-extrabold text-slate-600">Student ID</label>
-            <input
-              value={studentIdDel}
-              onChange={(e) => setStudentIdDel(e.target.value)}
-              className="mt-1 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm"
-              placeholder="000000000"
-            />
-          </div>
-
-          <div className="mt-5">
+          return (
             <button
-              disabled={delBusy}
-              onClick={onDelete}
+              key={it.key}
+              type="button"
+              onClick={() => onPick?.(it.examId, it.roomId)}
               className={[
-                "inline-flex items-center gap-2",
-                "rounded-xl px-5 py-2",
-                "text-sm font-bold",
-                "border border-red-200 bg-red-50 text-red-700",
-                "hover:bg-red-100",
-                "focus:outline-none focus:ring-2 focus:ring-red-200",
-                "disabled:opacity-60 disabled:cursor-not-allowed",
-                "shadow-sm hover:shadow-md transition-all",
+                "group rounded-2xl border px-3 py-2 text-left shadow-sm transition",
+                isActive
+                  ? "border-indigo-300 bg-white ring-2 ring-indigo-200"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
               ].join(" ")}
             >
-              <span className="text-base leading-none">{delBusy ? "⏳" : "🗑️"}</span>
-              <span>{delBusy ? "Deleting..." : "Delete Student"}</span>
+              <div className="flex items-center gap-2">
+                <div
+                  className={[
+                    "h-2.5 w-2.5 rounded-full",
+                    isActive ? "bg-indigo-500" : "bg-slate-300 group-hover:bg-slate-400",
+                  ].join(" ")}
+                />
+                <div className="text-sm font-extrabold text-slate-900">{it.label}</div>
+              </div>
+              <div className="mt-0.5 text-[11px] font-semibold text-slate-500 line-clamp-1">
+                {it.sub}
+              </div>
             </button>
-          </div>
-
-
-        </div>
+          );
+        })}
       </div>
     </div>
   );
