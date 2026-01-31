@@ -1,67 +1,58 @@
 // client/src/services/admin.service.js
-import { fetchWithCache, cacheDel } from "./_cache.js";
+
 
 async function handle(res) {
-  if (res.ok) return res.json();
-
-  let data = null;
-  try { data = await res.json(); } catch {}
-
-  const msg = data?.message || `Request failed (${res.status})`;
-  const err = new Error(msg);
-  err.status = res.status;
-  err.data = data;
-  throw err;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+  return data;
 }
 
-// =========================
-// Admin: Users
-// =========================
-export async function listUsers(role = "", { force = false } = {}) {
-  const r = String(role || "").trim();
-  const qs = r ? `?role=${encodeURIComponent(r)}` : "";
-  const key = `admin:users:${r || "all"}`;
-
-  return fetchWithCache(
-    key,
-    async () => {
-      const res = await fetch(`/api/admin/users${qs}`, {
-        method: "GET",
-        credentials: "include",
-      });
-      return handle(res);
-    },
-    { ttlMs: 120_000, force }
-  );
+export async function listUsers(role) {
+  const q = role ? `?role=${encodeURIComponent(role)}` : "";
+  const res = await fetch(`/api/admin/users${q}`, {
+    method: "GET",
+    credentials: "include",
+  });
+  return handle(res);
 }
 
-// =========================
-// Admin: Exams
-// =========================
 export async function updateExamAdmin(examId, payload) {
   const res = await fetch(`/api/admin/exams/${examId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify(payload || {}),
+    body: JSON.stringify(payload),
   });
-  const data = await handle(res);
-  cacheDel("admin:exams:");
-  cacheDel("exams:list");
-  return data;
+  return handle(res);
 }
 
-export async function deleteExamAdmin(examId) {
-  const res = await fetch(`/api/admin/exams/${examId}`, {
+export async function deleteExamAdmin(examId, opts = {}) {
+  const force = Boolean(opts?.force);
+  const q = force ? `?force=1` : "";
+  const res = await fetch(`/api/admin/exams/${examId}${q}`, {
     method: "DELETE",
     credentials: "include",
   });
-  const data = await handle(res);
-  cacheDel("admin:exams:");
-  cacheDel("exams:list");
-  return data;
+  return handle(res);
 }
 
+// ✅ Keep: Auto Assign (SERVER-SIDE apply on existing exam)
+export async function autoAssignExam(examId) {
+  const res = await fetch(`/api/admin/exams/${examId}/auto-assign`, {
+    method: "POST",
+    credentials: "include",
+  });
+  return handle(res);
+}
+
+/**
+ * ✅ Auto Assign Draft (Create modal only)
+ * POST /api/admin/exams/auto-assign-draft
+ * body: { examDate, startAt, endAt, totalStudents, requestedRooms }
+ *
+ * NOTE:
+ * requestedRooms = 0 => AUTO (allow grow/shrink by students)
+ */
 export async function autoAssignDraft(payload) {
   const res = await fetch(`/api/admin/exams/auto-assign-draft`, {
     method: "POST",
@@ -70,17 +61,4 @@ export async function autoAssignDraft(payload) {
     body: JSON.stringify(payload || {}),
   });
   return handle(res);
-}
-
-export async function autoAssignExam(examId, payload) {
-  const res = await fetch(`/api/admin/exams/${examId}/auto-assign`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(payload || {}),
-  });
-  const data = await handle(res);
-  cacheDel("admin:exams:");
-  cacheDel("exams:list");
-  return data;
 }
