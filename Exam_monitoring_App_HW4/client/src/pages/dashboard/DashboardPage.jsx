@@ -145,7 +145,7 @@ export default function DashboardPage() {
       tTitle = "Student Removed";
       icon = "🗑️";
       message = `Student removed from the exam — ${studentName} • ${studentId}`;
-    } else if (type.includes("TOO_MANY_TOILET") || type.includes("TOILET_LIMIT")) {
+    } else if (type.includes("TOO_MANY_TOILET_EXITS") || type.includes("TOO_MANY_TOILET") || type.includes("TOILET_LIMIT")) {
       tTitle = "Toilet Limit Reached";
       icon = "🚻";
       message = `${studentName} • ${studentId} exceeded the toilet exit limit (3+)`;
@@ -217,7 +217,7 @@ export default function DashboardPage() {
 
       const t = String(msg.type || "");
 
-      if (t.includes("TOO_MANY_TOILET") || t.includes("TOILET_LIMIT")) {
+      if (t.includes("TOO_MANY_TOILET_EXITS") || t.includes("TOO_MANY_TOILET") || t.includes("TOILET_LIMIT")) {
         scheduleRefetch();
         showToastFromItem({
           type: "TOO_MANY_TOILET",

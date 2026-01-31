@@ -1,5 +1,10 @@
 // ===== file: client/src/services/dashboard.service.js =====
 
+// ✅ Support Vercel (prod) via VITE_API_BASE
+const API_BASE = String(import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
+const BASE = API_BASE ? `${API_BASE}/api` : "/api";
+
+
 async function handle(res) {
   if (res.status === 204) return null;
 
@@ -33,14 +38,29 @@ async function http(url, options = {}) {
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
+  // ✅ Avoid endless loading (Render may be waking up)
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 12000);
 
-  return handle(res);
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers,
+      credentials: "include",
+      signal: controller.signal,
+    });
+
+    return handle(res);
+  } catch (e) {
+    if (String(e?.name) === "AbortError") {
+      throw new Error("Server is taking too long (Render waking up). Please retry.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
 }
+
 
 /**
  * Dashboard snapshot
@@ -51,7 +71,7 @@ export function getDashboardSnapshot({ examId } = {}) {
   const usp = new URLSearchParams();
   if (examId) usp.set("examId", String(examId));
   const qs = usp.toString() ? `?${usp.toString()}` : "";
-  return http(`/api/dashboard/snapshot${qs}`, { method: "GET" });
+  return http(`${BASE}/dashboard/snapshot${qs}`, { method: "GET" });
 }
 
 
@@ -64,9 +84,9 @@ export function getDashboardSnapshotLite({ examId } = {}) {
   const usp = new URLSearchParams();
   if (examId) usp.set("examId", String(examId));
   const qs = usp.toString() ? `?${usp.toString()}` : "";
-  return http(`/api/dashboard/snapshot-lite${qs}`, { method: "GET" });
+  return http(`${BASE}/dashboard/snapshot-lite${qs}`, { method: "GET" });
 }
 
 export function getClock() {
-  return http(`/api/dashboard/clock`, { method: "GET" });
+  return http(`${BASE}/dashboard/clock`, { method: "GET" });
 }
