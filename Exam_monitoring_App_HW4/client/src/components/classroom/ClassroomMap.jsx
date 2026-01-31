@@ -997,10 +997,11 @@ useEffect(() => {
                         />
                       ) : (
                         <div
-                          className="w-full h-full rounded-2xl border border-slate-200 bg-slate-50/70 grid place-items-center text-[11px] text-slate-400"
-                          title="Empty seat"
+                          className="w-full h-full rounded-2xl border border-slate-200 bg-white grid place-items-center shadow-sm"
+                          title={`Empty seat • ${key}`}
                         >
-                          Empty
+                          <div className="text-lg leading-none">🪑</div>
+                          <div className="text-[11px] font-extrabold text-slate-500 mt-1">{key}</div>
                         </div>
                       )}
                     </div>

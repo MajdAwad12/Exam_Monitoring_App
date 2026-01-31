@@ -68,6 +68,7 @@ export default function DashboardPage() {
 
   // ✅ Dashboard data (actual exam snapshot)
   const {
+    me: dashMe,
     exam,
     rooms,
     activeRoom,
@@ -328,7 +329,7 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-12 gap-5">
           <div className="col-span-12">
-            <ExamOverviewCard me={me} exam={exam} stats={stats} inbox={inbox} simNow={simNow} loading={false} />
+            <ExamOverviewCard me={dashMe || me} exam={exam} stats={stats} inbox={inbox} simNow={simNow} loading={false} />
           </div>
 
           {/* ✅ Admin + Lecturer: Add/Delete Students */}
@@ -346,7 +347,7 @@ export default function DashboardPage() {
           <div className="col-span-12">
             <ClassroomMap
               exam={exam}
-              me={me}
+              me={dashMe || me}
               refreshNow={refetch}
               nowMs={simNowMs || Date.now()}
               forcedRoomId={selectedRoomId}
@@ -359,11 +360,11 @@ export default function DashboardPage() {
 
           <div className="col-span-12 grid grid-cols-12 gap-5">
             <div className="col-span-12 lg:col-span-6">
-              <TransfersPanel me={me} items={transfersForRoom} loading={false} error={""} onChanged={refetch} />
+              <TransfersPanel me={dashMe || me} items={transfersForRoom} loading={false} error={""} onChanged={refetch} />
             </div>
 
             <div id="events-panel" className="col-span-12 lg:col-span-6">
-              <EventsFeed me={me} items={eventsForRoom} alerts={alertsForRoom} loading={false} />
+              <EventsFeed me={dashMe || me} items={eventsForRoom} alerts={alertsForRoom} loading={false} />
             </div>
           </div>
         </div>

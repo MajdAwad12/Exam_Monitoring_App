@@ -162,33 +162,32 @@ export default function AppLayout() {
     };
   }, [me, loadingMe, chatContext]);
 
-  if (loadingMe) {
-    return (
-      <div className="min-h-screen grid place-items-center bg-gradient-to-br from-indigo-700 via-sky-600 to-cyan-400">
-        <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl px-8 py-6 text-slate-700">
-          Loading...
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-700 via-sky-600 to-cyan-400 flex items-center justify-center p-4">
       <div className="w-full max-w-[1800px] h-[95vh] bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl flex overflow-hidden relative">
-        <Sidebar me={me} onLogout={onLogout} />
+        {me ? <Sidebar me={me} onLogout={onLogout} /> : <div className="w-[280px] bg-white/90 border-r border-slate-200" /> }
 
         <div className="flex-1 flex flex-col bg-white min-w-0">
-          <Topbar me={me} />
+          {me ? <Topbar me={me} /> : <div className="h-[64px] border-b border-slate-200 bg-white" /> }
 
           <div className="flex-1 overflow-y-auto bg-slate-50">
             <div className="p-10">
-              <Outlet context={outletCtx} />
+              {loadingMe ? (
+                <div className="min-h-[240px] grid place-items-center">
+                  <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 text-slate-700 shadow-sm">
+                    <div className="font-extrabold">Loading session…</div>
+                    <div className="text-sm text-slate-500 mt-1">Preparing your dashboard</div>
+                  </div>
+                </div>
+              ) : (
+                <Outlet context={outletCtx} />
+              )}
             </div>
           </div>
         </div>
 
         {/* ✅ Floating bot gets global context (updated by pages) */}
-        {me?.role !== "student" && <FloatingChatWidget me={me} context={chatContext} />}
+        {me?.role !== "student" && !loadingMe && <FloatingChatWidget me={me} context={chatContext} />}
       </div>
     </div>
   );

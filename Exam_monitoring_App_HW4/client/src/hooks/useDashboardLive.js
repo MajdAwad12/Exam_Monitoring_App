@@ -10,17 +10,27 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+// ---- tiny in-memory cache (makes sidebar navigation feel instant) ----
+let __dashCache = { raw: null, at: 0, examId: null, lite: null };
+const DASH_CACHE_TTL_MS = 30_000;
+
 /**
  * Live dashboard data (polling-based, but can be set to pollMs=0 when WS is used)
  * @param {object} params
  * @param {string|null} params.examId - (Admin only) selected running exam id
  * @param {string|null} params.roomId - (Client-side only) selected room for filtering UI
  * @param {number} params.pollMs
+ * @param {boolean} params.lite
  */
-export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite = false } = {})
- {
-  const [raw, setRaw] = useState(null);
-  const [loading, setLoading] = useState(true);
+export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite = false } = {}) {
+  const cacheOk =
+    __dashCache.raw &&
+    Date.now() - (__dashCache.at || 0) < DASH_CACHE_TTL_MS &&
+    Boolean(__dashCache.lite) === Boolean(lite) &&
+    String(__dashCache.examId || "") === String(examId || "");
+
+  const [raw, setRaw] = useState(cacheOk ? __dashCache.raw : null);
+  const [loading, setLoading] = useState(!cacheOk);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
@@ -30,7 +40,7 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
     examIdRef.current = examId;
   }, [examId]);
 
-  // keep latest roomId without restarting polling
+  // keep latest roomId without restarting polling (used only in derived view)
   const roomIdRef = useRef(roomId);
   useEffect(() => {
     roomIdRef.current = roomId;
@@ -42,20 +52,20 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
     pollMsRef.current = pollMs;
   }, [pollMs]);
 
-  // ---- WS awareness (reduces loading + avoids extra polling) ----
+  // ---- WS awareness ----
   const [wsConnected, setWsConnected] = useState(false);
   const lastWsAtRef = useRef(0);
-
-  // timers/refs
   const wsRefreshTimerRef = useRef(null);
 
+  // refs
   const aliveRef = useRef(true);
   const inFlightRef = useRef(false);
   const pendingForceRef = useRef(false);
   const reqIdRef = useRef(0);
+  const didMountRef = useRef(false);
   const timerRef = useRef(null);
 
-  // backoff on errors (prevents spam + improves UX)
+  // backoff on errors
   const backoffRef = useRef(1);
   const MAX_BACKOFF = 6;
 
@@ -78,11 +88,10 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
 
       const base = Number(pollMsRef.current);
 
-      // If WS is connected and recently active, avoid redundant polling.
+      // If WS recently delivered a fresh event, pause polling temporarily
       const WS_FRESH_MS = 20000;
       if (wsConnected && Date.now() - (lastWsAtRef.current || 0) < WS_FRESH_MS) return;
 
-      // Polling disabled if pollMs <= 0 (or invalid)
       if (!Number.isFinite(base) || base <= 0) return;
 
       const wait = clamp(base * multiplier, 1500, 60000);
@@ -94,7 +103,6 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
     [clearTimer, wsConnected]
   );
 
-  // ✅ define fetchOnce BEFORE scheduleWsRefresh (fix TDZ / "Cannot access before initialization")
   const fetchOnce = useCallback(
     async (opts = { force: false }) => {
       if (!aliveRef.current) return;
@@ -119,6 +127,7 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
         if (myReqId !== reqIdRef.current) return;
 
         setRaw(snap);
+        __dashCache = { raw: snap, at: Date.now(), examId: examIdRef.current || null, lite };
         setLoading(false);
         setRefreshing(false);
 
@@ -144,7 +153,6 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
     [shouldPause, lite]
   );
 
-  // ✅ now scheduleWsRefresh can safely depend on fetchOnce
   const scheduleWsRefresh = useCallback(() => {
     clearTimeout(wsRefreshTimerRef.current);
     wsRefreshTimerRef.current = setTimeout(() => {
@@ -162,10 +170,8 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
 
     const onWs = (e) => {
       lastWsAtRef.current = Date.now();
-
       const msg = e?.detail || {};
       const t = String(msg?.type || "").toUpperCase();
-
       if (t === "EXAM_UPDATED" || t === "EXAM_STARTED" || t === "EXAM_ENDED") {
         scheduleWsRefresh();
       }
@@ -178,29 +184,31 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
       window.removeEventListener("ws:status", onStatus);
       window.removeEventListener("ws:event", onWs);
     };
+  }, [scheduleWsRefresh]);
+
+  // restart on examId changes (avoid double-load on first mount)
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+
+    setError("");
+    reqIdRef.current += 1;
+
+    if (raw) {
+      setRefreshing(true);
+      fetchOnce({ force: true });
+    } else {
+      setLoading(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // restart the "session" when examId changes (avoid showing old exam briefly)
-// ✅ IMPORTANT: keep previous UI rendered; do not setRaw(null) (prevents blank screen + long loaders)
-useEffect(() => {
-  setError("");
-  reqIdRef.current += 1;
-
-  // if we already have data, treat as "refresh" instead of full loading
-  if (raw) {
-    setRefreshing(true);
-    // fetch immediately for snappy tabs-like switch
-    fetchOnce({ force: true });
-  } else {
-    setLoading(true);
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [examId]);
+  }, [examId]);
 
   useEffect(() => {
     aliveRef.current = true;
-    setLoading(true);
+
+    if (!raw) setLoading(true);
     reqIdRef.current += 1;
 
     let cancelled = false;
@@ -241,59 +249,52 @@ useEffect(() => {
       clearTimer();
       clearTimeout(wsRefreshTimerRef.current);
     };
-  }, [fetchOnce, clearTimer, scheduleNext, shouldPause]);
+  }, [fetchOnce, clearTimer, scheduleNext, shouldPause, raw]);
 
   const derived = useMemo(() => {
-  const me = raw?.me || null;
-  const exam = raw?.exam || null;
+    const me = raw?.me || null;
+    const exam = raw?.exam || null;
 
-  const classrooms = exam?.classrooms || exam?.rooms || [];
-  const rooms = (Array.isArray(classrooms) ? classrooms : [])
-    .map((c) => ({
-      id: normalizeRoomId(c?.id || c?.roomId || c?.name || c),
-      name: normalizeRoomId(c?.name || c?.id || c?.roomId || c),
-      rows: Number(c?.rows || 0),
-      cols: Number(c?.cols || 0),
-      assignedSupervisorId: c?.assignedSupervisorId || null,
-      assignedSupervisorName: String(c?.assignedSupervisorName || ""),
-    }))
-    .filter((r) => r.id);
+    const classrooms = exam?.classrooms || exam?.rooms || [];
+    const rooms = (Array.isArray(classrooms) ? classrooms : [])
+      .map((c) => ({
+        id: normalizeRoomId(c?.id || c?.roomId || c?.name || c),
+        name: normalizeRoomId(c?.name || c?.id || c?.roomId || c),
+        rows: Number(c?.rows || 0),
+        cols: Number(c?.cols || 0),
+        assignedSupervisorId: c?.assignedSupervisorId || null,
+        assignedSupervisorName: String(c?.assignedSupervisorName || ""),
+      }))
+      .filter((r) => r.id);
 
-  // ---- SAFE room selection ----
-  const requestedRoomId = normalizeRoomId(roomIdRef.current);
-  const assignedRoomId = normalizeRoomId(me?.assignedRoomId);
+    const requestedRoomId = normalizeRoomId(roomIdRef.current);
+    const assignedRoomId = normalizeRoomId(me?.assignedRoomId);
 
-  const roomIds = rooms.map((r) => normalizeRoomId(r.id));
+    const roomIds = rooms.map((r) => normalizeRoomId(r.id));
 
-  let effectiveRoomId = "";
+    let effectiveRoomId = "";
 
-  if (requestedRoomId && roomIds.includes(requestedRoomId)) {
-    effectiveRoomId = requestedRoomId;
-  } else if (assignedRoomId && roomIds.includes(assignedRoomId)) {
-    effectiveRoomId = assignedRoomId;
-  } else {
-    effectiveRoomId = normalizeRoomId(rooms?.[0]?.id || "");
-  }
+    if (requestedRoomId && roomIds.includes(requestedRoomId)) effectiveRoomId = requestedRoomId;
+    else if (assignedRoomId && roomIds.includes(assignedRoomId)) effectiveRoomId = assignedRoomId;
+    else effectiveRoomId = roomIds[0] || "";
 
-  const activeRoom =
-    rooms.find((r) => normalizeRoomId(r.id) === effectiveRoomId) || null;
+    const activeRoom = rooms.find((r) => normalizeRoomId(r.id) === effectiveRoomId) || null;
 
-  const attendance = raw?.attendance || exam?.attendance || [];
+    const attendance = raw?.attendance || exam?.attendance || [];
 
-  return {
-    me,
-    exam,
-    rooms,
-    activeRoom,
-    attendance,
-    transfers: raw?.transfers || [],
-    stats: raw?.stats || {},
-    alerts: raw?.alerts || [],
-    inbox: raw?.inbox || { unread: 0, recent: [] },
-    events: raw?.events || [],
-  };
-}, [raw]);
-
+    return {
+      me,
+      exam,
+      rooms,
+      activeRoom,
+      attendance,
+      transfers: raw?.transfers || [],
+      stats: raw?.stats || {},
+      alerts: raw?.alerts || [],
+      inbox: raw?.inbox || { unread: 0, recent: [] },
+      events: raw?.events || [],
+    };
+  }, [raw]);
 
   const refetch = useCallback(async () => {
     backoffRef.current = 1;
