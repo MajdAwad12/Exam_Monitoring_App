@@ -59,11 +59,23 @@ async function findRunningExamForUser(user, { examId, lean = false, select = nul
   }
 
   if (role === "lecturer") {
-    examQuery["$or"] = [{ "lecturer.id": user._id }, { "coLecturers.id": user._id }];
+    const uidObj = user._id;
+    const uidStr = String(user._id);
+    examQuery["$or"] = [
+      { "lecturer.id": uidObj },
+      { "lecturer.id": uidStr },
+      { "coLecturers.id": uidObj },
+      { "coLecturers.id": uidStr },
+    ];
   }
 
   if (role === "supervisor") {
-    examQuery["supervisors.id"] = user._id;
+    const uidObj = user._id;
+    const uidStr = String(user._id);
+    examQuery["$or"] = [
+      { "supervisors.id": uidObj },
+      { "supervisors.id": uidStr },
+    ];
   }
 
   return applyExamQuery(Exam.findOne(examQuery).sort({ startAt: 1 }));

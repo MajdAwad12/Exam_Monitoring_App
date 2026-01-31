@@ -33,14 +33,27 @@ async function http(url, options = {}) {
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 15000;
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
 
-  return handle(res);
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers,
+      credentials: "include",
+      signal: controller.signal,
+    });
+
+    return await handle(res);
+  } catch (err) {
+    const msg = err?.name === "AbortError" ? "Request timed out. Please try again." : (err?.message || "Network error");
+    throw new Error(msg);
+  } finally {
+    clearTimeout(t);
+  }
 }
+
 
 /**
  * Dashboard snapshot

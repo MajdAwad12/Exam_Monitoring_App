@@ -488,11 +488,14 @@ async function buildSupervisorsFromClassrooms(classrooms) {
 
   const byId = new Map(supUsers.map((u) => [String(u._id), u]));
 
-  return pairs.map((p) => ({
-    id: p.supId,
-    name: byId.get(String(p.supId))?.fullName || p.supNameHint || "",
-    roomId: p.roomId,
-  }));
+  return pairs
+    .filter((p) => mongoose.Types.ObjectId.isValid(p.supId))
+    .map((p) => ({
+      // Store as ObjectId (schema expects ObjectId)
+      id: new mongoose.Types.ObjectId(p.supId),
+      name: byId.get(String(p.supId))?.fullName || p.supNameHint || "",
+      roomId: p.roomId,
+    }));
 }
 
 /* =========================
@@ -1444,11 +1447,14 @@ export async function createExam(req, res) {
           .lean();
         const byId = new Map(lecUsers.map((u) => [String(u._id), u]));
         coLecturersObj = body.coLecturers
-          .map((x) => ({
-            id: String(x?.id || "").trim(),
-            name: byId.get(String(x?.id || ""))?.fullName || String(x?.name || ""),
-            roomIds: Array.isArray(x?.roomIds) ? x.roomIds : [],
-          }))
+          .map((x) => {
+            const rawId = String(x?.id || x || "").trim();
+            return {
+              id: mongoose.Types.ObjectId.isValid(rawId) ? new mongoose.Types.ObjectId(rawId) : null,
+              name: byId.get(rawId)?.fullName || String(x?.name || ""),
+              roomIds: Array.isArray(x?.roomIds) ? x.roomIds : [],
+            };
+          })
           .filter((x) => x.id);
       }
     }
