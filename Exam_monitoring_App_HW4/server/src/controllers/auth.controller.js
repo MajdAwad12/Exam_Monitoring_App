@@ -44,10 +44,6 @@ function genOtp6() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-function escapeRegex(str) {
-  return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /* =========================
    STAFF LOGIN (username+password)
    + lockout policy
@@ -215,8 +211,7 @@ export async function studentRequestOtp(req, res) {
       return res.status(400).json({ message: "Missing email or studentId" });
     }
 
-    const emailRegex = new RegExp(`^${escapeRegex(email)}$`, "i");
-    const user = await User.findOne({ role: "student", email: emailRegex, studentId });
+    const user = await User.findOne({ role: "student", email, studentId });
     if (!user) return res.status(404).json({ message: "Student not found" });
 
     const code = genOtp6();
@@ -256,8 +251,7 @@ export async function studentVerifyOtp(req, res) {
       return res.status(400).json({ message: "Missing fields" });
     }
 
-    const emailRegex = new RegExp(`^${escapeRegex(email)}$`, "i");
-    const user = await User.findOne({ role: "student", email: emailRegex, studentId });
+    const user = await User.findOne({ role: "student", email, studentId });
     if (!user) return res.status(404).json({ message: "Student not found" });
 
     if (!user.otpHash || !user.otpExpiresAt) {
