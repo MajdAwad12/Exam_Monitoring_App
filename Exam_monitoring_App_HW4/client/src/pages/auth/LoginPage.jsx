@@ -115,11 +115,7 @@ export default function LoginPage() {
         { autoHideMs: 12000 }
       );
     } catch (err) {
-    const msg =
-      err?.response?.data?.message ||
-      err?.message ||
-      "Failed.";
-    showNotice("error", msg);
+      showNotice("error", err?.message || "Failed to send OTP.");
       triggerShake();
     } finally {
       setIsLoading(false);
@@ -274,8 +270,6 @@ export default function LoginPage() {
                           setTab("student");
                           setNotice(null);
                           setShowForgot(false);
-                          setStudentStep(1);
-                          setOtp("");
                         }}
                         className={[
                           "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",

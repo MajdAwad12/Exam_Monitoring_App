@@ -4,7 +4,6 @@ import { fileURLToPath } from "url";
 import http from "http";
 
 import express from "express";
-import compression from "compression";
 import cors from "cors";
 import dotenv from "dotenv";
 import session from "express-session";

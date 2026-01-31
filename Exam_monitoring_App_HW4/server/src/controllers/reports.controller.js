@@ -207,25 +207,12 @@ export async function listReports(req, res) {
   const actor = ensureLecturerOrAdmin(req, res);
   if (!actor) return;
 
-  const { page, limit } = req.query;
-
   const q = { status: "ended" };
   if (actor.role === "lecturer") q["lecturer.id"] = actor._id;
 
-  const p = Math.max(1, parseInt(page || "1", 10) || 1);
-  const lim = Math.min(300, Math.max(20, parseInt(limit || "100", 10) || 100));
-  const skip = (p - 1) * lim;
-
-  const select =
-    "_id courseName examMode status startAt endAt attendance events report.summary lecturer coLecturers supervisors";
-
-  const [total, exams] = await Promise.all([
-    Exam.countDocuments(q),
-    Exam.find(q).select(select).sort({ endAt: -1, examDate: -1 }).skip(skip).limit(lim).lean(),
-  ]);
-
+  const exams = await Exam.find(q).sort({ endAt: -1, examDate: -1 }).limit(200);
   const out = exams.map((e) => computeExamKPIs(e));
-  res.json({ exams: out, page: p, limit: lim, total });
+  res.json({ exams: out });
 }
 
 /* =========================

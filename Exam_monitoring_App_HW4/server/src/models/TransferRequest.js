@@ -59,6 +59,4 @@ transferRequestSchema.index({ examId: 1, createdAt: -1 });
 transferRequestSchema.index({ examId: 1, studentId: 1, status: 1 });
 transferRequestSchema.index({ transferId: 1 }, { unique: false });
 
-transferRequestSchema.index({ examId: 1, updatedAt: -1 });
-
 export default mongoose.model("TransferRequest", transferRequestSchema);

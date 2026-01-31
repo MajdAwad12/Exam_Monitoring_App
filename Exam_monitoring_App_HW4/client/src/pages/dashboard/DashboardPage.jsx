@@ -21,7 +21,7 @@ function normRoom(x) {
 }
 
 export default function DashboardPage() {
-  const { me, setChatContext } = useOutletContext();
+  const { setChatContext } = useOutletContext();
 
   const { simNow, simNowMs } = useSimClock();
 
@@ -32,6 +32,9 @@ export default function DashboardPage() {
   const [runningExams, setRunningExams] = useState([]);
   const [selectedExamId, setSelectedExamId] = useState(null);
   const [examsLoading, setExamsLoading] = useState(false);
+
+  // Load initial snapshot (no examId until we know the role)
+  const { me } = useDashboardLive({ pollMs: 0 });
 
   const meRole = useMemo(() => String(me?.role || "").toLowerCase(), [me]);
   const isAdmin = meRole === "admin";
@@ -80,7 +83,7 @@ export default function DashboardPage() {
     transfers,
     alerts,
     inbox,
-  } = useDashboardLive({ examId: isAdmin ? selectedExamId : null, roomId, pollMs: 6000, lite: true });
+  } = useDashboardLive({ examId: isAdmin ? selectedExamId : null, roomId, pollMs: 0 });
 
   const activeRoomId = useMemo(() => {
     return String(activeRoom?.id || activeRoom?.name || "").trim();
@@ -313,6 +316,7 @@ export default function DashboardPage() {
               />
             </div>
           ) : null}
+
           {/* ✅ Lecturer/Admin: room selector */}
           {canLecturerUX ? (
             <div className="mt-5">

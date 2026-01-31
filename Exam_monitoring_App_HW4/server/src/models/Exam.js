@@ -237,11 +237,7 @@ const examSchema = new mongoose.Schema(
 );
 
 examSchema.index({ status: 1, startAt: 1 });
-
-examSchema.index({ status: 1, "lecturer.id": 1 });
-examSchema.index({ status: 1, "coLecturers.id": 1 });
-
-// ✅ support both supervisor assignment styles
-examSchema.index({ status: 1, "supervisors.id": 1 });
-examSchema.index({ status: 1, "classrooms.assignedSupervisorId": 1 });
+examSchema.index({ "lecturer.id": 1, status: 1 });
+examSchema.index({ "supervisors.id" : 1, status: 1 });
+  
 export default mongoose.model("Exam", examSchema);

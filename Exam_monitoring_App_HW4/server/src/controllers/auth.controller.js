@@ -205,21 +205,14 @@ export async function checkUsername(req, res) {
 export async function studentRequestOtp(req, res) {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
-    const studentIdRaw = String(req.body?.studentId || "").trim();
-    const studentIdClean = studentIdRaw.replace(/[\s-]/g, ""); // remove spaces/dashes
+    const studentId = String(req.body?.studentId || "").trim();
 
-    if (!email || !studentIdRaw) {
+    if (!email || !studentId) {
       return res.status(400).json({ message: "Missing email or studentId" });
     }
 
-    const user = await User.findOne({
-      role: "student",
-      email,
-      $or: [{ studentId: studentIdRaw }, { studentId: studentIdClean }],
-    });
-
+    const user = await User.findOne({ role: "student", email, studentId });
     if (!user) return res.status(404).json({ message: "Student not found" });
-
 
     const code = genOtp6();
     user.otpHash = hashOtp(code);
@@ -251,19 +244,14 @@ export async function studentRequestOtp(req, res) {
 export async function studentVerifyOtp(req, res) {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
-    const studentIdRaw = String(req.body?.studentId || "").trim();
-    const studentIdClean = studentIdRaw.replace(/[\s-]/g, ""); // remove spaces/dashes
+    const studentId = String(req.body?.studentId || "").trim();
     const otp = String(req.body?.otp || "").trim();
 
     if (!email || !studentId || !otp) {
       return res.status(400).json({ message: "Missing fields" });
     }
 
-    const user = await User.findOne({
-      role: "student",
-      email,
-      $or: [{ studentId: studentIdRaw }, { studentId: studentIdClean }],
-    });
+    const user = await User.findOne({ role: "student", email, studentId });
     if (!user) return res.status(404).json({ message: "Student not found" });
 
     if (!user.otpHash || !user.otpExpiresAt) {

@@ -1,5 +1,17 @@
 // client/src/pages/reports/ReportsPage.jsx
 import { useEffect, useMemo, useState } from "react";
+import { Line, Bar } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Tooltip,
+  Legend,
+  Filler,
+} from "chart.js";
 
 import RocketLoader from "../../components/loading/RocketLoader.jsx";
 import {
@@ -10,38 +22,7 @@ import {
   downloadReportCsv,
 } from "../../services/reports.service.js";
 
-
-/**
- * Lazy-load chart libraries to speed up navigation.
- * (Vite will split these into separate chunks.)
- */
-function useLazyCharts() {
-  const [Charts, setCharts] = useState(null);
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        // IMPORTANT (prod stability):
-        // Import chart.js first (auto registers), then import react-chartjs-2.
-        // Using Promise.all + manual register can trigger TDZ errors after minification.
-        await import("chart.js/auto");
-        const { Line, Bar } = await import("react-chartjs-2");
-
-        if (alive) setCharts({ Line, Bar });
-      } catch (e) {
-        console.error("Failed to load charts", e);
-        if (alive) setCharts({ error: true });
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  return Charts;
-}
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler);
 
 /* =========================
    Small helpers
@@ -95,7 +76,6 @@ function Card({ title, subtitle, right, children }) {
 }
 
 export default function ReportsPage() {
-  const Charts = useLazyCharts();
   const [loading, setLoading] = useState(true);
   const [all, setAll] = useState([]);
   const [analytics, setAnalytics] = useState(null);
@@ -491,7 +471,7 @@ export default function ReportsPage() {
           right={`Points: ${points}`}
         >
           <div className="h-72">
-            {Charts?.Line ? <Charts.Line data={attendanceChartData} options={attendanceOptions} /> : null}
+            <Line data={attendanceChartData} options={attendanceOptions} />
           </div>
         </Card>
 
@@ -501,7 +481,7 @@ export default function ReportsPage() {
           right={`Shown Top : ${cheatingSeries.length}`}
         >
           <div className="h-72">
-            {Charts?.Bar ? <Charts.Bar data={cheatingChartData} options={cheatingOptions} /> : null}
+            <Bar data={cheatingChartData} options={cheatingOptions} />
           </div>
         </Card>
 
@@ -511,7 +491,7 @@ export default function ReportsPage() {
           right={`Rooms: ${toiletSeries.length}`}
         >
           <div className="h-72">
-            {Charts?.Bar ? <Charts.Bar data={toiletChartData} options={toiletOptions} /> : null}
+            <Bar data={toiletChartData} options={toiletOptions} />
           </div>
         </Card>
 
@@ -521,7 +501,7 @@ export default function ReportsPage() {
           right={`Rooms: ${teacherSeries.length}`}
         >
           <div className="h-72">
-            {Charts?.Bar ? <Charts.Bar data={teacherChartData} options={teacherOptions} /> : null}
+            <Bar data={teacherChartData} options={teacherOptions} />
           </div>
         </Card>
       </section>
