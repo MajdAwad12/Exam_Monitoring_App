@@ -17,9 +17,11 @@ function clamp(n, min, max) {
  * @param {string|null} params.roomId - (Client-side only) selected room for filtering UI
  * @param {number} params.pollMs
  */
-export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite = true } = {}) {
+export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite = false } = {})
+ {
   const [raw, setRaw] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   // keep latest examId without restarting polling
@@ -118,6 +120,7 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
 
         setRaw(snap);
         setLoading(false);
+        setRefreshing(false);
 
         backoffRef.current = 1;
       } catch (e) {
@@ -126,6 +129,7 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
 
         setError(e?.message || "Failed to load dashboard");
         setLoading(false);
+        setRefreshing(false);
 
         backoffRef.current = clamp(backoffRef.current * 2, 1, MAX_BACKOFF);
       } finally {
@@ -178,13 +182,21 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
   }, []);
 
   // restart the "session" when examId changes (avoid showing old exam briefly)
-  useEffect(() => {
+// ✅ IMPORTANT: keep previous UI rendered; do not setRaw(null) (prevents blank screen + long loaders)
+useEffect(() => {
+  setError("");
+  reqIdRef.current += 1;
+
+  // if we already have data, treat as "refresh" instead of full loading
+  if (raw) {
+    setRefreshing(true);
+    // fetch immediately for snappy tabs-like switch
+    fetchOnce({ force: true });
+  } else {
     setLoading(true);
-    setRaw(null);
-    setError("");
-    reqIdRef.current += 1;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examId]);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [examId]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -232,46 +244,56 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
   }, [fetchOnce, clearTimer, scheduleNext, shouldPause]);
 
   const derived = useMemo(() => {
-    const me = raw?.me || null;
-    const exam = raw?.exam || null;
+  const me = raw?.me || null;
+  const exam = raw?.exam || null;
 
-    const classrooms = exam?.classrooms || exam?.rooms || [];
-    const rooms = (Array.isArray(classrooms) ? classrooms : [])
-      .map((c) => ({
-        id: normalizeRoomId(c?.id || c?.roomId || c?.name || c),
-        name: normalizeRoomId(c?.name || c?.id || c?.roomId || c),
-        rows: Number(c?.rows || 0),
-        cols: Number(c?.cols || 0),
-        assignedSupervisorId: c?.assignedSupervisorId || null,
-        assignedSupervisorName: String(c?.assignedSupervisorName || ""),
-      }))
-      .filter((r) => r.id);
+  const classrooms = exam?.classrooms || exam?.rooms || [];
+  const rooms = (Array.isArray(classrooms) ? classrooms : [])
+    .map((c) => ({
+      id: normalizeRoomId(c?.id || c?.roomId || c?.name || c),
+      name: normalizeRoomId(c?.name || c?.id || c?.roomId || c),
+      rows: Number(c?.rows || 0),
+      cols: Number(c?.cols || 0),
+      assignedSupervisorId: c?.assignedSupervisorId || null,
+      assignedSupervisorName: String(c?.assignedSupervisorName || ""),
+    }))
+    .filter((r) => r.id);
 
-    const firstRoomId = normalizeRoomId(rooms?.[0]?.id || rooms?.[0]?.name || "");
-    const requestedRoomId = normalizeRoomId(roomIdRef.current);
+  // ---- SAFE room selection ----
+  const requestedRoomId = normalizeRoomId(roomIdRef.current);
+  const assignedRoomId = normalizeRoomId(me?.assignedRoomId);
 
-    const effectiveRoomId =
-      requestedRoomId || normalizeRoomId(me?.assignedRoomId) || firstRoomId || "";
+  const roomIds = rooms.map((r) => normalizeRoomId(r.id));
 
-    const activeRoom = effectiveRoomId
-      ? rooms.find((r) => normalizeRoomId(r.id) === normalizeRoomId(effectiveRoomId)) || null
-      : rooms[0] || null;
+  let effectiveRoomId = "";
 
-    const attendance = raw?.attendance || exam?.attendance || [];
+  if (requestedRoomId && roomIds.includes(requestedRoomId)) {
+    effectiveRoomId = requestedRoomId;
+  } else if (assignedRoomId && roomIds.includes(assignedRoomId)) {
+    effectiveRoomId = assignedRoomId;
+  } else {
+    effectiveRoomId = normalizeRoomId(rooms?.[0]?.id || "");
+  }
 
-    return {
-      me,
-      exam,
-      rooms,
-      activeRoom,
-      attendance,
-      transfers: raw?.transfers || [],
-      stats: raw?.stats || {},
-      alerts: raw?.alerts || [],
-      inbox: raw?.inbox || { unread: 0, recent: [] },
-      events: raw?.events || [],
-    };
-  }, [raw]);
+  const activeRoom =
+    rooms.find((r) => normalizeRoomId(r.id) === effectiveRoomId) || null;
+
+  const attendance = raw?.attendance || exam?.attendance || [];
+
+  return {
+    me,
+    exam,
+    rooms,
+    activeRoom,
+    attendance,
+    transfers: raw?.transfers || [],
+    stats: raw?.stats || {},
+    alerts: raw?.alerts || [],
+    inbox: raw?.inbox || { unread: 0, recent: [] },
+    events: raw?.events || [],
+  };
+}, [raw]);
+
 
   const refetch = useCallback(async () => {
     backoffRef.current = 1;
@@ -279,5 +301,5 @@ export function useDashboardLive({ examId = null, roomId, pollMs = 60000, lite =
     scheduleNext(1);
   }, [fetchOnce, scheduleNext]);
 
-  return { ...derived, raw, loading, error, refetch, wsConnected };
+  return { ...derived, raw, loading, refreshing, error, refetch, wsConnected };
 }
