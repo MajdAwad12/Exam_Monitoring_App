@@ -352,8 +352,71 @@ export async function getDashboardSnapshot(req, res) {
     const alerts = [];
     const now = Date.now();
 
+
+    // ---- Exam time remaining alerts (computed live; no DB writes) ----
+    const endMs = exam.endAt ? new Date(exam.endAt).getTime() : null;
+    if (exam.status === "running" && endMs && !Number.isNaN(endMs)) {
+      const remainingMs = endMs - now;
+
+      if (remainingMs <= 30 * 60 * 1000 && remainingMs > 10 * 60 * 1000) {
+        alerts.push({
+          type: "EXAM_TIME_LEFT_30M",
+          severity: "low",
+          description: "Exam has 30 minutes remaining.",
+          at: new Date().toISOString(),
+          roomId: myRoomId || "",
+          remainingMs,
+        });
+      }
+
+      if (remainingMs <= 10 * 60 * 1000 && remainingMs > 0) {
+        alerts.push({
+          type: "EXAM_TIME_LEFT_10M",
+          severity: "medium",
+          description: "Exam has 10 minutes remaining.",
+          at: new Date().toISOString(),
+          roomId: myRoomId || "",
+          remainingMs,
+        });
+      }
+
+      if (remainingMs <= 0) {
+        alerts.push({
+          type: "EXAM_TIME_ENDED",
+          severity: "high",
+          description: "Exam time is over.",
+          at: new Date().toISOString(),
+          roomId: myRoomId || "",
+          remainingMs,
+        });
+      }
+    }
+
+    // ---- Too many toilet exits (>=3) ----
+    for (const a of visibleAttendance) {
+      const key = String(a.studentId || "");
+      if (!key) continue;
+      const st = studentFilesSlim[key];
+      const toiletCount = Number(st?.toiletCount || 0) || 0;
+
+      if (toiletCount >= 3) {
+        alerts.push({
+          type: "TOO_MANY_TOILET_EXITS",
+          severity: toiletCount >= 5 ? "high" : "medium",
+          description: `Too many toilet exits (${toiletCount}).`,
+          at: new Date().toISOString(),
+          roomId: attRoom(a),
+          studentId: key,
+          studentCode: a.studentNumber || "",
+          name: a.name || "",
+          classroom: attRoom(a),
+          seat: a.seat || "",
+          toiletCount,
+        });
+      }
+    }
     // ---------------- Toilet too long ----------------
-    const TOILET_ALERT_MS = 10 * 60 * 1000;
+    const TOILET_ALERT_MS = 5 * 60 * 1000;
     for (const a of visibleAttendance) {
       if (a.status !== "temp_out") continue;
 
@@ -371,6 +434,7 @@ export async function getDashboardSnapshot(req, res) {
         alerts.push({
           type: "TOILET_LONG",
           severity: "medium",
+          description: "Student has been out for more than 5 minutes.",
           at: new Date(base).toISOString(),
           roomId: attRoom(a),
           studentId: key,
@@ -432,6 +496,7 @@ export async function getDashboardSnapshot(req, res) {
         alerts.push({
           type: "TRANSFER_PENDING_TO_YOU",
           severity: "medium",
+          description: "Pending transfer request to your room.",
           at: t.createdAt,
           roomId: t.toClassroom,
           studentId: String(t.studentId),
@@ -447,6 +512,7 @@ export async function getDashboardSnapshot(req, res) {
         alerts.push({
           type: "TRANSFER_PENDING_IN_EXAM",
           severity: "low",
+          description: "Pending transfer request in this exam.",
           at: t.createdAt,
           roomId: t.toClassroom,
           studentId: String(t.studentId),
@@ -645,7 +711,7 @@ export async function getDashboardSnapshotLite(req, res) {
     const alerts = [];
     const now = Date.now();
 
-    const TOILET_ALERT_MS = 10 * 60 * 1000;
+    const TOILET_ALERT_MS = 5 * 60 * 1000;
     for (const a of visibleAttendance) {
       if (a.status !== "temp_out") continue;
 
@@ -663,6 +729,7 @@ export async function getDashboardSnapshotLite(req, res) {
         alerts.push({
           type: "TOILET_LONG",
           severity: "medium",
+          description: "Student has been out for more than 5 minutes.",
           at: new Date(base).toISOString(),
           roomId: attRoom(a),
           studentId: key,
@@ -706,6 +773,7 @@ export async function getDashboardSnapshotLite(req, res) {
         alerts.push({
           type: "TRANSFER_PENDING_TO_YOU",
           severity: "medium",
+          description: "Pending transfer request to your room.",
           at: t.createdAt,
           roomId: t.toClassroom,
           studentId: String(t.studentId),
@@ -721,6 +789,7 @@ export async function getDashboardSnapshotLite(req, res) {
         alerts.push({
           type: "TRANSFER_PENDING_IN_EXAM",
           severity: "low",
+          description: "Pending transfer request in this exam.",
           at: t.createdAt,
           roomId: t.toClassroom,
           studentId: String(t.studentId),

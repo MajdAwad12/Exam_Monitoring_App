@@ -238,6 +238,7 @@ const examSchema = new mongoose.Schema(
 
 examSchema.index({ status: 1, startAt: 1 });
 examSchema.index({ "lecturer.id": 1, status: 1 });
+examSchema.index({ "coLecturers.id": 1, status: 1 });
 examSchema.index({ "supervisors.id" : 1, status: 1 });
   
 export default mongoose.model("Exam", examSchema);

@@ -1259,6 +1259,17 @@ export async function startExam(req, res) {
           details: { startAt: exam.startAt, endAt: exam.endAt, force: false },
         });
 
+        // ✅ Also push to events panel (dashboard)
+        pushExamEvent(exam, {
+          type: "EXAM_STARTED",
+          timestamp: now,
+          severity: "low",
+          description: `Exam started${force ? " (forced)" : ""}.`,
+          classroom: "",
+          seat: "",
+          studentId: null,
+        });
+
         recalcSummary(exam);
       });
 
@@ -1293,6 +1304,17 @@ export async function startExam(req, res) {
         student: null,
         details: { startAt: exam.startAt, endAt: exam.endAt, durationHours: 3, force: true },
       });
+
+        // ✅ Also push to events panel (dashboard)
+        pushExamEvent(exam, {
+          type: "EXAM_STARTED",
+          timestamp: now,
+          severity: "low",
+          description: `Exam started${force ? " (forced)" : ""}.`,
+          classroom: "",
+          seat: "",
+          studentId: null,
+        });
 
       for (const c of exam.classrooms || []) {
         const rid = String(c?.id || c?.name || "").trim();
@@ -1355,6 +1377,17 @@ export async function endExam(req, res) {
         actor,
         student: null,
         details: { endedAt: now },
+      });
+
+      // ✅ Also push to events panel (dashboard)
+      pushExamEvent(exam, {
+        type: "EXAM_ENDED",
+        timestamp: now,
+        severity: "low",
+        description: "Exam ended.",
+        classroom: "",
+        seat: "",
+        studentId: null,
       });
 
       recalcSummary(exam);
