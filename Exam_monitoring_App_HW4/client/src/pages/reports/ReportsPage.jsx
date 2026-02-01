@@ -115,9 +115,9 @@ export default function ReportsPage() {
         setLoading(true);
         setErr("");
 
-        // fetch list + analytics in parallel
-        const [listData, analyticsData] = await Promise.all([getReportsList(), getReportsAnalytics()]);
-
+        // ✅ Fast screen open:
+        // 1) Load the reports list first (small + fast)
+        const listData = await getReportsList();
         if (!alive) return;
 
         const exams = Array.isArray(listData?.exams) ? listData.exams : [];
@@ -130,14 +130,24 @@ export default function ReportsPage() {
         });
 
         setAll(sorted);
-        setAnalytics(analyticsData || null);
+        setLoading(false);
+
+        // 2) Load analytics in the background (do NOT block navigation)
+        try {
+          const analyticsData = await getReportsAnalytics();
+          if (!alive) return;
+          setAnalytics(analyticsData || null);
+        } catch (e) {
+          // analytics is optional; keep the page usable
+          console.warn("Reports analytics failed", e);
+          if (!alive) return;
+          setAnalytics(null);
+        }
       } catch (e) {
         if (!alive) return;
         setErr(e?.message || "Failed to load reports");
         setAll([]);
         setAnalytics(null);
-      } finally {
-        if (!alive) return;
         setLoading(false);
       }
     })();
@@ -145,7 +155,7 @@ export default function ReportsPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, []);;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

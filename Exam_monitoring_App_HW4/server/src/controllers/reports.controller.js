@@ -239,7 +239,11 @@ export async function getReportsAnalytics(req, res) {
   const q = { status: "ended" };
   if (actor.role === "lecturer") q["lecturer.id"] = actor._id;
 
-  const exams = await Exam.find(q).sort({ endAt: 1, examDate: 1 }).limit(500);
+  const exams = await Exam.find(q)
+    .select("courseName examMode examDate startAt endAt status lecturer classrooms supervisors report.summary events.type events.severity events.classroom events.eventId events.seenByLecturer events.seenText")
+    .sort({ endAt: 1, examDate: 1 })
+    .limit(250)
+    .lean();
 
   // 1) Attendance per exam
   const attendanceSeries = exams.map((e) => {

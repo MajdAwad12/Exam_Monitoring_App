@@ -235,7 +235,8 @@ export default function EventsFeed({
       await markCallLecturerSeen(examId, eventId);
       // UI will update via polling / WS; keep a tiny optimistic mark
       it.raw.seenByLecturer = true;
-      it.raw.seenText = it.raw.seenText || "Lecturer saw this call and will respond soon.";
+      it.raw.seenText = "המרצה ראה את הקריאה , הוא יבוא בזמן הקרוב לכיתה";
+      it.raw.description = it.raw.seenText;
       it.raw.severity = it.raw.severity || "high";
     } catch (e) {
       console.error(e);
@@ -298,11 +299,16 @@ return (
               const sev = sevMeta(it.severity);
               const head = titleOf(it.raw);
 
-              const shownText = it.text?.trim()
-                ? it.text
-                : it.source === "alert"
-                  ? "Alert received (no details provided)."
-                  : "—";
+              const isCallLecturer = String(it.raw?.type || "").toUpperCase() === "CALL_LECTURER";
+              const seenText = typeof it.raw?.seenText === "string" ? it.raw.seenText.trim() : "";
+
+              const shownText = isCallLecturer && it.raw?.seenByLecturer && seenText
+                ? seenText
+                : it.text?.trim()
+                  ? it.text
+                  : it.source === "alert"
+                    ? "Alert received (no details provided)."
+                    : "—";
 
               return (
                 <div key={`${idx}-${String(it.at)}`} className={`rounded-3xl border p-4 shadow-sm ${sev.row}`}>
@@ -346,14 +352,14 @@ return (
                         <button
                           type="button"
                           onClick={() => handleSeen(it)}
-                          disabled={seenBusyId === String(it.raw?.eventId || "")}
+                          disabled={!String(it.raw?.eventId || "").trim() || seenBusyId === String(it.raw?.eventId || "").trim()}
                           className={[
                             "mt-2 w-full rounded-xl px-3 py-1.5 text-xs font-extrabold",
                             "bg-sky-700 text-white hover:bg-sky-800",
                             "disabled:opacity-60 disabled:cursor-not-allowed",
                           ].join(" ")}
                         >
-                          {seenBusyId === String(it.raw?.eventId || "") ? "Saving..." : "Seen"}
+                          {seenBusyId === String(it.raw?.eventId || "").trim() ? "Saving..." : "Seen"}
                         </button>
                       ) : null}
 
