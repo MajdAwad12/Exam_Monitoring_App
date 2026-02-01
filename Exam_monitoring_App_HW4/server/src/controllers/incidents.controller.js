@@ -145,7 +145,7 @@ export async function logIncident(req, res) {
       ev.seenText = "The lecturer saw the reading, he will come to class soon.";
 
       // make it visually prominent for all users
-      ev.severity = "high";
+      ev.severity = "low";
 
       await saveWithRetry(exam);
 
