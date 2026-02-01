@@ -233,9 +233,10 @@ useEffect(() => {
         if (wantStatus === "temp_out") item.outStartedAt = item.outStartedAt || nowISO;
 
         if (wantStatus === "present") {
-          if (normStatus(item.status) === "temp_out") item.outStartedAt = null;
+          // ❗ אל תאפס outStartedAt כאן – השרת מחשב זמן שירותים ומאפס אחרי הצלחה
           item.arrivedAt = item.arrivedAt || nowISO;
         }
+
 
         if (wantStatus === "finished") item.finishedAt = item.finishedAt || nowISO;
 
@@ -457,9 +458,10 @@ useEffect(() => {
         if (patch?.status === "temp_out") next.outStartedAt = patch.outStartedAt || nowISO;
 
         if (patch?.status === "present") {
-          if (normStatus(x.status) === "temp_out") next.outStartedAt = null;
+          // ❗ אל תאפס outStartedAt כאן – השרת מחשב זמן שירותים ומאפס אחרי הצלחה
           next.arrivedAt = x.arrivedAt || patch.arrivedAt || nowISO;
         }
+
 
         if (patch?.status === "finished") next.finishedAt = x.finishedAt || nowISO;
 

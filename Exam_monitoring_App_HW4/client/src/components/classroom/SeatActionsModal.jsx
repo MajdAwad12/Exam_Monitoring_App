@@ -144,9 +144,8 @@ async function setPresentOrBackToRoom() {
   setLocalErr("");
   setActionBusy(true);
 
-  const payload = isTempOutNow
-    ? { status: "present", outStartedAt: null }
-    : { status: "present" };
+  const payload = { status: "present" };
+
 
   try {
     await onSetStatus?.(seat.studentId, payload);
