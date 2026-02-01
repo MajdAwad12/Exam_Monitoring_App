@@ -76,6 +76,9 @@ export default function ClassroomMap({
   const isSupervisor = meRole === "supervisor";
   const isLecturer = meRole === "lecturer";
   const isAdmin = meRole === "admin";
+
+  // ✅ exam id can be `_id` (mongo) or `id` (normalized)
+  const examId = exam?.id || exam?._id;
   const canCallLecturer = isSupervisor || isAdmin;
 
   // ✅ permissions (single source of truth)
@@ -230,9 +233,10 @@ useEffect(() => {
         if (wantStatus === "temp_out") item.outStartedAt = item.outStartedAt || nowISO;
 
         if (wantStatus === "present") {
-          if (normStatus(item.status) === "temp_out") item.outStartedAt = null;
+          // ❗ אל תאפס outStartedAt כאן – השרת מחשב זמן שירותים ומאפס אחרי הצלחה
           item.arrivedAt = item.arrivedAt || nowISO;
         }
+
 
         if (wantStatus === "finished") item.finishedAt = item.finishedAt || nowISO;
 
@@ -454,9 +458,10 @@ useEffect(() => {
         if (patch?.status === "temp_out") next.outStartedAt = patch.outStartedAt || nowISO;
 
         if (patch?.status === "present") {
-          if (normStatus(x.status) === "temp_out") next.outStartedAt = null;
+          // ❗ אל תאפס outStartedAt כאן – השרת מחשב זמן שירותים ומאפס אחרי הצלחה
           next.arrivedAt = x.arrivedAt || patch.arrivedAt || nowISO;
         }
+
 
         if (patch?.status === "finished") next.finishedAt = x.finishedAt || nowISO;
 
@@ -470,7 +475,7 @@ useEffect(() => {
 
 
   async function patchStatus(studentId, patch) {
-    if (!exam?.id) return;
+    if (!examId) return;
     setLocalError("");
 
     const resolvedId = resolveStudentIdKey(studentId);
@@ -485,7 +490,7 @@ useEffect(() => {
 
     try {
       setSaving(true);
-      await updateAttendance({ examId: exam.id, studentId: resolvedId, patch: safePatch });
+      await updateAttendance({ examId, studentId: resolvedId, patch: safePatch });
       refreshNow?.();
     } catch (e) {
       pendingRef.current.delete(String(resolvedId));
@@ -539,10 +544,10 @@ useEffect(() => {
   }
 
   async function callLecturerGlobal() {
-    if (!exam?.id) return;
+    if (!examId) return;
     try {
       setSaving(true);
-      await logIncident(exam.id, null, {
+      await logIncident(examId, null, {
         kind: "CALL_LECTURER",
         severity: "medium",
         note: `${isAdmin ? "Admin" : "Supervisor"} requested lecturer assistance in room ${activeRoom}`,
@@ -558,7 +563,7 @@ useEffect(() => {
   }
 
   async function requestTransfer(seat, toRoom) {
-    if (!exam?.id || !seat) return;
+    if (!examId || !seat) return;
     setLocalError("");
 
     const sid = String(seat.studentId || "").trim();
@@ -595,7 +600,7 @@ useEffect(() => {
       setSaving(true);
 
       await createTransfer({
-        examId: exam.id,
+        examId: examId,
         studentId: sid,
         toClassroom: toRoom,
         toSeat: "AUTO",
@@ -635,7 +640,7 @@ useEffect(() => {
   }
 
   async function cancelPendingTransfer(seat) {
-    if (!exam?.id || !seat) return;
+    if (!examId || !seat) return;
     setLocalError("");
 
     const sid = String(seat.studentId || "").trim();
@@ -687,7 +692,7 @@ useEffect(() => {
   }
 
   async function submitCheatNote(seat, text) {
-    if (!exam?.id || !seat || !text) return;
+    if (!examId || !seat || !text) return;
 
     const studentKey = safeStudentKey(seat);
     if (!studentKey) {
@@ -699,7 +704,7 @@ useEffect(() => {
 
     try {
       setSaving(true);
-      await logIncident(exam.id, studentKey, {
+      await logIncident(examId, studentKey, {
         kind: "CHEAT_NOTE",
         severity: "high",
         note: text,
@@ -996,13 +1001,14 @@ useEffect(() => {
                           onClick={() => setSelectedStudentId(String(a.studentId))}
                         />
                       ) : (
-                        <div
-                          className="w-full h-full rounded-2xl border border-slate-200 bg-slate-50/70 grid place-items-center text-[11px] text-slate-400"
-                          title="Empty seat"
-                        >
-                          Empty
-                        </div>
-                      )}
+                      <div
+                        className="w-full h-full rounded-2xl border border-slate-200 bg-white grid place-items-center shadow-sm"
+                        title={`Empty • ${key}`}
+                      >
+                        <div className="text-sm font-extrabold text-slate-500">Empty</div>
+                      </div>
+                    )}
+
                     </div>
                   );
                 })}

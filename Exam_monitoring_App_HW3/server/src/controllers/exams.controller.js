@@ -77,8 +77,29 @@ async function updateExamWithRetry(examId, mutator, retries = 6) {
 
 
 function toOut(doc) {
-  const o = doc.toObject({ getters: true });
-  return { ...o, id: String(o._id) };
+  const o = doc && typeof doc.toObject === "function" ? doc.toObject({ getters: true }) : (doc || {});
+  const _id = o._id || o.id;
+  return { ...o, id: String(_id || "") };
+}
+
+function slugCourseId(courseName) {
+  const s = String(courseName || "").trim();
+  if (!s) return "";
+  // Example: "Software Engineering" -> "SE" + stable hash-ish tail
+  const letters = s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0] || "")
+    .join("")
+    .toUpperCase()
+    .slice(0, 6);
+  const tail = Math.abs(
+    Array.from(s).reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0, 7)
+  )
+    .toString(36)
+    .toUpperCase()
+    .slice(0, 4);
+  return `${letters}${tail}`;
 }
 
 function ensureReport(exam) {
@@ -467,11 +488,14 @@ async function buildSupervisorsFromClassrooms(classrooms) {
 
   const byId = new Map(supUsers.map((u) => [String(u._id), u]));
 
-  return pairs.map((p) => ({
-    id: p.supId,
-    name: byId.get(String(p.supId))?.fullName || p.supNameHint || "",
-    roomId: p.roomId,
-  }));
+  return pairs
+    .filter((p) => mongoose.Types.ObjectId.isValid(p.supId))
+    .map((p) => ({
+      // Store as ObjectId (schema expects ObjectId)
+      id: new mongoose.Types.ObjectId(p.supId),
+      name: byId.get(String(p.supId))?.fullName || p.supNameHint || "",
+      roomId: p.roomId,
+    }));
 }
 
 /* =========================
@@ -502,28 +526,35 @@ async function resolveStudentUser(studentIdOrNumber) {
 export async function getExams(req, res) {
   try {
     const me = req.user || {};
-    const role = String(me.role || "");
+    const role = String(me.role || "").toLowerCase();
+    const myId = me._id || me.id;
 
-    const exams = await Exam.find({}).sort({ startAt: -1 });
-    let filtered = exams;
+    // ✅ Security: do NOT return all exams to lecturer/supervisor/student.
+    // Build a DB-side filter to return only the exams the user is related to.
+    const filter = {};
 
     if (role === "supervisor") {
-      filtered = exams.filter((e) =>
-        (e.supervisors || []).some((s) => String(s?.id) === String(me.id || me._id))
-      );
+      filter.supervisors = { $elemMatch: { id: myId } };
+    } else if (role === "student") {
+      filter.attendance = { $elemMatch: { studentId: myId } };
+    } else if (role === "lecturer") {
+      filter.$or = [
+        { "lecturer.id": myId },
+        { coLecturers: { $elemMatch: { id: myId } } },
+      ];
     }
+    // admin (and other roles) keep full access
 
-    if (role === "student") {
-      filtered = exams.filter((e) =>
-        (e.attendance || []).some((a) => String(a?.studentId) === String(me.id || me._id))
-      );
-    }
-
-    return res.json({ ok: true, exams: filtered.map(toOut) });
+    const exams = await Exam.find(filter)
+      .select("_id courseName examMode status startAt endAt classrooms lecturer coLecturers supervisors report.summary createdAt updatedAt")
+      .sort({ startAt: -1 })
+      .lean();
+    return res.json({ ok: true, exams: exams.map(toOut) });
   } catch (e) {
     return res.status(500).json({ message: e.message || "Failed to load exams" });
   }
 }
+
 
 // ✅ GET /api/exams/:examId
 export async function getExamById(req, res) {
@@ -805,7 +836,7 @@ export async function updateAttendance(req, res) {
               details: { toiletCount: ss.toiletCount },
             });
 
-            if (ss.toiletCount === 3) {
+            if (ss.toiletCount >= 3) {
               pushExamTimeline(exam, {
                 kind: "TOO_MANY_TOILET_EXITS",
                 at: leftAt,
@@ -820,7 +851,7 @@ export async function updateAttendance(req, res) {
                 type: "TOO_MANY_TOILET_EXITS",
                 timestamp: leftAt,
                 severity: "medium",
-                description: `${att.name} (${att.studentNumber || "—"}) exceeded toilet exits (${ss.toiletCount}).`,
+                description: `${att.name} (${att.studentNumber || "—"}) exceeded 3 toilet exits (${ss.toiletCount}).`,
                 classroom: att.classroom || "",
                 seat: att.seat || "",
                 studentNumber: String(att.studentNumber || ""),
@@ -848,9 +879,31 @@ export async function updateAttendance(req, res) {
           if (prevStatus === "temp_out" && nextStatus === "present") {
             const leftAt = att.outStartedAt ? new Date(att.outStartedAt) : null;
 
+            let deltaMs = 0;
             if (leftAt && !Number.isNaN(leftAt.getTime())) {
-              const deltaMs = now.getTime() - leftAt.getTime();
+              deltaMs = now.getTime() - leftAt.getTime();
               ss.totalToiletMs = (Number(ss.totalToiletMs) || 0) + Math.max(0, deltaMs);
+            }
+
+            // If a single toilet exit lasted > 5 minutes, record an event (not the sum)
+            if (deltaMs >= 5 * 60 * 1000) {
+              const mins = Math.round((deltaMs / 60000) * 10) / 10;
+              pushExamEvent(exam, {
+                type: "TOILET_TOO_LONG_SINGLE",
+                timestamp: now,
+                severity: "high",
+                description: `${att.name} (${att.studentNumber || "—"}) stayed out for ${mins} minutes in a single toilet exit (> 5).`,
+                classroom: att.classroom || "",
+                seat: att.seat || "",
+                studentNumber: String(att.studentNumber || ""),
+                studentName: String(att.name || ""),
+                studentId: att.studentId || null,
+              });
+
+              // keep report counters consistent (use existing studentStat "ss")
+              ss.incidentCount = (Number(ss.incidentCount) || 0) + 1;
+              ss.lastIncidentAt = now;
+
             }
 
             // clear out state
@@ -1228,6 +1281,17 @@ export async function startExam(req, res) {
           details: { startAt: exam.startAt, endAt: exam.endAt, force: false },
         });
 
+        // ✅ Also push to events panel (dashboard)
+        pushExamEvent(exam, {
+          type: "EXAM_STARTED",
+          timestamp: now,
+          severity: "low",
+          description: `Exam started${force ? " (forced)" : ""}.`,
+          classroom: "",
+          seat: "",
+          studentId: null,
+        });
+
         recalcSummary(exam);
       });
 
@@ -1262,6 +1326,17 @@ export async function startExam(req, res) {
         student: null,
         details: { startAt: exam.startAt, endAt: exam.endAt, durationHours: 3, force: true },
       });
+
+        // ✅ Also push to events panel (dashboard)
+        pushExamEvent(exam, {
+          type: "EXAM_STARTED",
+          timestamp: now,
+          severity: "low",
+          description: `Exam started${force ? " (forced)" : ""}.`,
+          classroom: "",
+          seat: "",
+          studentId: null,
+        });
 
       for (const c of exam.classrooms || []) {
         const rid = String(c?.id || c?.name || "").trim();
@@ -1326,6 +1401,17 @@ export async function endExam(req, res) {
         details: { endedAt: now },
       });
 
+      // ✅ Also push to events panel (dashboard)
+      pushExamEvent(exam, {
+        type: "EXAM_ENDED",
+        timestamp: now,
+        severity: "low",
+        description: "Exam ended.",
+        classroom: "",
+        seat: "",
+        studentId: null,
+      });
+
       recalcSummary(exam);
     });
 
@@ -1354,6 +1440,7 @@ export async function createExam(req, res) {
 
     const body = req.body || {};
 
+    const courseId = String(body.courseId || "").trim();
     const courseName = String(body.courseName || "").trim();
     const examMode = String(body.examMode || "onsite").trim();
     const startAt = new Date(body.startAt || body.examDate || 0);
@@ -1406,6 +1493,24 @@ export async function createExam(req, res) {
 
     const supervisorsObj = await buildSupervisorsFromClassrooms(cleanRooms);
 
+// Keep supervisor user profiles in sync (assignedRoomId) to enable transfer approvals
+// (Some older DB states may have assignedRoomId=null even though exam.supervisors has roomId.)
+try {
+  if (Array.isArray(supervisorsObj) && supervisorsObj.length) {
+    const ops = supervisorsObj
+      .filter((s) => s?.id && s?.roomId)
+      .map((s) => ({
+        updateOne: {
+          filter: { _id: s.id, role: "supervisor" },
+          update: { $set: { assignedRoomId: String(s.roomId) } },
+        },
+      }));
+    if (ops.length) await User.bulkWrite(ops, { ordered: false });
+  }
+} catch (e) {
+  // non-fatal: exam creation should still succeed
+}
+
     let coLecturersObj = [];
     if (Array.isArray(body.coLecturers)) {
       const ids = body.coLecturers.map((x) => String(x?.id || x)).filter(Boolean);
@@ -1415,16 +1520,22 @@ export async function createExam(req, res) {
           .lean();
         const byId = new Map(lecUsers.map((u) => [String(u._id), u]));
         coLecturersObj = body.coLecturers
-          .map((x) => ({
-            id: String(x?.id || "").trim(),
-            name: byId.get(String(x?.id || ""))?.fullName || String(x?.name || ""),
-            roomIds: Array.isArray(x?.roomIds) ? x.roomIds : [],
-          }))
+          .map((x) => {
+            const rawId = String(x?.id || x || "").trim();
+            return {
+              id: mongoose.Types.ObjectId.isValid(rawId) ? new mongoose.Types.ObjectId(rawId) : null,
+              name: byId.get(rawId)?.fullName || String(x?.name || ""),
+              roomIds: Array.isArray(x?.roomIds) ? x.roomIds : [],
+            };
+          })
           .filter((x) => x.id);
       }
     }
 
+    const resolvedCourseId = courseId || slugCourseId(courseName);
+
     const exam = await Exam.create({
+      courseId: resolvedCourseId,
       courseName,
       examMode,
       examDate: startAt,

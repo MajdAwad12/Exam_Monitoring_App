@@ -1,4 +1,5 @@
 // server/src/controllers/incidents.controller.js
+import mongoose from "mongoose";
 import Exam from "../models/Exam.js";
 
 /* =========================
@@ -95,7 +96,7 @@ function ensureStudentStat(exam, studentId) {
 
 function isGlobalKind(kind) {
   const k = String(kind || "").toUpperCase();
-  return k === "CALL_LECTURER";
+  return k === "CALL_LECTURER" || k === "CALL_LECTURER_SEEN";
 }
 
 export async function logIncident(req, res) {
@@ -105,6 +106,7 @@ export async function logIncident(req, res) {
 
     const studentId = body.studentId ?? null;
     const kind = body.kind;
+    const kindUpper = String(kind || "").toUpperCase();
     const severity = body.severity || "low";
     const note = body.note || body.description || "";
     const meta = body.meta || {};
@@ -117,6 +119,38 @@ export async function logIncident(req, res) {
     ensureMaps(exam);
 
     const actor = actorFromReq(req);
+
+    // Visibility: CALL_LECTURER should be visible to lecturer+admin only
+    const visibilityRoles = kindUpper === "CALL_LECTURER" ? ["admin", "lecturer", "supervisor"] : null;
+
+
+    // ✅ Lecturer acknowledges a CALL_LECTURER event ("Seen" button)
+    if (kindUpper === "CALL_LECTURER_SEEN") {
+      if (String(actor?.role || "").toLowerCase() !== "lecturer") {
+        return res.status(403).json({ message: "Lecturer only" });
+      }
+
+      const targetEventId = String(meta?.targetEventId || meta?.eventId || "").trim();
+      if (!targetEventId) return res.status(400).json({ message: "meta.targetEventId is required" });
+
+      const ev = (exam.events || []).find((e) => String(e?.eventId || "") === targetEventId);
+      if (!ev) {
+        // Fail-safe: do not break the UI if an old event has no eventId or was trimmed
+        return res.json({ ok: true, missing: true, updated: { eventId: targetEventId, seenByLecturer: true } });
+      }
+
+      // mark acknowledged for everyone
+      ev.seenByLecturer = true;
+      ev.seenAt = new Date();
+      ev.seenText = "The lecturer saw the call , he will come to class soon ";
+      ev.description = "The lecturer saw the call, he will come to class soon" ;
+      // make it visually prominent for all users
+      ev.severity = "low";
+
+      await saveWithRetry(exam);
+
+      return res.json({ ok: true, updated: { eventId: targetEventId, seenByLecturer: true, seenAt: ev.seenAt } });
+    }
 
     // If this is not a global kind, require studentId
     if (!isGlobalKind(kind) && !studentId) {
@@ -138,6 +172,11 @@ export async function logIncident(req, res) {
 
     // 1) events
     exam.events.push({
+      eventId: new mongoose.Types.ObjectId().toString(),
+      seenByLecturer: false,
+      seenAt: null,
+      seenText: "",
+
       type: String(kind),
       timestamp: new Date(),
       description: String(note || ""),
@@ -146,6 +185,7 @@ export async function logIncident(req, res) {
       seat: String(seat),
       studentId: studentId || null,
       actor,
+      visibilityRoles,
     });
     exam.events = exam.events.slice(-MAX_EVENTS);
 

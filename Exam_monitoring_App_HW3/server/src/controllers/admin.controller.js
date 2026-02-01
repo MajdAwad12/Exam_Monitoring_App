@@ -236,7 +236,7 @@ async function pickLecturersForRooms({ rooms, preferredMainLecturerId }) {
     main: { id: main._id, name: main.fullName || "", roomIds: mainRoomIds },
     co: coAssignments.map((x) => ({ id: x.lec._id, name: x.lec.fullName || "", roomIds: x.roomIds })),
   };
-
+}
 
 /* =========================
    Schedule conflict checks (time + classrooms)
@@ -285,7 +285,6 @@ async function findScheduleConflicts({ startAt, endAt, roomIds, excludeExamId } 
     };
   });
 }
-}
 
 /* =========================
    Users
@@ -324,7 +323,7 @@ export async function listExams(req, res) {
   try {
     if (!ensureAdmin(req, res)) return;
 
-    const { q, status, mode, from, to } = req.query;
+    const { q, status, mode, from, to, page, limit } = req.query;
 
     const filter = {};
     if (status && status !== "all") filter.status = String(status);
@@ -352,9 +351,21 @@ export async function listExams(req, res) {
       }
     }
 
-    const exams = await Exam.find(filter).sort({ startAt: -1, createdAt: -1 }).lean();
+    const p = Math.max(1, parseInt(page || "1", 10) || 1);
+    const lim = Math.min(300, Math.max(10, parseInt(limit || "200", 10) || 200));
+    const skip = (p - 1) * lim;
 
-    return res.json({ ok: true, exams });
+    const [total, exams] = await Promise.all([
+      Exam.countDocuments(filter),
+      Exam.find(filter)
+        .select("_id courseName examMode status startAt endAt classrooms lecturer coLecturers supervisors createdAt updatedAt")
+        .sort({ startAt: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(lim)
+        .lean(),
+    ]);
+
+    return res.json({ ok: true, exams, page: p, limit: lim, total });
   } catch (err) {
     console.error("listExams error", err);
     return res.status(500).json({ message: "Failed to list exams" });
@@ -481,8 +492,6 @@ export async function updateExamAdmin(req, res) {
         // keep ended as ended
       }
     }
-
-
 
     // ✅ Prevent time+classroom overlaps (same classroom(s) + overlapping time window)
     if (exam.startAt && exam.endAt) {

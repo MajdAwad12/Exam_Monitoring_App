@@ -5,6 +5,7 @@ import requireAuth from "../middleware/requireAuth.js";
 import {
   getClock,
   getDashboardSnapshot,
+  getDashboardSnapshotLite,
   addStudentToRunningExam,
   deleteStudentFromRunningExam,
 } from "../controllers/dashboard.controller.js";
@@ -14,6 +15,7 @@ const router = Router();
 /* ---------- base dashboard ---------- */
 router.get("/clock", requireAuth, getClock);
 router.get("/snapshot", requireAuth, getDashboardSnapshot);
+router.get("/snapshot-lite", requireAuth, getDashboardSnapshotLite);
 
 /* ---------- admin actions (students) ---------- */
 router.post("/students/add", requireAuth, addStudentToRunningExam);

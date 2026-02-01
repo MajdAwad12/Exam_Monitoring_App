@@ -1,15 +1,12 @@
 // server/index.js
-import path from "path";
-import { fileURLToPath } from "url";
 import http from "http";
 
 import express from "express";
+import compression from "compression";
 import cors from "cors";
 import dotenv from "dotenv";
 import session from "express-session";
 import MongoStore from "connect-mongo";
-
-import { WebSocketServer, WebSocket } from "ws";
 
 import Exam from "./src/models/Exam.js";
 import authRoutes from "./src/routes/auth.routes.js";
@@ -35,9 +32,10 @@ const isProd = process.env.NODE_ENV === "production";
 if (isProd) expressApp.set("trust proxy", 1);
 
 /* =========================
-   Body parser
+   Body parser + compression
 ========================= */
-expressApp.use(express.json());
+expressApp.use(express.json({ limit: "2mb" }));
+expressApp.use(compression());
 
 /* =========================
    Health
@@ -113,23 +111,9 @@ async function start() {
 
   const httpServer = http.createServer(expressApp);
 
-  const wsServer = new WebSocketServer({ server: httpServer, path: "/ws" });
-  globalThis.__wss = wsServer;
-
-  wsServer.on("connection", (socket) => {
-    socket.send(JSON.stringify({ type: "WELCOME" }));
-
-    const ping = setInterval(() => {
-      if (socket.readyState === WebSocket.OPEN) socket.ping();
-    }, 30000);
-
-    socket.on("close", () => clearInterval(ping));
-  });
-
   /* =========================
      ⏱️ EXAM TIME ALERT TIMER
-     ✅ FIX: atomic update (no exam.save) to avoid VersionError:
-     "No matching document found for id ... version ..."
+     - polling UI will pick updates on next snapshot
   ========================= */
   const ALERTS = [
     { min: 30, key: "m30", type: "EXAM_30_MIN_LEFT" },
@@ -146,7 +130,7 @@ async function start() {
     try {
       const nowMs = Date.now();
 
-      // lean + minimal fields (fast, avoids mongoose doc versioning)
+      // lean + minimal fields (fast)
       const exams = await Exam.find({ status: "running" })
         .select("_id endAt report.summary.timeAlerts")
         .lean();
@@ -169,7 +153,6 @@ async function start() {
 
           const at = new Date();
 
-          // atomic: set flag + push timeline + push event
           const filter = {
             _id: exam._id,
             status: "running",
@@ -199,37 +182,19 @@ async function start() {
             },
           };
 
-          const r = await Exam.updateOne(filter, update);
-
-          // only broadcast if we actually updated (prevents duplicate pushes)
-          if (r?.modifiedCount === 1) {
-            globalThis.__wss?.clients?.forEach((c) => {
-              if (c.readyState === WebSocket.OPEN) {
-                c.send(
-                  JSON.stringify({
-                    type: "EXAM_UPDATED",
-                    examId: String(exam._id),
-                    at: at.toISOString(),
-                    reason: "time_alert",
-                    minutesLeft: a.min,
-                  })
-                );
-              }
-            });
-
-            // update local cached flag so we don't try again in same loop
-            timeAlerts[a.key] = true;
-          }
+          await Exam.updateOne(filter, update);
         }
       }
-    } catch (err) {
-      console.error("⛔ Exam timer failed:", err?.message || err);
+    } catch (e) {
+      console.error("time alert timer error:", e);
     } finally {
       timerBusy = false;
     }
-  }, 30000);
+  }, 20_000);
 
-  httpServer.listen(port, () => console.log("🚀 Server running on", port));
+  httpServer.listen(port, () => {
+    console.log(`✅ Server running on port ${port}`);
+  });
 }
 
 start();

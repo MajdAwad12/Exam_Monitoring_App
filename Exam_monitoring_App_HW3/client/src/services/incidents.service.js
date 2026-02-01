@@ -16,3 +16,18 @@ export async function logIncident(examId, studentId, payload) {
   });
   return handle(res);
 }
+
+
+export async function markCallLecturerSeen(examId, targetEventId) {
+  const res = await fetch(`/api/incidents/${examId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      kind: "CALL_LECTURER_SEEN",
+      studentId: null,
+      meta: { targetEventId },
+    }),
+  });
+  return handle(res);
+}

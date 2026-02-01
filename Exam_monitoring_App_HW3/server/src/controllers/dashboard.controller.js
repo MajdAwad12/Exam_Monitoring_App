@@ -34,22 +34,51 @@ function isRecipient(msg, user) {
   return false;
 }
 
-async function findRunningExamForUser(user) {
-  if (String(user.role).toLowerCase() === "admin") {
-    return Exam.findOne({ status: "running" }).sort({ startAt: 1 });
+async function findRunningExamForUser(user, { examId, lean = false, select = null } = {}) {
+  const role = String(user?.role || "").toLowerCase();
+  const requestedId = examId ? String(examId) : "";
+
+  const applyExamQuery = (q) => {
+    if (select) q = q.select(select);
+    if (lean) q = q.lean();
+    return q;
+  };
+
+  // Admin can pick a specific RUNNING exam
+  if (role === "admin") {
+    if (requestedId) {
+      return applyExamQuery(Exam.findOne({ _id: requestedId, status: "running" }).sort({ startAt: 1 }));
+    }
+    return applyExamQuery(Exam.findOne({ status: "running" }).sort({ startAt: 1 }));
   }
 
   const examQuery = { status: "running" };
 
-  if (user.role === "lecturer") {
-    examQuery["$or"] = [{ "lecturer.id": user._id }, { "coLecturers.id": user._id }];
+  if (requestedId) {
+    examQuery._id = requestedId;
   }
 
-  if (user.role === "supervisor") {
-    examQuery["supervisors.id"] = user._id;
+  if (role === "lecturer") {
+    const uidObj = user._id;
+    const uidStr = String(user._id);
+    examQuery["$or"] = [
+      { "lecturer.id": uidObj },
+      { "lecturer.id": uidStr },
+      { "coLecturers.id": uidObj },
+      { "coLecturers.id": uidStr },
+    ];
   }
 
-  return Exam.findOne(examQuery).sort({ startAt: 1 });
+  if (role === "supervisor") {
+    const uidObj = user._id;
+    const uidStr = String(user._id);
+    examQuery["$or"] = [
+      { "supervisors.id": uidObj },
+      { "supervisors.id": uidStr },
+    ];
+  }
+
+  return applyExamQuery(Exam.findOne(examQuery).sort({ startAt: 1 }));
 }
 
 function normalizeRoomId(v) {
@@ -227,7 +256,9 @@ export async function getClock(req, res) {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const exam = await findRunningExamForUser(user);
+    const requestedExamId = req.query?.examId ? String(req.query.examId) : "";
+
+    const exam = await findRunningExamForUser(user, { examId: requestedExamId, lean: true, select: '-__v' });
     return res.json({
       simNow: new Date().toISOString(),
       simExamId: exam ? String(exam._id) : null,
@@ -245,7 +276,9 @@ export async function getDashboardSnapshot(req, res) {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const exam = await findRunningExamForUser(user);
+    const requestedExamId = req.query?.examId ? String(req.query.examId) : "";
+
+    const exam = await findRunningExamForUser(user, { examId: requestedExamId, lean: true, select: '-__v' });
 
     if (!exam) {
       return res.json({
@@ -254,7 +287,7 @@ export async function getDashboardSnapshot(req, res) {
           role: user.role,
           username: user.username,
           fullName: user.fullName,
-          assignedRoomId: user.assignedRoomId || null,
+          assignedRoomId: user.assignedRoomId || (String(user?.role||'').toLowerCase()==='supervisor' ? (()=>{ const uid=String(user._id); const sup=(exam?.supervisors||[]).find(s=>String(s?.id)==uid); return sup?.roomId || null; })() : null),
         },
         exam: null,
         attendance: [],
@@ -319,8 +352,71 @@ export async function getDashboardSnapshot(req, res) {
     const alerts = [];
     const now = Date.now();
 
+
+    // ---- Exam time remaining alerts (computed live; no DB writes) ----
+    const endMs = exam.endAt ? new Date(exam.endAt).getTime() : null;
+    if (exam.status === "running" && endMs && !Number.isNaN(endMs)) {
+      const remainingMs = endMs - now;
+
+      if (remainingMs <= 30 * 60 * 1000 && remainingMs > 10 * 60 * 1000) {
+        alerts.push({
+          type: "EXAM_TIME_LEFT_30M",
+          severity: "low",
+          description: "Exam has 30 minutes remaining.",
+          at: new Date(endMs - 30 * 60 * 1000).toISOString(),
+          roomId: "",
+          remainingMs,
+        });
+      }
+
+      if (remainingMs <= 10 * 60 * 1000 && remainingMs > 0) {
+        alerts.push({
+          type: "EXAM_TIME_LEFT_10M",
+          severity: "medium",
+          description: "Exam has 10 minutes remaining.",
+          at: new Date(endMs - 10 * 60 * 1000).toISOString(),
+          roomId: "",
+          remainingMs,
+        });
+      }
+
+      if (remainingMs <= 0) {
+        alerts.push({
+          type: "EXAM_TIME_ENDED",
+          severity: "high",
+          description: "Exam time is over.",
+          at: new Date().toISOString(),
+          roomId: myRoomId || "",
+          remainingMs,
+        });
+      }
+    }
+
+    // ---- Too many toilet exits (>=3) ----
+    for (const a of visibleAttendance) {
+      const key = String(a.studentId || "");
+      if (!key) continue;
+      const st = studentFilesSlim[key];
+      const toiletCount = Number(st?.toiletCount || 0) || 0;
+
+      if (toiletCount >= 3) {
+        alerts.push({
+          type: "TOO_MANY_TOILET_EXITS",
+          severity: toiletCount >= 5 ? "high" : "medium",
+          description: `Too many toilet exits (${toiletCount}).`,
+          at: new Date().toISOString(),
+          roomId: attRoom(a),
+          studentId: key,
+          studentCode: a.studentNumber || "",
+          name: a.name || "",
+          classroom: attRoom(a),
+          seat: a.seat || "",
+          toiletCount,
+        });
+      }
+    }
     // ---------------- Toilet too long ----------------
-    const TOILET_ALERT_MS = 10 * 60 * 1000;
+    const TOILET_ALERT_MS = 5 * 60 * 1000;
     for (const a of visibleAttendance) {
       if (a.status !== "temp_out") continue;
 
@@ -338,6 +434,7 @@ export async function getDashboardSnapshot(req, res) {
         alerts.push({
           type: "TOILET_LONG",
           severity: "medium",
+          description: "Student has been out for more than 5 minutes.",
           at: new Date(base).toISOString(),
           roomId: attRoom(a),
           studentId: key,
@@ -399,6 +496,7 @@ export async function getDashboardSnapshot(req, res) {
         alerts.push({
           type: "TRANSFER_PENDING_TO_YOU",
           severity: "medium",
+          description: "Pending transfer request to your room.",
           at: t.createdAt,
           roomId: t.toClassroom,
           studentId: String(t.studentId),
@@ -414,6 +512,7 @@ export async function getDashboardSnapshot(req, res) {
         alerts.push({
           type: "TRANSFER_PENDING_IN_EXAM",
           severity: "low",
+          description: "Pending transfer request in this exam.",
           at: t.createdAt,
           roomId: t.toClassroom,
           studentId: String(t.studentId),
@@ -480,12 +579,24 @@ export async function getDashboardSnapshot(req, res) {
     });
 
     // ---------------- Events visibility ----------------
-    const rawEvents = (exam.events || []).slice(-30).reverse();
+    const rawEvents = (exam.events || []).slice(-500).reverse();
+
+    const roleStr = String(role || "").toLowerCase();
+
+    const canSeeEvent = (e) => {
+      const vis = e?.visibilityRoles;
+      if (!Array.isArray(vis) || vis.length === 0) return true;
+      return vis.map((x) => String(x).toLowerCase()).includes(roleStr);
+    };
 
     const visibleEvents =
       isSupervisorRole && myRoomId
-        ? rawEvents.filter((e) => !e.classroom || normalizeRoomId(e.classroom) === normalizeRoomId(myRoomId))
-        : rawEvents;
+        ? rawEvents.filter(
+            (e) =>
+              canSeeEvent(e) &&
+              (!e.classroom || normalizeRoomId(e.classroom) === normalizeRoomId(myRoomId))
+          )
+        : rawEvents.filter(canSeeEvent);
 
     const examPayload = {
       id: String(exam._id),
@@ -530,6 +641,238 @@ export async function getDashboardSnapshot(req, res) {
     return res.status(500).json({ message: "Dashboard error" });
   }
 }
+
+
+export async function getDashboardSnapshotLite(req, res) {
+  try {
+    const userId = req.user?._id;
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const requestedExamId = req.query?.examId ? String(req.query.examId) : "";
+
+    // ✅ Lean + minimal fields for speed
+    const select =
+      "courseName examMode examDate startAt endAt status lecturer coLecturers supervisors classrooms attendance events messages report.summary report.studentFiles";
+    const exam = await findRunningExamForUser(user, { examId: requestedExamId, lean: true, select });
+
+    if (!exam) {
+      return res.json({
+        me: {
+          id: String(user._id),
+          role: user.role,
+          username: user.username,
+          fullName: user.fullName,
+          assignedRoomId: user.assignedRoomId || (String(user?.role||'').toLowerCase()==='supervisor' ? (()=>{ const uid=String(user._id); const sup=(exam?.supervisors||[]).find(s=>String(s?.id)==uid); return sup?.roomId || null; })() : null),
+        },
+        exam: null,
+        attendance: [],
+        transfers: [],
+        stats: {},
+        alerts: [],
+        inbox: { unread: 0, recent: [] },
+        events: [],
+      });
+    }
+
+    const role = String(user.role || "").toLowerCase();
+    const isSupervisorRole = role === "supervisor";
+    const isLecturerLike = role === "lecturer" || role === "admin";
+
+    const myRoomId = isSupervisorRole ? deriveSupervisorRoomId({ user, exam }) : "";
+
+    const allAttendance = exam.attendance || [];
+
+    const visibleAttendance =
+      isSupervisorRole && myRoomId
+        ? allAttendance.filter((a) => attRoom(a) === normalizeRoomId(myRoomId))
+        : allAttendance;
+
+    // ---- Build a *slim* studentFiles map (only what UI needs) ----
+    const reportFilesMap = exam.report?.studentFiles || new Map();
+    const studentFilesSlim = {};
+    const takeSlim = (v) => {
+      if (!v || typeof v !== "object") return {};
+      return {
+        toiletCount: Number(v.toiletCount || 0) || 0,
+        totalToiletMs: Number(v.totalToiletMs || 0) || 0,
+        activeToilet: v.activeToilet || null,
+      };
+    };
+
+    if (reportFilesMap?.forEach) {
+      reportFilesMap.forEach((val, key) => {
+        studentFilesSlim[String(key)] = takeSlim(val);
+      });
+    } else if (reportFilesMap && typeof reportFilesMap === "object") {
+      for (const [k, v] of Object.entries(reportFilesMap)) {
+        studentFilesSlim[String(k)] = takeSlim(v);
+      }
+    }
+
+    const stats = {
+      totalStudents: visibleAttendance.length,
+      present: visibleAttendance.filter((a) => a.status === "present").length,
+      tempOut: visibleAttendance.filter((a) => a.status === "temp_out").length,
+      absent: visibleAttendance.filter((a) => a.status === "absent").length,
+      moving: visibleAttendance.filter((a) => a.status === "moving").length,
+      finished: visibleAttendance.filter((a) => a.status === "finished").length,
+      notArrived: visibleAttendance.filter((a) => a.status === "not_arrived").length,
+      violations: visibleAttendance.reduce((sum, a) => sum + (a.violations || 0), 0),
+    };
+
+    const alerts = [];
+    const now = Date.now();
+
+    const TOILET_ALERT_MS = 5 * 60 * 1000;
+    for (const a of visibleAttendance) {
+      if (a.status !== "temp_out") continue;
+
+      const key = String(a.studentId);
+      const st = studentFilesSlim[key];
+
+      const leftAt = st?.activeToilet?.leftAt ? new Date(st.activeToilet.leftAt).getTime() : null;
+      const startedAt = a.outStartedAt ? new Date(a.outStartedAt).getTime() : null;
+
+      const base = leftAt || startedAt;
+      if (!base) continue;
+
+      const elapsedMs = Math.max(0, now - base);
+      if (elapsedMs >= TOILET_ALERT_MS) {
+        alerts.push({
+          type: "TOILET_LONG",
+          severity: "medium",
+          description: "Student has been out for more than 5 minutes.",
+          at: new Date(base).toISOString(),
+          roomId: attRoom(a),
+          studentId: key,
+          studentCode: a.studentNumber || "",
+          name: a.name || "",
+          classroom: attRoom(a),
+          seat: a.seat || "",
+          elapsedMs,
+        });
+      }
+    }
+
+    // ---- Inbox (lite): only last 10 + unread count ----
+    const msgItems = (exam.messages || [])
+      .filter((m) => isRecipient(m, user) || String(m.from?.id) === String(user._id))
+      .slice(-30);
+
+    const unread = msgItems.filter((m) => !(m.readBy || []).map(String).includes(String(user._id)))
+      .length;
+    const recentMessages = msgItems.slice(-10).reverse();
+
+    // ---- Transfers (lite): limit to 50 ----
+    const allTransfers = await TransferRequest.find({ examId: exam._id })
+      .sort({ updatedAt: -1 })
+      .limit(50)
+      .lean();
+
+    const transfers =
+      isSupervisorRole && myRoomId
+        ? allTransfers.filter(
+            (t) =>
+              normalizeRoomId(t.toClassroom) === normalizeRoomId(myRoomId) ||
+              normalizeRoomId(t.fromClassroom) === normalizeRoomId(myRoomId)
+          )
+        : allTransfers;
+
+    const pending = allTransfers.filter((t) => t.status === "pending");
+
+    for (const t of pending) {
+      if (isSupervisorRole && myRoomId && normalizeRoomId(t.toClassroom) === normalizeRoomId(myRoomId)) {
+        alerts.push({
+          type: "TRANSFER_PENDING_TO_YOU",
+          severity: "medium",
+          description: "Pending transfer request to your room.",
+          at: t.createdAt,
+          roomId: t.toClassroom,
+          studentId: String(t.studentId),
+          studentCode: t.studentCode || "",
+          studentName: t.studentName || "",
+          fromClassroom: t.fromClassroom,
+          toClassroom: t.toClassroom,
+          requestId: String(t._id),
+        });
+      }
+
+      if (isLecturerLike) {
+        alerts.push({
+          type: "TRANSFER_PENDING_IN_EXAM",
+          severity: "low",
+          description: "Pending transfer request in this exam.",
+          at: t.createdAt,
+          roomId: t.toClassroom,
+          studentId: String(t.studentId),
+          studentCode: t.studentCode || "",
+          studentName: t.studentName || "",
+          fromClassroom: t.fromClassroom,
+          toClassroom: t.toClassroom,
+          requestId: String(t._id),
+        });
+      }
+    }
+
+    const pendingByStudent = new Set(
+      pending
+        .filter((t) => (isSupervisorRole ? normalizeRoomId(t.fromClassroom) === normalizeRoomId(myRoomId) : true))
+        .map((t) => String(t.studentId))
+    );
+
+    const attendanceWithTransfers = visibleAttendance.map((a) => {
+      const plain = typeof a?.toObject === "function" ? a.toObject() : { ...a };
+      if (pendingByStudent.has(String(plain.studentId))) return { ...plain, status: "moving" };
+      return plain;
+    });
+
+    const rawEvents = (exam.events || []).slice(-30).reverse();
+
+    const visibleEvents =
+      isSupervisorRole && myRoomId
+        ? rawEvents.filter((e) => !e.classroom || normalizeRoomId(e.classroom) === normalizeRoomId(myRoomId))
+        : rawEvents;
+
+    const examPayload = {
+      id: String(exam._id),
+      courseName: exam.courseName,
+      examMode: exam.examMode,
+      examDate: exam.examDate,
+      startAt: exam.startAt,
+      endAt: exam.endAt,
+      status: exam.status,
+      lecturer: exam.lecturer,
+      coLecturers: exam.coLecturers || [],
+      supervisors: exam.supervisors || [],
+      classrooms: exam.classrooms || [],
+      reportSummary: exam.report?.summary || {},
+      reportStudentFiles: studentFilesSlim,
+      attendance: attendanceWithTransfers,
+    };
+
+    return res.json({
+      me: {
+        id: String(user._id),
+        role: user.role,
+        username: user.username,
+        fullName: user.fullName,
+        assignedRoomId: isSupervisorRole ? myRoomId || null : user.assignedRoomId || null,
+      },
+      exam: examPayload,
+      attendance: attendanceWithTransfers,
+      transfers,
+      stats,
+      alerts,
+      inbox: { unread, recent: recentMessages },
+      events: visibleEvents,
+    });
+  } catch (err) {
+    console.error("Dashboard lite error:", err);
+    return res.status(500).json({ message: "Dashboard error" });
+  }
+}
+
 
 /* =========================
    NEW: Add / Delete Student (Admin/Lecturer)

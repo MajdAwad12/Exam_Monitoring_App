@@ -344,15 +344,20 @@ export async function createTransfer(req, res) {
       return res.status(400).json({ message: "There is already a pending transfer for this student" });
     }
 
+    const transferId = `TR-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
     const created = await TransferRequest.create({
+      transferId,
       examId: eid,
       studentId: sid,
       studentName: att.name || "",
       studentCode: att.studentNumber || "",
 
+      fromClassroomId: fromClassroom,
       fromClassroom,
       fromSeat,
 
+      toClassroomId: targetRoom,
       toClassroom: targetRoom,
       toSeat: seatNorm,
 

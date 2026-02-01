@@ -3,15 +3,20 @@ import mongoose from "mongoose";
 
 const transferRequestSchema = new mongoose.Schema(
   {
+    // NEW: stable id for this transfer request (useful for audit & UI)
+    transferId: { type: String, default: "", index: true },
     examId: { type: mongoose.Schema.Types.ObjectId, ref: "Exam", required: true },
 
     studentId: { type: String, required: true }, // keep consistent with your attendance lookups
     studentName: { type: String, default: "" },
     studentCode: { type: String, default: "" },
 
+    // NEW preferred naming (keep legacy fields for compatibility)
+    fromClassroomId: { type: String, default: "" },
     fromClassroom: { type: String, required: true },
     fromSeat: { type: String, default: "" },
 
+    toClassroomId: { type: String, default: "" },
     toClassroom: { type: String, required: true },
     toSeat: { type: String, default: "AUTO" },
 
@@ -52,5 +57,8 @@ const transferRequestSchema = new mongoose.Schema(
 
 transferRequestSchema.index({ examId: 1, createdAt: -1 });
 transferRequestSchema.index({ examId: 1, studentId: 1, status: 1 });
+transferRequestSchema.index({ transferId: 1 }, { unique: false });
+
+transferRequestSchema.index({ examId: 1, updatedAt: -1 });
 
 export default mongoose.model("TransferRequest", transferRequestSchema);

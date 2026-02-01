@@ -1,33 +1,74 @@
 // client/src/pages/dashboard/DashboardPage.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useDashboardLive } from "../../hooks/useDashboardLive";
 import { useSimClock } from "../../hooks/useSimClock";
 import RocketLoader from "../../components/loading/RocketLoader.jsx";
 
-import RoomTabs from "../../components/dashboard/RoomTabs";
-import ExamOverviewCard from "../../components/dashboard/ExamOverviewCard";
+import ExamTabs from "../../components/dashboard/ExamTabs.jsx";
+import RoomTabs from "../../components/dashboard/RoomTabs.jsx";
+import ExamOverviewCard from "../../components/dashboard/ExamOverviewCard.jsx";
 import DashboardAddDeleteStudentsCard from "../../components/dashboard/DashboardAddDeleteStudentsCard.jsx";
-import EventsFeed from "../../components/dashboard/EventsFeed";
-import TransfersPanel from "../../components/dashboard/TransfersPanel";
-import ClassroomMap from "../../components/classroom/ClassroomMap";
+import EventsFeed from "../../components/dashboard/EventsFeed.jsx";
+import TransfersPanel from "../../components/dashboard/TransfersPanel.jsx";
+import ClassroomMap from "../../components/classroom/ClassroomMap.jsx";
 import Toast from "../../components/dashboard/Toast.jsx";
+
+import { getAdminExams } from "../../services/exams.service.js";
 
 function normRoom(x) {
   return String(x || "").trim();
 }
 
 export default function DashboardPage() {
-  const { setChatContext } = useOutletContext();
+  const { me, setChatContext } = useOutletContext();
+
+  const { simNow, simNowMs } = useSimClock();
 
   // ✅ Only lecturer/admin uses this to switch rooms manually.
   const [roomId, setRoomId] = useState(null);
 
-  const { simNow, simNowMs } = useSimClock();
+  // ✅ Admin: choose which RUNNING exam is currently shown in the dashboard
+  const [runningExams, setRunningExams] = useState([]);
+  const [selectedExamId, setSelectedExamId] = useState(null);
+  const [examsLoading, setExamsLoading] = useState(false);
 
-  // ✅ Turn polling OFF because WS will trigger refetch()
+  const meRole = useMemo(() => String(me?.role || "").toLowerCase(), [me]);
+  const isAdmin = meRole === "admin";
+  const canLecturerUX = meRole === "lecturer" || isAdmin;
+  const canManageStudents = canLecturerUX;
+
+  const loadRunningExams = useCallback(async () => {
+    if (!isAdmin) return;
+    setExamsLoading(true);
+    try {
+      const res = await getAdminExams({ status: "running" });
+      const exams = Array.isArray(res?.exams) ? res.exams : Array.isArray(res) ? res : [];
+      setRunningExams(exams);
+
+      // Keep current selection if still exists, otherwise auto-pick first
+      setSelectedExamId((prev) => {
+        const prevStr = String(prev || "");
+        const stillThere = exams.some((e) => String(e?._id || e?.id) === prevStr);
+        if (stillThere) return prev;
+        const firstId = exams?.[0]?._id || exams?.[0]?.id || null;
+        return firstId ? String(firstId) : null;
+      });
+    } catch {
+      // ignore list errors (dashboard snapshot will still show "first running exam")
+    } finally {
+      setExamsLoading(false);
+    }
+  }, [isAdmin]);
+
+  // When role becomes admin, load running exams
+  useEffect(() => {
+    if (isAdmin) loadRunningExams();
+  }, [isAdmin, loadRunningExams]);
+
+  // ✅ Dashboard data (actual exam snapshot)
   const {
-    me,
+    me: dashMe,
     exam,
     rooms,
     activeRoom,
@@ -40,11 +81,7 @@ export default function DashboardPage() {
     transfers,
     alerts,
     inbox,
-  } = useDashboardLive({ roomId, pollMs: 0 });
-
-  const meRole = String(me?.role || "").toLowerCase();
-  const canLecturerUX = meRole === "lecturer" || meRole === "admin";
-  const canManageStudents = canLecturerUX;
+  } = useDashboardLive({ examId: isAdmin ? selectedExamId : null, roomId, pollMs: 10000, lite: true });
 
   const activeRoomId = useMemo(() => {
     return String(activeRoom?.id || activeRoom?.name || "").trim();
@@ -88,80 +125,54 @@ export default function DashboardPage() {
   const [toast, setToast] = useState(null);
 
   function showToastFromItem(item) {
-  if (!item) return;
+    if (!item) return;
 
-  const sev = String(item.severity || "info").toLowerCase();
-  const type = String(item.type || item.raw?.type || "").toUpperCase();
+    const sev = String(item.severity || "info").toLowerCase();
+    const type = String(item.type || item.raw?.type || "").toUpperCase();
 
-  const studentName = item.name || "Student";
-  const studentId = item.studentCode || item.studentNumber || "";
-  const room = item.roomId ? `Room ${item.roomId}` : "";
+    const studentName = item.name || "Student";
+    const studentId = item.studentCode || item.studentNumber || "";
+    const room = item.roomId ? `Room ${item.roomId}` : "";
 
-  let title = "New update";
-  let message = item.text || item.description || "A new event was recorded.";
-  let icon = "✅";
+    let tTitle = "New update";
+    let message = item.text || item.description || "A new event was recorded.";
+    let icon = "✅";
 
-  // ➕ Add student
-  if (type.includes("STUDENT_ADDED") || type.includes("ADD_STUDENT")) {
-    title = "Student Added";
-    icon = "➕";
-    message = `Student added to ${room} — ${studentName} • ${studentId}`;
-  }
-  // 🗑️ Delete student
-  else if (type.includes("STUDENT_REMOVED") || type.includes("DELETE_STUDENT")) {
-    title = "Student Removed";
-    icon = "🗑️";
-    message = `Student removed from the exam — ${studentName} • ${studentId}`;
-  }
-  // 🚻 Toilet limit 3+
-  else if (type.includes("TOO_MANY_TOILET") || type.includes("TOILET_LIMIT")) {
-    title = "Toilet Limit Reached";
-    icon = "🚻";
-    message = `${studentName} • ${studentId} exceeded the toilet exit limit (3+)`;
-  }
-  // ⚠️ Incident
-  else if (type.includes("INCIDENT")) {
-    title = "Incident Reported";
-    icon = "⚠️";
-    message = item.text || "An incident was reported.";
-  }
-  // 🔔 Alert
-  else if (type.includes("ALERT")) {
-    title = "New Alert";
-    icon = "🔔";
-    message = item.text || "A new alert was triggered.";
-  }
-  // 🔁 Transfer
-  else if (type.includes("TRANSFER")) {
-    title = "Transfer Update";
-    icon = "🔁";
-    message = item.text || "A transfer request was updated.";
+    if (type.includes("STUDENT_ADDED") || type.includes("ADD_STUDENT")) {
+      tTitle = "Student Added";
+      icon = "➕";
+      message = `Student added to ${room} — ${studentName} • ${studentId}`;
+    } else if (type.includes("STUDENT_REMOVED") || type.includes("DELETE_STUDENT")) {
+      tTitle = "Student Removed";
+      icon = "🗑️";
+      message = `Student removed from the exam — ${studentName} • ${studentId}`;
+    } else if (type.includes("TOO_MANY_TOILET") || type.includes("TOILET_LIMIT")) {
+      tTitle = "Toilet Limit Reached";
+      icon = "🚻";
+      message = `${studentName} • ${studentId} exceeded the toilet exit limit (3+)`;
+    } else if (type.includes("INCIDENT")) {
+      tTitle = "Incident Reported";
+      icon = "⚠️";
+      message = item.text || "An incident was reported.";
+    } else if (type.includes("ALERT")) {
+      tTitle = "New Alert";
+      icon = "🔔";
+      message = item.text || "A new alert was triggered.";
+    } else if (type.includes("TRANSFER")) {
+      tTitle = "Transfer Update";
+      icon = "🔁";
+      message = item.text || "A transfer request was updated.";
+    }
+
+    setToast({
+      title: tTitle,
+      message,
+      severity: sev,
+      icon,
+    });
   }
 
-  const toastType =
-    sev === "critical" || sev === "high"
-      ? "danger"
-      : sev === "medium"
-      ? "warning"
-      : "info";
-
-  setToast({
-    type: toastType,
-    title,
-    message,
-    icon,
-    durationMs: 2200,
-    actionLabel: "Go to Events",
-    onAction: () => {
-      const el = document.getElementById("events-panel");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    },
-  });
-}
-
-
-
-  // ✅ Update global bot context (Dashboard = richest context)
+  // ✅ Send context to chat widget
   useEffect(() => {
     const alertsCount = Array.isArray(alertsForRoom) ? alertsForRoom.length : 0;
     const transfersCount = Array.isArray(transfersForRoom) ? transfersForRoom.length : 0;
@@ -177,51 +188,10 @@ export default function DashboardPage() {
     }));
   }, [setChatContext, examId, selectedRoomId, stats, alertsForRoom, transfersForRoom]);
 
-  // ✅ Listen to global WS events from AppLayout and refresh dashboard data
+  // ✅ When admin switches exam => reset room selection (so we pick the best active room automatically)
   useEffect(() => {
-    let debounceTimer = null;
-
-    const scheduleRefetch = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        refetch();
-      }, 150);
-    };
-
-    const onWs = (ev) => {
-      const msg = ev?.detail;
-      if (!msg || typeof msg !== "object") return;
-
-      if (msg.type === "EXAM_UPDATED" || msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED") {
-        scheduleRefetch();
-      }
-
-      const t = String(msg.type || "");
-
-      // ✅ Toast ONLY for toilet limit (3+)
-      if (t.includes("TOO_MANY_TOILET") || t.includes("TOILET_LIMIT")) {
-        scheduleRefetch();
-        showToastFromItem({
-          type: "TOO_MANY_TOILET",
-          severity: "medium",
-          title: "Toilet limit reached (3+)",
-          description: "A student exceeded toilet exits.",
-        });
-        return;
-      }
-
-      // still refetch for other important activity (no toast here)
-      if (t.includes("INCIDENT") || t.includes("ALERT") || t.includes("TRANSFER")) {
-        scheduleRefetch();
-      }
-    };
-
-    window.addEventListener("ws:event", onWs);
-    return () => {
-      window.removeEventListener("ws:event", onWs);
-      clearTimeout(debounceTimer);
-    };
-  }, [refetch]);
+    if (isAdmin) setRoomId(null);
+  }, [isAdmin, selectedExamId]);
 
   if (loading) return <RocketLoader />;
 
@@ -249,7 +219,10 @@ export default function DashboardPage() {
           <div className="text-xl font-extrabold text-slate-900">No running exam</div>
           <div className="mt-1 text-sm text-slate-600">Start an exam to see live monitoring.</div>
           <button
-            onClick={refetch}
+            onClick={() => {
+              refetch();
+              if (isAdmin) loadRunningExams();
+            }}
             className="mt-4 px-4 py-2 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 font-extrabold text-sm"
           >
             Refresh
@@ -261,49 +234,49 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Toast
-        show={!!toast}
-        type={toast?.type}
-        title={toast?.title}
-        message={toast?.message}
-        durationMs={toast?.durationMs || 2200}
-        icon={toast?.icon}
-        actionLabel={toast?.actionLabel}
-        onAction={toast?.onAction}
-        onClose={() => setToast(null)}
-      />
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
-
-      <div className="p-6 space-y-5">
+      <div className="p-5 sm:p-6 space-y-5">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-extrabold text-slate-900 truncate">{title}</h1>
-            <p className="text-slate-600 text-sm">Live monitoring • attendance • incidents • transfers</p>
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div>
+              <div className="text-2xl font-black text-slate-900">{title}</div>
+              <div className="mt-1 text-sm text-slate-600">
+                Live monitoring • {exam.examMode || "onsite"} • {rooms?.length || 0} rooms
+              </div>
+            </div>
           </div>
 
-          <div className="hidden md:flex items-center gap-2">
-            <button
-              onClick={refetch}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-extrabold hover:bg-slate-50"
-            >
-              Refresh
-            </button>
-          </div>
+          {/* ✅ Admin: exam selector tabs */}
+          {isAdmin ? (
+            <div className="mt-5">
+              <ExamTabs
+                exams={runningExams?.length ? runningExams : [exam]}
+                selectedExamId={selectedExamId || examId}
+                onSelect={(id) => {
+                  setSelectedExamId(String(id));
+                  setRoomId(null);
+                }}
+              />
+            </div>
+          ) : null}
+          {/* ✅ Lecturer/Admin: room selector */}
+          {canLecturerUX ? (
+            <div className="mt-5">
+              <RoomTabs
+                rooms={rooms}
+                roomId={selectedRoomId || activeRoomId || ""}
+                attendance={attendance}
+                onChangeRoom={(rid) => setRoomId(String(rid || "").trim() || null)}
+              />
+            </div>
+          ) : null}
         </div>
-
-        {/* ✅ Only lecturer/admin can switch rooms */}
-        {canLecturerUX ? (
-          <RoomTabs
-            rooms={rooms}
-            roomId={selectedRoomId || activeRoomId || ""}
-            onChangeRoom={(rid) => setRoomId(String(rid || "").trim() || null)}
-          />
-        ) : null}
 
         <div className="grid grid-cols-12 gap-5">
           <div className="col-span-12">
-            <ExamOverviewCard me={me} exam={exam} stats={stats} inbox={inbox} simNow={simNow} loading={false} />
+            <ExamOverviewCard me={dashMe || me} exam={exam} stats={stats} inbox={inbox} simNow={simNow} loading={false} />
           </div>
 
           {/* ✅ Admin + Lecturer: Add/Delete Students */}
@@ -321,7 +294,7 @@ export default function DashboardPage() {
           <div className="col-span-12">
             <ClassroomMap
               exam={exam}
-              me={me}
+              me={dashMe || me}
               refreshNow={refetch}
               nowMs={simNowMs || Date.now()}
               forcedRoomId={selectedRoomId}
@@ -334,17 +307,19 @@ export default function DashboardPage() {
 
           <div className="col-span-12 grid grid-cols-12 gap-5">
             <div className="col-span-12 lg:col-span-6">
-              <TransfersPanel me={me} items={transfersForRoom} loading={false} error={""} onChanged={refetch} />
+              <TransfersPanel me={dashMe || me} items={transfersForRoom} loading={false} error={""} onChanged={refetch} />
             </div>
 
             <div id="events-panel" className="col-span-12 lg:col-span-6">
-            <EventsFeed
+              <EventsFeed
+              examId={exam?.id || exam?._id || selectedExamId}
+              meRole={meRole}
               events={eventsForRoom}
               alerts={alertsForRoom}
               activeRoomId={selectedRoomId}
-              onNewEvent={(item) => showToastFromItem(item)}
+              canFilterRoom={canLecturerUX}
             />
-          </div>
+            </div>
           </div>
         </div>
       </div>

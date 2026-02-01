@@ -272,19 +272,22 @@ export default function ManageExamsPage() {
       setError(null);
 
       try {
-        const [lsRes, ssRes, exRes] = await Promise.all([
-          listUsers("lecturer"),
-          listUsers("supervisor"),
-          getAdminExams(),
-        ]);
+        // ✅ Open the page fast: load the exams list first
+        const exRes = await getAdminExams();
+        const list = unwrapExams(exRes);
+        setExams(list);
+
+        // Stop the full-screen loader as soon as exams are ready
+        if (!silent) setInitialLoading(false);
+
+        // Load lecturers/supervisors in the background (do not block UI)
+        const [lsRes, ssRes] = await Promise.all([listUsers("lecturer"), listUsers("supervisor")]);
 
         const ls = unwrapUsers(lsRes);
         const ss = unwrapUsers(ssRes);
-        const list = unwrapExams(exRes);
 
         setLecturers(ls);
         setSupervisors(ss);
-        setExams(list);
 
         if (!lecturerId && ls.length) setLecturerId(String(getId(ls[0])));
       } catch (e) {

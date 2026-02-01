@@ -1,194 +1,145 @@
 // client/src/hooks/useDashboardLive.js
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getDashboardSnapshot } from "../services/dashboard.service";
+import { getDashboardSnapshotLite, getDashboardSnapshot } from "../services/dashboard.service";
 
 function normalizeRoomId(v) {
   return String(v || "").trim();
 }
 
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
-}
+// ---- tiny in-memory cache (makes sidebar navigation feel instant) ----
+let __dashCache = { raw: null, at: 0, examId: null, lite: null };
+const DASH_CACHE_TTL_MS = 30_000;
 
-export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
-  const [raw, setRaw] = useState(null);
-  const [loading, setLoading] = useState(true);
+/**
+ * Live dashboard data (polling ONLY)
+ * @param {object} params
+ * @param {string|null} params.examId - (Admin only) selected running exam id
+ * @param {string|null} params.roomId - (Client-side only) selected room for filtering UI
+ * @param {number} params.pollMs - default 10s (per requirements)
+ * @param {boolean} params.lite - use lite snapshot for speed
+ */
+export function useDashboardLive({ examId = null, roomId, pollMs = 10000, lite = true } = {}) {
+  const cacheOk =
+    __dashCache.raw &&
+    Date.now() - (__dashCache.at || 0) < DASH_CACHE_TTL_MS &&
+    Boolean(__dashCache.lite) === Boolean(lite) &&
+    String(__dashCache.examId || "") === String(examId || "");
+
+  const [raw, setRaw] = useState(cacheOk ? __dashCache.raw : null);
+  const [loading, setLoading] = useState(!cacheOk);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  //  keep latest roomId without restarting polling
-  const roomIdRef = useRef(roomId);
-  useEffect(() => {
-    roomIdRef.current = roomId;
-  }, [roomId]);
+  const aliveRef = useRef(true);
+  const inFlightRef = useRef(false);
 
-  //  keep latest pollMs without restarting polling
+  const examIdRef = useRef(examId);
+  useEffect(() => {
+    examIdRef.current = examId;
+  }, [examId]);
+
   const pollMsRef = useRef(pollMs);
   useEffect(() => {
     pollMsRef.current = pollMs;
   }, [pollMs]);
 
-  const aliveRef = useRef(true);
-  const inFlightRef = useRef(false);
-  const pendingForceRef = useRef(false); // if a forced refresh happens during an in-flight fetch, run again after it finishes
-  const reqIdRef = useRef(0);
+  const fetchOnce = useCallback(async ({ force } = { force: false }) => {
+    if (!aliveRef.current) return;
 
-  const timerRef = useRef(null);
+    // avoid noisy polling when tab is hidden, unless forced
+    if (typeof document !== "undefined" && document.hidden && !force) return;
 
-  // backoff on errors (prevents spam + improves UX)
-  const backoffRef = useRef(1); // 1x, 2x, 4x...
-  const MAX_BACKOFF = 6; // up to 6x
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
 
-  // we keep a stable "tick" ref so scheduleNext can call it
-  const tickRef = useRef(null);
+    try {
+      setError("");
 
-  const clearTimer = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
+      const snap = await (lite ? getDashboardSnapshotLite : getDashboardSnapshot)({
+        examId: examIdRef.current,
+      });
 
-  const shouldPause = useCallback(() => {
-    // Pause polling when tab is hidden to avoid unnecessary network & CPU
-    return typeof document !== "undefined" && document.hidden;
-  }, []);
-
-  const scheduleNext = useCallback(
-    (multiplier = 1) => {
-      clearTimer();
-
-      const base = Number(pollMsRef.current);
-
-      // ✅ Polling disabled if pollMs <= 0 (or invalid)
-      if (!Number.isFinite(base) || base <= 0) return;
-
-      const wait = clamp(base * multiplier, 1500, 60000);
-
-      timerRef.current = setTimeout(() => {
-        tickRef.current?.();
-      }, wait);
-    },
-    [clearTimer]
-  );
-
-  const fetchOnce = useCallback(
-    async (opts = { force: false }) => {
       if (!aliveRef.current) return;
-      if (shouldPause() && !opts.force) return;
-      if (inFlightRef.current) {
-        // If user explicitly requested refresh (force) while a poll is already fetching,
-        // queue another fetch immediately after the current one completes.
-        if (opts.force) pendingForceRef.current = true;
-        return;
-      }
 
-      inFlightRef.current = true;
-      const myReqId = ++reqIdRef.current;
+      setRaw(snap);
+      __dashCache = { raw: snap, at: Date.now(), examId: examIdRef.current || null, lite };
+      setLoading(false);
+      setRefreshing(false);
+    } catch (e) {
+      if (!aliveRef.current) return;
 
-      try {
-        setError("");
+      setError(e?.message || "Failed to load dashboard");
+      setLoading(false);
+      setRefreshing(false);
+    } finally {
+      inFlightRef.current = false;
+    }
+  }, [lite]);
 
-        const snap = await getDashboardSnapshot(); // server decides visibility by role
-
-        if (!aliveRef.current) return;
-        if (myReqId !== reqIdRef.current) return;
-
-        setRaw(snap);
-        setLoading(false);
-
-        // ✅ success => reset backoff
-        backoffRef.current = 1;
-      } catch (e) {
-        if (!aliveRef.current) return;
-        if (myReqId !== reqIdRef.current) return;
-
-        setError(e?.message || "Failed to load dashboard");
-        setLoading(false);
-
-        // ✅ error => increase backoff (up to MAX_BACKOFF)
-        backoffRef.current = clamp(backoffRef.current * 2, 1, MAX_BACKOFF);
-      } finally {
-        inFlightRef.current = false;
-        if (pendingForceRef.current) {
-          pendingForceRef.current = false;
-          setTimeout(() => fetchOnce({ force: true }), 0);
-        }
-      }
-    },
-    [shouldPause]
-  );
-
+  // initial load + polling
   useEffect(() => {
     aliveRef.current = true;
-    setLoading(true);
-    reqIdRef.current += 1;
 
-    let cancelled = false;
+    // 1) immediate fetch
+    fetchOnce({ force: true });
 
-    const tick = async () => {
-      if (cancelled || !aliveRef.current) return;
+    // 2) poll
+    const id = setInterval(() => {
+      fetchOnce();
+    }, Math.max(2000, Number(pollMsRef.current) || 10000));
 
-      // if tab hidden => re-schedule (don’t fetch)
-      if (shouldPause()) {
-        scheduleNext(1);
-        return;
-      }
-
-      await fetchOnce();
-      if (cancelled || !aliveRef.current) return;
-
-      // schedule using current backoff (may do nothing if pollMs <= 0)
-      scheduleNext(backoffRef.current);
-    };
-
-    tickRef.current = tick;
-
-    // start immediately (one initial snapshot)
-    tick();
-
-    // also: when tab becomes visible, fetch immediately
+    // 3) when tab becomes visible => refresh immediately
     const onVis = () => {
-      if (!aliveRef.current) return;
-      if (!document.hidden) {
-        backoffRef.current = 1;
-        fetchOnce({ force: true });
-        scheduleNext(1);
-      }
+      if (!document.hidden) fetchOnce({ force: true });
     };
-
     document.addEventListener("visibilitychange", onVis);
 
     return () => {
-      cancelled = true;
       aliveRef.current = false;
+      clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
-      clearTimer();
     };
-  }, [fetchOnce, clearTimer, scheduleNext, shouldPause]);
+  }, [fetchOnce]);
+
+  // if admin switches exam => refresh (but keep UI responsive)
+  useEffect(() => {
+    if (!aliveRef.current) return;
+
+    setError("");
+    if (raw) setRefreshing(true);
+    else setLoading(true);
+
+    fetchOnce({ force: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examId]);
 
   const derived = useMemo(() => {
     const me = raw?.me || null;
     const exam = raw?.exam || null;
-    const classrooms = exam?.classrooms || exam?.rooms || [];
 
+    const classrooms = exam?.classrooms || exam?.rooms || [];
     const rooms = (Array.isArray(classrooms) ? classrooms : [])
       .map((c) => ({
         id: normalizeRoomId(c?.id || c?.roomId || c?.name || c),
         name: normalizeRoomId(c?.name || c?.id || c?.roomId || c),
         rows: Number(c?.rows || 0),
         cols: Number(c?.cols || 0),
+        assignedSupervisorId: c?.assignedSupervisorId || null,
+        assignedSupervisorName: String(c?.assignedSupervisorName || ""),
       }))
       .filter((r) => r.id);
 
-    const firstRoomId = normalizeRoomId(rooms?.[0]?.id || rooms?.[0]?.name || "");
     const requestedRoomId = normalizeRoomId(roomId);
+    const assignedRoomId = normalizeRoomId(me?.assignedRoomId);
 
-    const effectiveRoomId =
-      requestedRoomId || normalizeRoomId(me?.assignedRoomId) || firstRoomId || "";
+    const roomIds = rooms.map((r) => normalizeRoomId(r.id));
 
-    const activeRoom = effectiveRoomId
-      ? rooms.find((r) => normalizeRoomId(r.id) === normalizeRoomId(effectiveRoomId)) || null
-      : rooms[0] || null;
+    let effectiveRoomId = "";
+    if (requestedRoomId && roomIds.includes(requestedRoomId)) effectiveRoomId = requestedRoomId;
+    else if (assignedRoomId && roomIds.includes(assignedRoomId)) effectiveRoomId = assignedRoomId;
+    else effectiveRoomId = roomIds[0] || "";
+
+    const activeRoom = rooms.find((r) => normalizeRoomId(r.id) === effectiveRoomId) || null;
 
     const attendance = raw?.attendance || exam?.attendance || [];
 
@@ -204,14 +155,12 @@ export function useDashboardLive({ roomId, pollMs = 6000 } = {}) {
       inbox: raw?.inbox || { unread: 0, recent: [] },
       events: raw?.events || [],
     };
-    }, [raw, roomId]);
+  }, [raw, roomId]);
 
-  // ✅ manual refetch (instant + reset backoff)
   const refetch = useCallback(async () => {
-    backoffRef.current = 1;
+    setRefreshing(true);
     await fetchOnce({ force: true });
-    scheduleNext(1);
-  }, [fetchOnce, scheduleNext]);
+  }, [fetchOnce]);
 
-  return { ...derived, raw, loading, error, refetch };
+  return { ...derived, raw, loading, refreshing, error, refetch };
 }

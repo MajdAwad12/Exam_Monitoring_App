@@ -1,5 +1,6 @@
 // client/src/components/dashboard/EventsFeed.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+import { markCallLecturerSeen } from "../../services/incidents.service.js";
 
 function fmtTime(d) {
   const dt = new Date(d || Date.now());
@@ -139,20 +140,37 @@ function isRecent(at, ms = 12000) {
 }
 
 export default function EventsFeed({
+  examId,
+  meRole,
   events = [],
   alerts = [],
   activeRoomId = "",
-  onNewEvent, // ✅ callback when a new important newest item arrives
+  canFilterRoom = true,
+  onNewEvent,
 }) {
   const [q, setQ] = useState("");
   const [onlyThisRoom, setOnlyThisRoom] = useState(false);
+  // Used by the "Seen" button (lecturer CALL_LECTURER events)
+  const [seenBusyId, setSeenBusyId] = useState("");
+
+  // scroll container
+  const listRef = useRef(null);
+  const scrollToTop = () => {
+    const el = listRef.current;
+    if (el) el.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const scrollToBottom = () => {
+    const el = listRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
+
 
   const merged = useMemo(() => {
     const a = (Array.isArray(alerts) ? alerts : []).map((x) => normalize(x, "alert"));
     const e = (Array.isArray(events) ? events : []).map((x) => normalize(x, "event"));
     const all = [...a, ...e];
     all.sort((x, y) => new Date(y.at).getTime() - new Date(x.at).getTime());
-    return all.slice(0, 30);
+    return all.slice(0, 500);
   }, [alerts, events]);
 
   // ✅ Detect new event (newest item changed)
@@ -190,7 +208,9 @@ export default function EventsFeed({
     const query = q.trim().toLowerCase();
     return merged.filter((it) => {
       if (onlyThisRoom && activeRoomId) {
-        if (String(it.roomId) !== String(activeRoomId)) return false;
+        const rid = String(it.roomId || "");
+        // keep global items visible even when filtering a room
+        if (rid && rid !== String(activeRoomId)) return false;
       }
       if (!query) return true;
 
@@ -200,7 +220,32 @@ export default function EventsFeed({
     });
   }, [merged, q, onlyThisRoom, activeRoomId]);
 
-  return (
+  
+  async function handleSeen(it) {
+    try {
+      const role = String(meRole || "").toLowerCase();
+      if (role !== "lecturer") return;
+      const t = String(it?.raw?.type || "").toUpperCase();
+      if (t !== "CALL_LECTURER") return;
+
+      const eventId = String(it?.raw?.eventId || "").trim();
+      if (!examId || !eventId) return;
+
+      setSeenBusyId(eventId);
+      await markCallLecturerSeen(examId, eventId);
+      // UI will update via polling / WS; keep a tiny optimistic mark
+      it.raw.seenByLecturer = true;
+      it.raw.seenText = it.raw.seenText || "The lecturer saw the call , he will come to class soon "
+      it.raw.severity = it.raw.severity || "high";
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || String(e));
+    } finally {
+      setSeenBusyId("");
+    }
+  }
+
+return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-5 border-b border-slate-200">
         <div className="flex items-start justify-between gap-3">
@@ -209,8 +254,10 @@ export default function EventsFeed({
             <div className="text-lg font-extrabold text-slate-900">Alerts & Events</div>
             <div className="mt-1 text-xs text-slate-500">Alerts highlighted • Search + room filter</div>
           </div>
-          <div className="text-xs text-slate-500 font-bold">
-            Showing <span className="text-slate-900">{filtered.length}</span>
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-bold">
+            <span>Showing <span className="text-slate-900">{filtered.length}</span></span>
+            <button type="button" onClick={scrollToTop} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-extrabold text-slate-700 hover:bg-slate-50">Top</button>
+            <button type="button" onClick={scrollToBottom} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-extrabold text-slate-700 hover:bg-slate-50">Bottom</button>
           </div>
         </div>
 
@@ -222,7 +269,8 @@ export default function EventsFeed({
             className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-200"
           />
 
-          <button
+          {canFilterRoom ? (
+<button
             type="button"
             onClick={() => setOnlyThisRoom((v) => !v)}
             disabled={!activeRoomId}
@@ -235,6 +283,7 @@ export default function EventsFeed({
           >
             {onlyThisRoom ? `Filtered: Room ${activeRoomId}` : "Filter: This room"}
           </button>
+          ) : null}
         </div>
       </div>
 
@@ -244,7 +293,7 @@ export default function EventsFeed({
             No alerts/events.
           </div>
         ) : (
-          <div className="space-y-3">
+          <div ref={listRef} className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
             {filtered.map((it, idx) => {
               const sev = sevMeta(it.severity);
               const head = titleOf(it.raw);
@@ -288,7 +337,34 @@ export default function EventsFeed({
 
                     <div className="shrink-0 text-right">
                       <div className="text-xs font-extrabold text-slate-700">{fmtTime(it.at)}</div>
+                      
                       <div className="mt-1 text-[10px] text-slate-500 uppercase font-extrabold">{it.source}</div>
+
+                      {(() => {
+                        const eid = String(it.raw?.eventId || "").trim();
+                        const canShow =
+                          String(meRole || "").toLowerCase() === "lecturer" &&
+                          String(it.raw?.type || "").toUpperCase() === "CALL_LECTURER" &&
+                          !it.raw?.seenByLecturer &&
+                          !!eid;
+                        if (!canShow) return null;
+                        const busy = seenBusyId === eid;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleSeen(it)}
+                            disabled={busy}
+                            className={[
+                              "mt-2 w-full rounded-xl px-3 py-1.5 text-xs font-extrabold",
+                              "bg-sky-700 text-white hover:bg-sky-800",
+                              "disabled:opacity-60 disabled:cursor-not-allowed",
+                            ].join(" ")}
+                          >
+                            {busy ? "Saving..." : "Seen"}
+                          </button>
+                        );
+                      })()}
+
                     </div>
                   </div>
                 </div>

@@ -3,6 +3,9 @@ import mongoose from "mongoose";
 
 const classroomSchema = new mongoose.Schema(
   {
+    // Preferred stable identifier name in the system.
+    // We keep roomId for backward compatibility with existing code.
+    classroomId: { type: String, default: "", trim: true, index: true },
     roomId: { type: String, required: true, unique: true, trim: true }, // e.g. A101
     name: { type: String, required: true, trim: true }, // e.g. A101 (display)
     building: { type: String, default: "", trim: true }, // e.g. "Building A"

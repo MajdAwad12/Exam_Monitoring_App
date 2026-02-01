@@ -64,6 +64,7 @@ export default function SeatActionsModal({
   const [note, setNote] = useState("");
   const [toRoom, setToRoom] = useState("");
   const [localErr, setLocalErr] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
 
   const roomNow = String(seat?.roomId || seat?.classroom || seat?.room || "").trim();
   const seatLabel = seat?.seat || "-";
@@ -74,7 +75,7 @@ export default function SeatActionsModal({
 
   // Locked means: cannot change status / cannot start new transfer
   // but Cancel Transfer should still be possible
-  const lockedActions = isTransferPending || isMoving;
+  const lockedActions = isTransferPending || isMoving || actionBusy;
 
   const isPresentNow = rawStatus === "present";
   const isTempOutNow = rawStatus === "temp_out";
@@ -116,28 +117,51 @@ export default function SeatActionsModal({
     });
   }
 
-  function setStatus(status, extra = {}) {
-    if (!canChangeStatus) return;
+ async function setStatus(status, extra = {}) {
+  if (!canEditAttendance || lockedActions) return;
 
-    onClose?.(); // ✅ close immediately
+  const realStatus = String(status || "").trim();
+  if (!realStatus) return;
 
-    fireAndForget(
-      onSetStatus?.(seat.studentId, { status, ...extra }),
-      `Failed to set status: ${status}`
-    );
+  setLocalErr("");
+  setActionBusy(true);
+
+  try {
+    await onSetStatus?.(seat.studentId, { status: realStatus, ...extra });
+    onClose?.(); // ✅ close only after success
+  } catch (e) {
+    const msg = e?.message || String(e);
+    setLocalErr(msg);
+    if (typeof onActionError === "function") onActionError(msg);
+  } finally {
+    setActionBusy(false);
   }
+}
 
-  function setPresentOrBackToRoom() {
-    if (!canEditAttendance || lockedActions) return;
+async function setPresentOrBackToRoom() {
+  if (!canEditAttendance || lockedActions) return;
 
-    onClose?.(); // ✅ close immediately
+  setLocalErr("");
+  setActionBusy(true);
 
-    const payload = isTempOutNow
-      ? { status: "present", outStartedAt: null }
-      : { status: "present" };
+  const payload = { status: "present" };
 
-    fireAndForget(onSetStatus?.(seat.studentId, payload), "Failed to set Present");
+
+  try {
+    await onSetStatus?.(seat.studentId, payload);
+    onClose?.(); // ✅ close only after success
+  } catch (e) {
+    const msg = e?.message || String(e);
+    setLocalErr(msg);
+    if (typeof onActionError === "function") onActionError(msg);
+  } finally {
+    setActionBusy(false);
   }
+}
+
+
+    
+
 
   // Notes allowed for everyone (as requested)
   async function submitNote() {
