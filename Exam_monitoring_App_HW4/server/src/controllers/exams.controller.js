@@ -900,11 +900,10 @@ export async function updateAttendance(req, res) {
                 studentId: att.studentId || null,
               });
 
-              // keep report counters consistent
-              ensureReport(exam);
-              const st = ensureStudentStat(exam, realStudentKey);
-              st.incidentCount = (Number(st.incidentCount) || 0) + 1;
-              st.lastIncidentAt = now;
+              // keep report counters consistent (use existing studentStat "ss")
+              ss.incidentCount = (Number(ss.incidentCount) || 0) + 1;
+              ss.lastIncidentAt = now;
+
             }
 
             // clear out state
