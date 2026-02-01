@@ -134,13 +134,15 @@ export async function logIncident(req, res) {
       if (!targetEventId) return res.status(400).json({ message: "meta.targetEventId is required" });
 
       const ev = (exam.events || []).find((e) => String(e?.eventId || "") === targetEventId);
-      if (!ev) return res.status(404).json({ message: "Target event not found" });
+      if (!ev) {
+        // Fail-safe: do not break the UI if an old event has no eventId or was trimmed
+        return res.json({ ok: true, missing: true, updated: { eventId: targetEventId, seenByLecturer: true } });
+      }
 
       // mark acknowledged for everyone
       ev.seenByLecturer = true;
       ev.seenAt = new Date();
-      ev.seenText = "The lecturer saw the reading, he will come to class soon.";
-      ev.description = ev.seenText;
+      ev.seenText = "המרצה ראה את הקריאה , הוא יבוא בזמן הקרוב לכיתה";
 
       // make it visually prominent for all users
       ev.severity = "high";
