@@ -150,6 +150,8 @@ export default function EventsFeed({
 }) {
   const [q, setQ] = useState("");
   const [onlyThisRoom, setOnlyThisRoom] = useState(false);
+  // Used by the "Seen" button (lecturer CALL_LECTURER events)
+  const [seenBusyId, setSeenBusyId] = useState("");
 
   // scroll container
   const listRef = useRef(null);
