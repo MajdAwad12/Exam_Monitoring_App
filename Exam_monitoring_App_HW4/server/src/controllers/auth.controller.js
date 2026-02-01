@@ -139,8 +139,15 @@ export async function logout(req, res) {
 
 /* ================= ME ================= */
 export async function me(req, res) {
-  const user = await User.findById(req.user.id);
-  return res.json(safeUser(user));
+  try {
+    const uid = req.user?.id || req.user?._id;
+    if (!uid) return res.status(401).json({ message: "UNAUTHORIZED" });
+    const user = await User.findById(uid).select("fullName username email role studentId assignedRoomId").lean();
+    if (!user) return res.status(401).json({ message: "UNAUTHORIZED" });
+    return res.json(safeUser(user));
+  } catch {
+    return res.status(401).json({ message: "UNAUTHORIZED" });
+  }
 }
 
 /* ================= REGISTER ================= */

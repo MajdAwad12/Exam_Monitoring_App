@@ -188,59 +188,6 @@ export default function DashboardPage() {
     }));
   }, [setChatContext, examId, selectedRoomId, stats, alertsForRoom, transfersForRoom]);
 
-  // ✅ Listen to global WS events from AppLayout and refresh dashboard data
-  useEffect(() => {
-    let debounceTimer = null;
-
-    const scheduleRefetch = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        refetch();
-      }, 150);
-    };
-
-    const onWs = (ev) => {
-      const msg = ev?.detail;
-      if (!msg || typeof msg !== "object") return;
-
-      // If WS payload has an examId, and admin selected another exam => ignore
-      const msgExamId = msg?.examId || msg?.payload?.examId || msg?.data?.examId;
-      if (isAdmin && selectedExamId && msgExamId && String(msgExamId) !== String(selectedExamId)) {
-        // but still update the running exams list on exam start/end
-        if (msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED") loadRunningExams();
-        return;
-      }
-
-      if (msg.type === "EXAM_UPDATED" || msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED") {
-        scheduleRefetch();
-        if (isAdmin && (msg.type === "EXAM_STARTED" || msg.type === "EXAM_ENDED")) loadRunningExams();
-      }
-
-      const t = String(msg.type || "");
-
-      if (t.includes("TOO_MANY_TOILET") || t.includes("TOILET_LIMIT")) {
-        scheduleRefetch();
-        showToastFromItem({
-          type: "TOO_MANY_TOILET",
-          severity: "medium",
-          title: "Toilet limit reached (3+)",
-          description: "A student exceeded toilet exits.",
-        });
-        return;
-      }
-
-      if (t.includes("INCIDENT") || t.includes("ALERT") || t.includes("TRANSFER")) {
-        scheduleRefetch();
-      }
-    };
-
-    window.addEventListener("ws:event", onWs);
-    return () => {
-      window.removeEventListener("ws:event", onWs);
-      clearTimeout(debounceTimer);
-    };
-  }, [refetch, isAdmin, selectedExamId, loadRunningExams]);
-
   // ✅ When admin switches exam => reset room selection (so we pick the best active room automatically)
   useEffect(() => {
     if (isAdmin) setRoomId(null);

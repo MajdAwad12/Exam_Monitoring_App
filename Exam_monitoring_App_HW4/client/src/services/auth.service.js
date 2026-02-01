@@ -1,83 +1,51 @@
 // ============================
 // client/src/services/auth.service.js
 // ============================
-async function handle(res) {
-  let data = {};
-  try {
-    data = await res.json();
-  } catch {
-    data = {};
-  }
+// Uses shared http helper to avoid infinite loading (timeout + consistent errors)
+import { http } from "./http.js";
 
-  if (!res.ok) {
-    const msg = data?.message || `HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-  return data;
-}
-
-export async function loginUser({ username, password }) {
-  const res = await fetch("/api/auth/login", {
+export function loginUser({ username, password }) {
+  return http("/api/auth/login", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ username, password }),
+    body: { username, password },
+    timeoutMs: 12000,
   });
-  return handle(res);
 }
 
-export async function requestStudentOtp({ email, studentId }) {
-  const res = await fetch("/api/auth/student/request-otp", {
+export function requestStudentOtp({ email, studentId }) {
+  return http("/api/auth/student/request-otp", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ email, studentId }),
+    body: { email, studentId },
+    timeoutMs: 12000,
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
-  return data;
 }
 
-export async function verifyStudentOtp({ email, studentId, otp }) {
-  const res = await fetch("/api/auth/student/verify-otp", {
+export function verifyStudentOtp({ email, studentId, otp }) {
+  return http("/api/auth/student/verify-otp", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ email, studentId, otp }),
+    body: { email, studentId, otp },
+    timeoutMs: 12000,
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
-  return data;
 }
 
-export async function staffForgotPassword(email) {
-  const res = await fetch("/api/auth/staff/forgot-password", {
+export function staffForgotPassword(email) {
+  return http("/api/auth/staff/forgot-password", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ email }),
+    body: { email },
+    timeoutMs: 12000,
   });
-  return handle(res);
 }
 
-export async function getMe() {
-  const res = await fetch("/api/auth/me", { method: "GET", credentials: "include" });
-  return handle(res);
+export function getMe() {
+  return http("/api/auth/me", { method: "GET", timeoutMs: 12000 });
 }
 
-export async function logout() {
-  const res = await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-  return handle(res);
+export function logout() {
+  return http("/api/auth/logout", { method: "POST", timeoutMs: 12000 });
 }
 
-export async function registerUser(payload) {
-  const res = await fetch("/api/auth/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(payload),
-  });
-  return handle(res);
+export function registerUser(payload) {
+  return http("/api/auth/register", { method: "POST", body: payload, timeoutMs: 15000 });
 }
 
 /* =========================
@@ -91,12 +59,10 @@ export async function checkUsername(username) {
   const params = new URLSearchParams();
   params.set("username", u);
 
-  const res = await fetch(`/api/auth/check-username?${params.toString()}`, {
+  const data = await http(`/api/auth/check-username?${params.toString()}`, {
     method: "GET",
-    credentials: "include",
+    timeoutMs: 12000,
   });
-
-  const data = await handle(res);
 
   const taken =
     data === true ||
