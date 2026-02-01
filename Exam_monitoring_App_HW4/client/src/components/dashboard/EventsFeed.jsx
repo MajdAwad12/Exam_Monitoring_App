@@ -235,7 +235,7 @@ export default function EventsFeed({
       await markCallLecturerSeen(examId, eventId);
       // UI will update via polling / WS; keep a tiny optimistic mark
       it.raw.seenByLecturer = true;
-      it.raw.seenText = it.raw.seenText || "The lecturer saw the reading, he will come to class soon "
+      it.raw.seenText = it.raw.seenText || "The lecturer saw the call , he will come to class soon "
       it.raw.severity = it.raw.severity || "high";
     } catch (e) {
       console.error(e);
