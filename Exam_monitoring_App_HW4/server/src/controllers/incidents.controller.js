@@ -139,7 +139,7 @@ export async function logIncident(req, res) {
       // mark acknowledged for everyone
       ev.seenByLecturer = true;
       ev.seenAt = new Date();
-      ev.seenText = "המרצה ראה את הקריאה , הוא יבוא בזמן הקרוב לכיתה";
+      ev.seenText = "The lecturer saw the reading, he will come to class soon.";
       ev.description = ev.seenText;
 
       // make it visually prominent for all users
