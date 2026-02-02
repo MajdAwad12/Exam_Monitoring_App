@@ -52,6 +52,12 @@ export async function login(req, res) {
   try {
     const { username, password } = req.body;
 
+   if (username || !password) {
+      return res.status(400).json({ message: "Wrong password" });
+    }
+    if (!username || password) {
+      return res.status(400).json({ message: "Wrong username" });
+    }
     if (!username || !password) {
       return res.status(400).json({ message: "Missing credentials" });
     }
