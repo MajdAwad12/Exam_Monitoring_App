@@ -42,13 +42,3 @@
 .read-the-docs {
   color: #888;
 }
-@keyframes loopArrow {
-  0%   { transform: translateY(0px) rotate(-6deg); }
-  50%  { transform: translateY(6px) rotate(6deg); }
-  100% { transform: translateY(0px) rotate(-6deg); }
-}
-
-.animate-loopArrow {
-  animation: loopArrow 1.6s ease-in-out infinite;
-  transform-origin: 70% 60%;
-}

@@ -208,46 +208,16 @@ export default function LoginPage() {
       <div className="min-h-screen flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-6xl">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-            <div className="hidden lg:block relative">
-  <div className="max-w-md relative">
-    <h1 className="text-white text-4xl font-extrabold tracking-tight">
-      Login Page
-    </h1>
+            {/* LEFT COLUMN (kept clean; no arrow here) */}
+            <div className="hidden lg:block">
+              <div className="max-w-md">
+                <h1 className="text-white text-4xl font-extrabold tracking-tight">
+                  Login Page
+                </h1>
+              </div>
+            </div>
 
-    <svg
-      viewBox="0 0 220 160"
-      className="pointer-events-none absolute -right-44 top-10 w-56 h-44 opacity-90 animate-loopArrow"
-      fill="none"
-    >
-      <path
-        d="M40 120c30-70 120-90 150-40 20 35-5 75-45 80"
-        stroke="rgba(99,102,241,0.55)"
-        strokeWidth="12"
-        strokeLinecap="round"
-        className="blur-[2px]"
-      />
-      <path
-        d="M40 120c30-70 120-90 150-40 20 35-5 75-45 80"
-        stroke="rgba(255,255,255,0.95)"
-        strokeWidth="6"
-        strokeLinecap="round"
-      />
-      <path
-        d="M150 120l-12 18 22-4"
-        stroke="rgba(255,255,255,0.95)"
-        strokeWidth="6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-
-    <div className="absolute -right-44 top-2 text-white/90 text-sm font-extrabold tracking-wide">
-      Login here ↴
-    </div>
-  </div>
-</div>
-
-
+            {/* RIGHT COLUMN */}
             <div className="w-full max-w-xl mx-auto">
               <div className="lg:hidden text-center mb-4">
                 <h1 className="text-white text-3xl font-extrabold tracking-tight">
@@ -255,246 +225,294 @@ export default function LoginPage() {
                 </h1>
               </div>
 
-              <LoginHeader />
+              {/* ✅ Wrap the card in relative container so arrow points to it */}
+              <div className="relative">
+                {/* Arrow (desktop only) - Tailwind only */}
+                <svg
+                  viewBox="0 0 280 180"
+                  className="
+                    pointer-events-none hidden lg:block
+                    absolute -left-44 top-14
+                    w-80 h-56 opacity-95
+                  "
+                  fill="none"
+                >
+                  {/* glow */}
+                  <path
+                    d="M20 140c40-90 170-120 230-55 35 40 10 95-55 105"
+                    stroke="rgba(99,102,241,0.55)"
+                    strokeWidth="14"
+                    strokeLinecap="round"
+                    className="blur-[3px]"
+                  />
+                  {/* main line */}
+                  <path
+                    d="M20 140c40-90 170-120 230-55 35 40 10 95-55 105"
+                    stroke="rgba(255,255,255,0.95)"
+                    strokeWidth="7"
+                    strokeLinecap="round"
+                  />
+                  {/* arrow head */}
+                  <path
+                    d="M205 148l-18 18 28-6"
+                    stroke="rgba(255,255,255,0.95)"
+                    strokeWidth="7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
 
-              <LoginCard shake={shake}>
-                <div className="mb-5">
-                  <div className="rounded-2xl bg-white/90 border border-white/40 p-1 shadow-sm">
-                    <div className="grid grid-cols-2 relative">
-                      <div
-                        className={[
-                          "absolute top-0 left-0 h-full w-1/2 rounded-xl bg-indigo-600 shadow transition-transform duration-300",
-                          tab === "student" ? "translate-x-full" : "translate-x-0",
-                        ].join(" ")}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTab("staff");
-                          setNotice(null);
-                          setStudentStep(1);
-                          setOtp("");
-                        }}
-                        className={[
-                          "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
-                          tab === "staff"
-                            ? "text-white"
-                            : "text-slate-700 hover:text-slate-900",
-                        ].join(" ")}
-                        disabled={isLoading}
-                      >
-                        Staff
-                      </button>
+                {/* label */}
+                <div
+                  className="
+                    pointer-events-none hidden lg:block
+                    absolute -left-40 top-6
+                    text-white/90 text-sm font-extrabold tracking-wide
+                  "
+                >
+                  Login here ↴
+                </div>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTab("student");
-                          setNotice(null);
-                          setShowForgot(false);
-                        }}
-                        className={[
-                          "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
-                          tab === "student"
-                            ? "text-white"
-                            : "text-slate-700 hover:text-slate-900",
-                        ].join(" ")}
-                        disabled={isLoading}
-                      >
-                        Student
-                      </button>
+                <LoginHeader />
+
+                <LoginCard shake={shake}>
+                  <div className="mb-5">
+                    <div className="rounded-2xl bg-white/90 border border-white/40 p-1 shadow-sm">
+                      <div className="grid grid-cols-2 relative">
+                        <div
+                          className={[
+                            "absolute top-0 left-0 h-full w-1/2 rounded-xl bg-indigo-600 shadow transition-transform duration-300",
+                            tab === "student" ? "translate-x-full" : "translate-x-0",
+                          ].join(" ")}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTab("staff");
+                            setNotice(null);
+                            setStudentStep(1);
+                            setOtp("");
+                          }}
+                          className={[
+                            "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
+                            tab === "staff"
+                              ? "text-white"
+                              : "text-slate-700 hover:text-slate-900",
+                          ].join(" ")}
+                          disabled={isLoading}
+                        >
+                          Staff
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTab("student");
+                            setNotice(null);
+                            setShowForgot(false);
+                          }}
+                          className={[
+                            "relative z-10 py-2.5 rounded-xl text-sm font-extrabold transition",
+                            tab === "student"
+                              ? "text-white"
+                              : "text-slate-700 hover:text-slate-900",
+                          ].join(" ")}
+                          disabled={isLoading}
+                        >
+                          Student
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {notice ? (
-                  <ErrorAlert
-                    type={notice.type}
-                    text={notice.text}
-                    onClose={() => setNotice(null)}
-                  />
-                ) : null}
+                  {notice ? (
+                    <ErrorAlert
+                      type={notice.type}
+                      text={notice.text}
+                      onClose={() => setNotice(null)}
+                    />
+                  ) : null}
 
-                <div className="rounded-2xl bg-white border border-slate-200 p-6">
-                  {tab === "staff" ? (
-                    <>
-                      <LoginForm
-                        username={staffUsername}
-                        password={staffPassword}
-                        setUsername={setStaffUsername}
-                        setPassword={setStaffPassword}
-                        isLoading={isLoading}
-                        onSubmit={onSubmitStaff}
-                        usernameLabel="Username"
-                        usernamePlaceholder="Enter your username"
-                      />
+                  <div className="rounded-2xl bg-white border border-slate-200 p-6">
+                    {tab === "staff" ? (
+                      <>
+                        <LoginForm
+                          username={staffUsername}
+                          password={staffPassword}
+                          setUsername={setStaffUsername}
+                          setPassword={setStaffPassword}
+                          isLoading={isLoading}
+                          onSubmit={onSubmitStaff}
+                          usernameLabel="Username"
+                          usernamePlaceholder="Enter your username"
+                        />
 
-                      <div className="mt-3 flex items-center justify-between">
-                        <button
-                          type="button"
-                          disabled={isLoading}
-                          onClick={() => setShowForgot((v) => !v)}
-                          className="text-sm font-bold text-indigo-700 hover:text-indigo-900"
-                        >
-                          Forgot username or password ? (email will be sent)
-                        </button>
-                      </div>
-
-                     {showForgot ? (
-                      <div className="relative mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        {/* ❌ Close */}
-                        <button
-                          type="button"
-                          aria-label="Close"
-                          onClick={() => {
-                            setShowForgot(false);
-                            setForgotEmail("");
-                            setNotice(null);
-                          }}
-                          className="absolute top-2 right-2 rounded-lg p-1
-                                    text-slate-500 hover:text-slate-800
-                                    hover:bg-slate-200 transition"
-                        >
-                          ✕
-                        </button>
-
-                        <div className="text-sm font-extrabold text-slate-800">
-                          Staff Forgot Password
-                        </div>
-                        <div className="text-xs text-slate-600 mt-1">
-                          Enter your staff email. We will send your username + password.
-                        </div>
-
-                        <div className="mt-3 flex gap-2">
-                          <input
-                            value={forgotEmail}
-                            onChange={(e) => setForgotEmail(e.target.value)}
-                            className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                            placeholder="your.email@..."
-                            disabled={isLoading}
-                          />
+                        <div className="mt-3 flex items-center justify-between">
                           <button
                             type="button"
-                            onClick={onStaffForgot}
                             disabled={isLoading}
-                            className="rounded-xl px-4 py-2 text-sm font-extrabold text-white
-                                      bg-indigo-600 hover:bg-indigo-700"
+                            onClick={() => setShowForgot((v) => !v)}
+                            className="text-sm font-bold text-indigo-700 hover:text-indigo-900"
                           >
-                            {isLoading ? "Sending..." : "Send"}
+                            Forgot username or password ? (email will be sent)
                           </button>
                         </div>
 
-                        <div className="mt-3 text-xs text-slate-600">
-                          Tip: check <span className="font-extrabold">Spam/Junk</span> too.
-                        </div>
-                      </div>
-                    ) : null}
-
-                    </>
-                  ) : (
-                    <>
-                      {studentStep === 1 ? (
-                        <form onSubmit={onRequestOtp} className="space-y-3">
-                          <div>
-                            <div className="text-sm font-extrabold text-slate-800 mb-1">
-                              Student ID
-                            </div>
-                            <input
-                              value={studentId}
-                              onChange={(e) => setStudentId(e.target.value)}
-                              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                              placeholder="Enter your student ID"
-                              disabled={isLoading}
-                            />
-                          </div>
-
-                          <div>
-                            <div className="text-sm font-extrabold text-slate-800 mb-1">
-                              Email
-                            </div>
-                            <input
-                              value={studentEmail}
-                              onChange={(e) => setStudentEmail(e.target.value)}
-                              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                              placeholder="Enter your email"
-                              disabled={isLoading}
-                            />
-                          </div>
-
-                          <button
-                            type="submit"
-                            disabled={isLoading}
-                            className="w-full rounded-full px-6 py-3 text-white text-base font-extrabold
-                                       bg-indigo-600 hover:bg-indigo-700 shadow-lg transition"
-                          >
-                            {isLoading ? "Sending..." : "Send OTP"}
-                          </button>
-
-                          <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                             After sending OTP, please check your Inbox and also{" "}
-                            <span className="font-extrabold">Spam/Junk</span>.
-                          </div>
-                        </form>
-                      ) : (
-                        <form onSubmit={onVerifyOtp} className="space-y-3">
-                          <div>
-                            <div className="text-sm font-extrabold text-slate-800 mb-1">
-                              OTP Code
-                            </div>
-                            <input
-                              value={otp}
-                              onChange={(e) => setOtp(e.target.value)}
-                              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm tracking-widest"
-                              placeholder="6 digits"
-                              disabled={isLoading}
-                            />
-                          </div>
-
-                          <button
-                            type="submit"
-                            disabled={isLoading}
-                            className="w-full rounded-full px-6 py-3 text-white text-base font-extrabold
-                                       bg-emerald-600 hover:bg-emerald-700 shadow-lg transition"
-                          >
-                            {isLoading ? "Verifying..." : "Verify & Login"}
-                          </button>
-
-                          <div className="flex gap-2">
+                        {showForgot ? (
+                          <div className="relative mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                             <button
                               type="button"
-                              disabled={isLoading}
+                              aria-label="Close"
                               onClick={() => {
-                                setStudentStep(1);
-                                setOtp("");
+                                setShowForgot(false);
+                                setForgotEmail("");
                                 setNotice(null);
                               }}
-                              className="w-full rounded-full px-6 py-2 text-sm font-extrabold
-                                         bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200"
+                              className="absolute top-2 right-2 rounded-lg p-1
+                                        text-slate-500 hover:text-slate-800
+                                        hover:bg-slate-200 transition"
                             >
-                              Back
+                              ✕
                             </button>
+
+                            <div className="text-sm font-extrabold text-slate-800">
+                              Staff Forgot Password
+                            </div>
+                            <div className="text-xs text-slate-600 mt-1">
+                              Enter your staff email. We will send your username + password.
+                            </div>
+
+                            <div className="mt-3 flex gap-2">
+                              <input
+                                value={forgotEmail}
+                                onChange={(e) => setForgotEmail(e.target.value)}
+                                className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                                placeholder="your.email@..."
+                                disabled={isLoading}
+                              />
+                              <button
+                                type="button"
+                                onClick={onStaffForgot}
+                                disabled={isLoading}
+                                className="rounded-xl px-4 py-2 text-sm font-extrabold text-white
+                                          bg-indigo-600 hover:bg-indigo-700"
+                              >
+                                {isLoading ? "Sending..." : "Send"}
+                              </button>
+                            </div>
+
+                            <div className="mt-3 text-xs text-slate-600">
+                              Tip: check <span className="font-extrabold">Spam/Junk</span> too.
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        {studentStep === 1 ? (
+                          <form onSubmit={onRequestOtp} className="space-y-3">
+                            <div>
+                              <div className="text-sm font-extrabold text-slate-800 mb-1">
+                                Student ID
+                              </div>
+                              <input
+                                value={studentId}
+                                onChange={(e) => setStudentId(e.target.value)}
+                                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                                placeholder="Enter your student ID"
+                                disabled={isLoading}
+                              />
+                            </div>
+
+                            <div>
+                              <div className="text-sm font-extrabold text-slate-800 mb-1">
+                                Email
+                              </div>
+                              <input
+                                value={studentEmail}
+                                onChange={(e) => setStudentEmail(e.target.value)}
+                                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                                placeholder="Enter your email"
+                                disabled={isLoading}
+                              />
+                            </div>
 
                             <button
-                              type="button"
+                              type="submit"
                               disabled={isLoading}
-                              onClick={onRequestOtp}
-                              className="w-full rounded-full px-6 py-2 text-sm font-extrabold
-                                         bg-indigo-600 hover:bg-indigo-700 text-white"
+                              className="w-full rounded-full px-6 py-3 text-white text-base font-extrabold
+                                         bg-indigo-600 hover:bg-indigo-700 shadow-lg transition"
                             >
-                              Resend OTP
+                              {isLoading ? "Sending..." : "Send OTP"}
                             </button>
-                          </div>
-                        </form>
-                      )}
-                    </>
-                  )}
-                </div>
-              </LoginCard>
 
-              <div className="mt-4">
-                <AuthFooter />
+                            <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                              After sending OTP, please check your Inbox and also{" "}
+                              <span className="font-extrabold">Spam/Junk</span>.
+                            </div>
+                          </form>
+                        ) : (
+                          <form onSubmit={onVerifyOtp} className="space-y-3">
+                            <div>
+                              <div className="text-sm font-extrabold text-slate-800 mb-1">
+                                OTP Code
+                              </div>
+                              <input
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value)}
+                                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm tracking-widest"
+                                placeholder="6 digits"
+                                disabled={isLoading}
+                              />
+                            </div>
+
+                            <button
+                              type="submit"
+                              disabled={isLoading}
+                              className="w-full rounded-full px-6 py-3 text-white text-base font-extrabold
+                                         bg-emerald-600 hover:bg-emerald-700 shadow-lg transition"
+                            >
+                              {isLoading ? "Verifying..." : "Verify & Login"}
+                            </button>
+
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                disabled={isLoading}
+                                onClick={() => {
+                                  setStudentStep(1);
+                                  setOtp("");
+                                  setNotice(null);
+                                }}
+                                className="w-full rounded-full px-6 py-2 text-sm font-extrabold
+                                           bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200"
+                              >
+                                Back
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={isLoading}
+                                onClick={onRequestOtp}
+                                className="w-full rounded-full px-6 py-2 text-sm font-extrabold
+                                           bg-indigo-600 hover:bg-indigo-700 text-white"
+                              >
+                                Resend OTP
+                              </button>
+                            </div>
+                          </form>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </LoginCard>
+
+                <div className="mt-4">
+                  <AuthFooter />
+                </div>
               </div>
             </div>
+            {/* end right column */}
           </div>
         </div>
       </div>
