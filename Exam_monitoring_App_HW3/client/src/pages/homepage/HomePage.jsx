@@ -140,7 +140,7 @@ export default function HomePage() {
             <div className="relative w-full max-w-xl">
               <div className="absolute -inset-4 rounded-[2.2rem] bg-white/10 blur-2xl" />
               <img
-                src="/hero-classroom.jpg"
+                src="/supervisor.jpg"
                 alt="Exam classroom"
                 className="relative w-full rounded-[2rem] shadow-2xl border border-white/20 object-cover max-h-[420px]"
                 draggable={false}
