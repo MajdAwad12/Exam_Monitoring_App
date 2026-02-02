@@ -216,49 +216,12 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="hidden lg:block relative">
-  <div className="max-w-md relative">
-    <h1 className="text-white text-4xl font-extrabold tracking-tight">
-      Login Page
-    </h1>
-
-    {/* Loop Arrow pointing to the login card (right column) */}
-    <svg
-      viewBox="0 0 220 160"
-      className="pointer-events-none absolute -right-44 top-10 w-56 h-44 opacity-90 animate-loopArrow"
-      fill="none"
-    >
-      {/* glow */}
-      <path
-        d="M40 120c30-70 120-90 150-40 20 35-5 75-45 80"
-        stroke="rgba(99,102,241,0.55)"
-        strokeWidth="12"
-        strokeLinecap="round"
-        className="blur-[2px]"
-      />
-      {/* curve */}
-      <path
-        d="M40 120c30-70 120-90 150-40 20 35-5 75-45 80"
-        stroke="rgba(255,255,255,0.95)"
-        strokeWidth="6"
-        strokeLinecap="round"
-      />
-      {/* head */}
-      <path
-        d="M150 120l-12 18 22-4"
-        stroke="rgba(255,255,255,0.95)"
-        strokeWidth="6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-
-    <div className="absolute -right-44 top-2 text-white/90 text-sm font-extrabold tracking-wide">
-      Login here ↴
-    </div>
-  </div>
-</div>
-
+            <div className="w-full max-w-xl mx-auto">
+              <div className="lg:hidden text-center mb-4">
+                <h1 className="text-white text-3xl font-extrabold tracking-tight">
+                  Login Page
+                </h1>
+              </div>
 
               <LoginHeader />
 
