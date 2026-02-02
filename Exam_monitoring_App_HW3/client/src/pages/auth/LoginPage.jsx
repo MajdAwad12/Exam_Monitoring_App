@@ -211,18 +211,8 @@ export default function LoginPage() {
             <div className="hidden lg:block">
               <div className="max-w-md">
                 <h1 className="text-white text-4xl font-extrabold tracking-tight">
-                  Login Page
+                  Login Page 
                 </h1>
-                <p className="text-indigo-200 mt-10 leading-relaxed">
-                  Staff: username + password. Students: Student ID + Email + OTP.
-                </p>
-
-                <div className="mt-6 rounded-3xl bg-white/10 border border-white/20 backdrop-blur p-6">
-                  <p className="text-white font-bold mb-2">Tip</p>
-                  <p className="text-indigo-100 text-sm">
-                    OTP emails may arrive in Spam/Junk. Move it to Inbox once.
-                  </p>
-                </div>
               </div>
             </div>
 
