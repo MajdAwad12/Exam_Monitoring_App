@@ -1,7 +1,7 @@
 //client/src/App.jsx 
 import { RouterProvider } from "react-router-dom";
+import { WebSocketProvider } from "./websocket/WebSocketProvider.jsx";
 import router from "./routes/router.jsx";
-import { WebSocketProvider } from "./ws/WsProvider.jsx";
 
 /**
  * Root component of the app.
