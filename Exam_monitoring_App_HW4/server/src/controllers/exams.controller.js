@@ -1265,7 +1265,7 @@ export async function startExam(req, res) {
 
       if (result.notFound) return res.status(404).json({ message: "Exam not found" });
 
-      broadcastToExam(exam._id, WEBSOCKET_EVENTS.SYSTEM_DATA_CHANGED, { ts: Date.now() });
+      broadcastToExam(result.exam._id, WEBSOCKET_EVENTS.SYSTEM_DATA_CHANGED, { ts: Date.now() });
 return res.json({ ok: true, exam: toOut(result.exam) });
     }
 
@@ -1311,7 +1311,7 @@ return res.json({ ok: true, exam: toOut(result.exam) });
 
     if (result.notFound) return res.status(404).json({ message: "Exam not found" });
 
-    broadcastToExam(exam._id, WEBSOCKET_EVENTS.SYSTEM_DATA_CHANGED, { ts: Date.now() });
+    broadcastToExam(result.exam._id, WEBSOCKET_EVENTS.SYSTEM_DATA_CHANGED, { ts: Date.now() });
 return res.json({ ok: true, exam: toOut(result.exam) });
   } catch (e) {
     const status = Number(e?.statusCode) || 500;
@@ -1375,7 +1375,7 @@ export async function endExam(req, res) {
 
     if (result.notFound) return res.status(404).json({ message: "Exam not found" });
 
-    broadcastToExam(exam._id, WEBSOCKET_EVENTS.SYSTEM_DATA_CHANGED, { ts: Date.now() });
+    broadcastToExam(result.exam._id, WEBSOCKET_EVENTS.SYSTEM_DATA_CHANGED, { ts: Date.now() });
 return res.json({ ok: true, exam: toOut(result.exam) });
   } catch (e) {
     const status = Number(e?.statusCode) || 500;
