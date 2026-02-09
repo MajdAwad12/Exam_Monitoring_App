@@ -246,7 +246,7 @@ const examSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    collection: "moddle", // ✅ keep as requested
+    collection: "moodle", // ✅ keep as requested
   }
 );
 
