@@ -71,14 +71,6 @@ export default function ReportsControlsSection({
           >
             {excelLabel}
           </button>
-
-          <button
-            onClick={onDownloadCsv}
-            disabled={!selected || downloadBusy}
-            className="px-4 py-2 rounded-xl text-sm font-bold bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50"
-          >
-            {t("reportsPage.controls.downloadCsv")}
-          </button>
         </div>
 
         <div className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
