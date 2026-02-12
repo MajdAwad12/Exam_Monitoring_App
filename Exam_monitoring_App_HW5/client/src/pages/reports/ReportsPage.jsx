@@ -7,9 +7,18 @@ import {
   getReportsList,
   getReportsAnalytics,
   getReportDetails,
-  downloadReportPdf,
   downloadReportCsv,
 } from "../../services/reports.service.js";
+
+import ReportsHeaderSection from "../../components/report/ReportsHeaderSection.jsx";
+import ReportsErrorBanner from "../../components/report/ReportsErrorBanner.jsx";
+import ReportsKpisSection from "../../components/report/ReportsKpisSection.jsx";
+import ReportsChartsSection from "../../components/report/ReportsChartsSection.jsx";
+import ReportsControlsSection from "../../components/report/ReportsControlsSection.jsx";
+import ReportsDetailsSection from "../../components/report/ReportsDetailsSection.jsx";
+
+import ExamReportPDF from "../../components/report/ExamReportPDF.jsx";
+import { downloadExamReportXlsx } from "../../components/report/ExamReportEXCEL.js";
 
 
 /**
@@ -62,38 +71,18 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-function Kpi({ title, value, hint, tone = "slate" }) {
-  const tones = {
-    slate: "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800",
-    sky: "bg-sky-50 border-sky-100 text-sky-900",
-    emerald: "bg-emerald-50 border-emerald-100 text-emerald-900",
-    amber: "bg-amber-50 border-amber-100 text-amber-900",
-    rose: "bg-rose-50 border-rose-100 text-rose-900",
-    violet: "bg-violet-50 border-violet-100 text-violet-900",
-  };
-  return (
-    <div className={`rounded-2xl border shadow-sm p-4 ${tones[tone]}`}>
-      <p className="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500 font-semibold">{title}</p>
-      <p className="text-2xl font-extrabold mt-1">{value}</p>
-      {hint ? <p className="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500 mt-1">{hint}</p> : null}
-    </div>
-  );
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2500);
 }
 
-function Card({ title, subtitle, right, children }) {
-  return (
-    <div className="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h4 className="text-lg font-bold mb-1">{title}</h4>
-          {subtitle ? <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{subtitle}</p> : null}
-        </div>
-        {right ? <div className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{right}</div> : null}
-      </div>
-      <div className="mt-4">{children}</div>
-    </div>
-  );
-}
+
 
 export default function ReportsPage() {
   const { t } = useTranslation();
@@ -438,9 +427,47 @@ export default function ReportsPage() {
       setDownloadBusy(true);
       setErr("");
       const safe = String(selected.courseName || "Exam").replace(/[^\w]+/g, "_");
-      await downloadReportPdf(selected.examId, `Report_${safe}_${fmtDateShort(selected.date)}.pdf`);
+      const filename = `Report_${safe}_${fmtDateShort(selected.date)}.pdf`;
+
+      // Ensure details exist (PDF uses full details)
+      let report = details;
+      if (!report || report?.examId !== selected.examId) {
+        report = await getReportDetails(selected.examId);
+      }
+
+      // Lazy-load react-pdf runtime for faster navigation
+      const { pdf } = await import("@react-pdf/renderer");
+      const blob = await pdf(<ExamReportPDF report={report} examMeta={selected} />).toBlob();
+      downloadBlob(blob, filename);
     } catch (e) {
+      // fallback to server PDF if available (keeps older behavior)
+      try {
+        const { downloadReportPdf } = await import("../../services/reports.service.js");
+        const safe = String(selected.courseName || "Exam").replace(/[^\w]+/g, "_");
+        await downloadReportPdf(selected.examId, `Report_${safe}_${fmtDateShort(selected.date)}.pdf`);
+      } catch {}
       setErr(e?.message || "PDF download failed");
+    } finally {
+      setDownloadBusy(false);
+    }
+  }
+
+  async function onDownloadExcel() {
+    if (!selected) return;
+    try {
+      setDownloadBusy(true);
+      setErr("");
+      const safe = String(selected.courseName || "Exam").replace(/[^\w]+/g, "_");
+      const filename = `Report_${safe}_${fmtDateShort(selected.date)}.xlsx`;
+
+      let report = details;
+      if (!report || report?.examId !== selected.examId) {
+        report = await getReportDetails(selected.examId);
+      }
+
+      await downloadExamReportXlsx({ report, examMeta: selected, filename });
+    } catch (e) {
+      setErr(e?.message || "Excel download failed");
     } finally {
       setDownloadBusy(false);
     }
@@ -468,244 +495,60 @@ export default function ReportsPage() {
 
   return (
     <section className="p-4 sm:p-6 lg:p-10 space-y-8 bg-slate-50 dark:bg-slate-900/40 min-h-full">
-      {/* Title */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{t("reportsPage.title")}</h2>
-          <p className="text-sm text-slate-600 dark:text-slate-300 max-w-3xl mt-1">
-            {t("reportsPage.subtitle")}
-          </p>
-        </div>
-      </div>
+      <ReportsHeaderSection
+        title={t("reportsPage.title")}
+        subtitle={t("reportsPage.subtitle")}
+      />
 
-      {/* Errors */}
-      {err ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 text-rose-900 p-4">
-          <div className="font-bold text-sm">{t("reportsPage.errorTitle")}</div>
-          <div className="text-sm mt-1">{err}</div>
-        </div>
-      ) : null}
+      <ReportsErrorBanner
+        err={err}
+        title={t("reportsPage.errorTitle")}
+      />
 
-      {/* KPIs */}
-      <section className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Kpi title={t("reportsPage.kpis.endedExams.title")} value={kpiAgg.endedExams} tone="sky" hint={t("reportsPage.kpis.endedExams.hint")} />
-        <Kpi title={t("reportsPage.kpis.avgAttendance.title")} value={`${kpiAgg.avgAttendanceRate}%`} tone="emerald" hint={t("reportsPage.kpis.avgAttendance.hint")} />
-        <Kpi title={t("reportsPage.kpis.cheating.title")} value={kpiAgg.totalCheating} tone="rose" hint={t("reportsPage.kpis.cheating.hint")} />
-        <Kpi title={t("reportsPage.kpis.toilet.title")} value={kpiAgg.totalToilet} tone="amber" hint={t("reportsPage.kpis.toilet.hint")} />
-        <Kpi title={t("reportsPage.kpis.teacherCalls.title")} value={kpiAgg.totalTeacherCalls} tone="violet" hint={t("reportsPage.kpis.teacherCalls.hint")} />
-      </section>
+      <ReportsKpisSection t={t} kpiAgg={kpiAgg} />
 
-      {/* Charts (4) */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card
-          title={t("reportsPage.charts.attendance.title")}
-          subtitle={t("reportsPage.charts.attendance.subtitle")}
-          right={t("reportsPage.charts.points", { count: points })}
-        >
-          <div className="h-72">
-            {Charts?.Line ? <Charts.Line data={attendanceChartData} options={attendanceOptions} /> : null}
-          </div>
-        </Card>
+      <ReportsChartsSection
+        t={t}
+        Charts={Charts}
+        points={points}
+        cheatingSeriesCount={cheatingSeries.length}
+        toiletSeriesCount={toiletSeries.length}
+        teacherSeriesCount={teacherSeries.length}
+        attendanceChartData={attendanceChartData}
+        attendanceOptions={attendanceOptions}
+        cheatingChartData={cheatingChartData}
+        cheatingOptions={cheatingOptions}
+        toiletChartData={toiletChartData}
+        toiletOptions={toiletOptions}
+        teacherChartData={teacherChartData}
+        teacherOptions={teacherOptions}
+      />
 
-        <Card
-          title={t("reportsPage.charts.cheating.title")}
-          subtitle={t("reportsPage.charts.cheating.subtitle")}
-          right={t("reportsPage.charts.shownTop", { count: cheatingSeries.length })}
-        >
-          <div className="h-72">
-            {Charts?.Bar ? <Charts.Bar data={cheatingChartData} options={cheatingOptions} /> : null}
-          </div>
-        </Card>
+      <ReportsControlsSection
+        t={t}
+        search={search}
+        setSearch={setSearch}
+        selectedExamId={selectedExamId}
+        setSelectedExamId={setSelectedExamId}
+        filtered={filtered}
+        selected={selected}
+        fmtDateShort={fmtDateShort}
+        downloadBusy={downloadBusy}
+        onDownloadPdf={onDownloadPdf}
+        onDownloadExcel={onDownloadExcel}
+        onDownloadCsv={onDownloadCsv}
+      />
 
-        <Card
-          title={t("reportsPage.charts.toilet.title")}
-          subtitle={t("reportsPage.charts.toilet.subtitle")}
-          right={t("reportsPage.charts.rooms", { count: toiletSeries.length })}
-        >
-          <div className="h-72">
-            {Charts?.Bar ? <Charts.Bar data={toiletChartData} options={toiletOptions} /> : null}
-          </div>
-        </Card>
-
-        <Card
-          title={t("reportsPage.charts.teacherCalls.title")}
-          subtitle={t("reportsPage.charts.teacherCalls.subtitle")}
-          right={t("reportsPage.charts.rooms", { count: teacherSeries.length })}
-        >
-          <div className="h-72">
-            {Charts?.Bar ? <Charts.Bar data={teacherChartData} options={teacherOptions} /> : null}
-          </div>
-        </Card>
-      </section>
-
-      {/* Controls */}
-      <section className="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="md:col-span-2">
-            <label className="text-xs font-bold text-slate-600 dark:text-slate-300">{t("reportsPage.controls.searchLabel")}</label>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("reportsPage.controls.searchPlaceholder")}
-              className="mt-2 w-full rounded-xl px-4 py-2 text-sm
-              border border-slate-200 dark:border-slate-800
-              bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100
-              placeholder:text-slate-400 dark:placeholder:text-slate-500
-              focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:ring-sky-500/30"
-                          />
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-slate-600 dark:text-slate-300">{t("reportsPage.controls.selectExamLabel")}</label>
-            <select
-              value={selectedExamId}
-              onChange={(e) => setSelectedExamId(e.target.value)}
-              className="mt-2 w-full rounded-xl px-3 py-2 text-sm
-              border border-slate-200 dark:border-slate-800
-              bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100
-              focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:ring-sky-500/30"
-            >
-              <option value="">{t("reportsPage.controls.chooseExam")}</option>
-              {filtered.map((r) => (
-                <option key={r.examId} value={r.examId}>
-                  {fmtDateShort(r.date)} • {r.courseName}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={onDownloadPdf}
-              disabled={!selected || downloadBusy}
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              {t("reportsPage.controls.downloadPdf")}
-            </button>
-
-            <button
-              onClick={onDownloadCsv}
-              disabled={!selected || downloadBusy}
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {t("reportsPage.controls.downloadCsv")}
-            </button>
-          </div>
-
-          <div className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
-            {selected ? (
-              <span>
-                {t("reportsPage.controls.selectedPrefix")} <span className="font-bold text-slate-700 dark:text-slate-200">{selected.courseName}</span> • {fmtDateShort(selected.date)}
-              </span>
-            ) : (
-              <span>{t("reportsPage.controls.selectExamHint")}</span>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Details */}
-      <section className="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
-        <div className="flex items-center justify-between">
-          <h4 className="text-lg font-bold">{t("reportsPage.details.title")}</h4>
-          {detailsLoading ? <span className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{t("reportsPage.details.loading")}</span> : null}
-        </div>
-
-        {!selectedExamId ? (
-          <p className="text-sm text-slate-600 dark:text-slate-300 mt-3">{t("reportsPage.details.pickExam")}</p>
-        ) : !details ? (
-          <p className="text-sm text-slate-600 dark:text-slate-300 mt-3">{t("reportsPage.details.noDetails")}</p>
-        ) : (
-          <div className="mt-4 space-y-6">
-            {/* Room breakdown */}
-            <div>
-              <div className="flex items-end justify-between">
-                <h5 className="font-bold text-slate-900 dark:text-slate-100">{t("reportsPage.details.roomBreakdownTitle")}</h5>
-                <div className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{t("reportsPage.details.roomBreakdownHint")}</div>
-              </div>
-
-              <div className="overflow-x-auto mt-3">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 dark:bg-slate-900/40 text-xs uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2 text-left">{t("reportsPage.table.room")}</th>
-                      <th className="px-3 py-2 text-left">{t("reportsPage.table.total")}</th>
-                      <th className="px-3 py-2 text-left">{t("reportsPage.table.present")}</th>
-                      <th className="px-3 py-2 text-left">{t("reportsPage.table.notArrived")}</th>
-                      <th className="px-3 py-2 text-left">{t("reportsPage.table.tempOut")}</th>
-                      <th className="px-3 py-2 text-left">{t("reportsPage.table.absent")}</th>
-                      <th className="px-3 py-2 text-left">{t("reportsPage.table.finished")}</th>
-                      <th className="px-3 py-2 text-left">{t("reportsPage.table.incidents")}</th>
-                      <th className="px-3 py-2 text-left">{t("reportsPage.table.violations")}</th>
-                      <th className="px-3 py-2 text-left">{t("reportsPage.table.rate")}</th>
-                    </tr>
-                  </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {(details.roomStats || []).map((r) => (
-                      <tr key={r.roomId}>
-                        <td className="px-3 py-2 font-bold">{r.roomId}</td>
-                        <td className="px-3 py-2">{r.total}</td>
-                        <td className="px-3 py-2">{r.present}</td>
-                        <td className="px-3 py-2">{r.not_arrived}</td>
-                        <td className="px-3 py-2">{r.temp_out}</td>
-                        <td className="px-3 py-2">{r.absent}</td>
-                        <td className="px-3 py-2">{r.finished}</td>
-                        <td className="px-3 py-2">{r.incidents}</td>
-                        <td className="px-3 py-2">{r.violations}</td>
-                        <td className="px-3 py-2 font-bold">{r.attendanceRate}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Incidents */}
-            <div>
-              <h5 className="font-bold text-slate-900 dark:text-slate-100">{t("reportsPage.incidents.title")}</h5>
-              <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 mt-1">{t("reportsPage.incidents.subtitle")}</p>
-
-              <div className="mt-3 space-y-2">
-                {(details.incidents || []).length === 0 ? (
-                  <div className="text-sm text-slate-600 dark:text-slate-300">{t("reportsPage.incidents.empty")}</div>
-                ) : (
-                  (details.incidents || []).map((x, idx) => (
-                    <div key={idx} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-3">
-                      <div className="flex flex-wrap gap-2 items-center justify-between">
-                        <div className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                          {new Date(x.at).toISOString().replace("T", " ").slice(0, 16)}
-                        </div>
-                        <div className="text-xs text-slate-600 dark:text-slate-300">
-                          {x.roomId || "-"} {x.seat ? `• ${x.seat}` : ""}
-                        </div>
-                      </div>
-                      <div className="mt-1 font-bold text-sm text-slate-900 dark:text-slate-100">{x.type}</div>
-                      <div className="text-sm text-slate-700 dark:text-slate-200 mt-1">{x.description}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 mt-2">{t("reportsPage.incidents.severity", { severity: x.severity })}</div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Notes */}
-            {details.notes ? (
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
-                <div className="text-xs font-bold text-slate-600 dark:text-slate-300">{t("reportsPage.notes.title")}</div>
-                <div className="text-sm text-slate-800 dark:text-slate-100 mt-2 whitespace-pre-wrap">{details.notes}</div>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </section>
-
-      {/* Footer */}
-      <div className="text-xs text-slate-400 dark:text-slate-500">
-        {t("reportsPage.footerTip")}
-      </div>
+      <ReportsDetailsSection
+        t={t}
+        selectedExamId={selectedExamId}
+        details={details}
+        detailsLoading={detailsLoading}
+        fmtDateShort={fmtDateShort}
+        toNum={toNum}
+      />
     </section>
   );
 }
+
   
