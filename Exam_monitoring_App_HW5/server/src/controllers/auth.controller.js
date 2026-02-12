@@ -5,6 +5,7 @@ import crypto from "crypto";
 import User from "../models/User.js";
 import { sendOtpEmail, sendStaffCredentialsEmail } from "../mailer/mailer.js";
 
+
 function safeUser(u) {
   return {
     id: u._id.toString(),
@@ -44,6 +45,41 @@ function genOtp6() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+async function verifyRecaptcha(token, ip) {
+  const secret = String(process.env.RECAPTCHA_SECRET_KEY || "").trim();
+  if (!secret) return { ok: false, reason: "missing_secret" };
+
+  const t = String(token || "").trim();
+  if (!t) return { ok: false, reason: "missing_token" };
+
+  const params = new URLSearchParams();
+  params.set("secret", secret);
+  params.set("response", t);
+  if (ip) params.set("remoteip", ip);
+
+  try {
+    const r = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+
+    const data = await r.json().catch(() => null);
+
+    console.log("============== CAPTCHA GOOGLE RESPONSE ==============");
+    console.log(data);
+    console.log("====================================================");
+
+    return { ok: Boolean(data?.success), data };
+  } catch (err) {
+    console.error("RECAPTCHA VERIFY ERROR:", err);
+    return { ok: false, reason: "network_error" };
+  }
+}
+
+
+
+
 /* =========================
    STAFF LOGIN (username+password)
    + lockout policy
@@ -63,6 +99,8 @@ export async function login(req, res) {
     }
 
     const u = String(username).trim().toLowerCase();
+    console.log("[FORGOT FLOW] forgot hit:", { email });
+
     const user = await User.findOne({ username: u });
 
     if (!user) {
@@ -159,8 +197,31 @@ export async function me(req, res) {
 /* ================= REGISTER ================= */
 export async function register(req, res) {
   try {
-    const { fullName, username, email, password, role } = req.body;
+    const { fullName, username, email, password, role, captchaToken } = req.body;
 
+    // 1) verify captcha first
+    const ip =
+      req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      "";
+
+    const captcha = await verifyRecaptcha(captchaToken, ip);
+
+    // If server is misconfigured, return 500 (so you notice)
+    if (captcha.reason === "missing_secret") {
+      return res.status(500).json({ message: "Captcha not configured on server" });
+    }
+
+    // Normal invalid captcha -> 400
+    if (!captcha.ok) {
+      return res.status(400).json({
+        message: "Security check failed. Please try again.",
+        reason: captcha.reason || undefined,
+        details: captcha.data || undefined,
+      });
+    }
+
+    // 2) existing validations (keep yours)
     if (!["supervisor", "lecturer"].includes(role)) {
       return res.status(400).json({ message: "Role must be supervisor or lecturer" });
     }
@@ -194,6 +255,7 @@ export async function register(req, res) {
     return res.status(500).json({ message: "Server error" });
   }
 }
+
 
 /* ================= CHECK USERNAME ================= */
 export async function checkUsername(req, res) {
@@ -328,9 +390,6 @@ export async function studentVerifyOtp(req, res) {
    POST /api/auth/staff/forgot-password
 ====================================================== */
 export async function staffForgotPassword(req, res) {
-  console.log("[FORGOT FLOW] forgot hit:", { email });
-console.log("[FORGOT FLOW] user found:", Boolean(user));
-
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
     if (!email) return res.status(400).json({ message: "Missing email" });
@@ -339,6 +398,8 @@ console.log("[FORGOT FLOW] user found:", Boolean(user));
       email,
       role: { $in: ["admin", "supervisor", "lecturer"] },
     });
+
+    console.log("[FORGOT FLOW] user found:", Boolean(user));
 
     // same message even if not found
     if (!user) {

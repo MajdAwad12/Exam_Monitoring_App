@@ -1,10 +1,11 @@
 // client/src/components/auth/RegisterForm.jsx
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import ReCAPTCHA from "react-google-recaptcha";
 
 export default function RegisterForm({
   onSubmit,
-  captchaLabel = null,
+  captchaLabel = null, // נשאר, אבל לא חובה עכשיו
   isLoading = false,
 }) {
   const { t, i18n } = useTranslation();
@@ -17,11 +18,20 @@ export default function RegisterForm({
     password: "",
     password2: "",
     role: "",
-    captchaAnswer: "",
   });
 
+  const captchaRef = useRef(null);
+
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaError, setCaptchaError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const busy = isLoading || isSubmitting;
+
+  const siteKey = useMemo(() => {
+    // Vite exposes only VITE_* vars
+    return import.meta.env.VITE_RECAPTCHA_SITE_KEY || "";
+  }, []);
 
   function setField(name, value) {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -31,6 +41,25 @@ export default function RegisterForm({
     e.preventDefault();
     if (busy) return;
 
+    // Require captcha
+    if (!siteKey) {
+      setCaptchaError(
+        t(
+          "auth.register.captchaMissingKey",
+          "Captcha is not configured (missing site key)."
+        )
+      );
+      return;
+    }
+
+    if (!captchaToken) {
+      setCaptchaError(
+        t("auth.register.captchaRequired", "Please complete the captcha.")
+      );
+      return;
+    }
+
+    setCaptchaError("");
     setIsSubmitting(true);
     try {
       await onSubmit({
@@ -40,10 +69,13 @@ export default function RegisterForm({
         password: form.password,
         password2: form.password2,
         role: form.role,
-        captchaAnswer: form.captchaAnswer,
+        captchaToken, // ✅ NEW: send token to server
       });
     } finally {
       setIsSubmitting(false);
+      // avoid 'timeout-or-duplicate' by forcing a new token next time
+      try { captchaRef.current?.reset(); } catch {}
+      setCaptchaToken("");
     }
   }
 
@@ -199,32 +231,37 @@ export default function RegisterForm({
         />
       </div>
 
-      {/* Captcha */}
+      {/* ✅ Google reCAPTCHA */}
       <div>
         <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2">
           {t("auth.register.captcha", "Security check")}
         </label>
 
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-sm font-semibold border border-slate-200 dark:border-slate-800">
-            {captchaLabel || t("auth.register.captcha", "Security check")}
-          </span>
+        <div
+          className={[
+            "rounded-2xl border border-slate-200 dark:border-slate-800",
+            "bg-white dark:bg-slate-950 p-3",
+            isRtl ? "flex justify-end" : "flex justify-start",
+          ].join(" ")}
+        >
+          <ReCAPTCHA
+            ref={captchaRef}
+            sitekey={siteKey}
+            onChange={(token) => {
+              setCaptchaToken(token || "");
+              setCaptchaError("");
+              
+            }}
+              onExpired={() => { setCaptchaToken(""); setCaptchaError(t("auth.register.captchaExpired","Captcha expired. Try again.")); }}
 
-          <input
-            className={[
-              "w-28 px-3 py-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950",
-              "text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:text-slate-500",
-              "focus:outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 dark:focus:ring-sky-500/20 dark:focus:border-sky-400/50 transition",
-              isRtl ? "text-right" : "text-left",
-            ].join(" ")}
-            type="number"
-            value={form.captchaAnswer}
-            onChange={(e) => setField("captchaAnswer", e.target.value)}
-            placeholder={t("auth.register.captchaPlaceholder", "Answer")}
-            disabled={busy}
-            required
           />
         </div>
+
+        {!!captchaError && (
+          <p className="mt-2 text-sm font-semibold text-rose-600">
+            {captchaError}
+          </p>
+        )}
       </div>
 
       <button

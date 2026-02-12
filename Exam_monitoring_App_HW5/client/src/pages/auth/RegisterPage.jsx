@@ -1,7 +1,7 @@
 // ==============================
 // client/src/pages/auth/RegisterPage.jsx
 // ==============================
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -18,12 +18,6 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "he";
-
-  const captcha = useMemo(() => {
-    const a = Math.floor(Math.random() * (9 - 2 + 1)) + 2;
-    const b = Math.floor(Math.random() * (9 - 1 + 1)) + 1;
-    return { a, b, answer: a + b };
-  }, []);
 
   const [message, setMessage] = useState({
     show: false,
@@ -58,18 +52,6 @@ export default function RegisterPage() {
       return;
     }
 
-    if (Number(formData.captchaAnswer) !== captcha.answer) {
-      setMessage({
-        show: true,
-        type: "error",
-        text: t(
-          "auth.register.errors.captchaFailed",
-          "Security check failed. Please try again."
-        ),
-      });
-      return;
-    }
-
     try {
       setIsLoading(true);
 
@@ -97,6 +79,7 @@ export default function RegisterPage() {
         username: formData.username,
         password: formData.password,
         role: formData.role,
+        captchaToken: formData.captchaToken,
       });
 
       setMessage({
@@ -227,7 +210,6 @@ export default function RegisterPage() {
 
                 <RegisterForm
                   onSubmit={handleSubmit}
-                  captchaLabel={`${captcha.a} + ${captcha.b} = ?`}
                   isLoading={isLoading}
                 />
               </div>
