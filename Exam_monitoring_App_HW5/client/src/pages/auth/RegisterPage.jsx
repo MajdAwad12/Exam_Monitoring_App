@@ -112,10 +112,10 @@ export default function RegisterPage() {
         type="button"
         onClick={() => navigate("/", { replace: true })}
         className={[
-          "fixed top-5 z-50 inline-flex items-center gap-2 px-4 py-2 rounded-full",
+          "fixed top-3 sm:top-5 z-50 inline-flex items-center gap-2 px-4 py-2 rounded-full",
           "bg-white/15 hover:bg-white/25 text-white text-sm font-semibold",
           "border border-white/20 backdrop-blur shadow-lg transition",
-          isRtl ? "right-5" : "left-5",
+          isRtl ? "right-3 sm:right-5" : "left-3 sm:left-5",
         ].join(" ")}
       >
         {t("auth.login.backHome", "← Back to Home")}
@@ -124,8 +124,8 @@ export default function RegisterPage() {
       {/* Top controls: Theme + Accessibility + Language (also visible on Register) */}
       <div
         className={[
-          "fixed top-5 z-50",
-          isRtl ? "left-5" : "right-5",
+          "fixed top-3 sm:top-5 z-50",
+          isRtl ? "left-3 sm:left-5" : "right-3 sm:right-5",
           "flex items-center gap-2",
         ].join(" ")}
       >
@@ -153,7 +153,7 @@ export default function RegisterPage() {
         </div>
       </div>
 
-      <div className="min-h-screen flex items-center justify-center px-4 py-10">
+      <div className="min-h-screen flex items-center justify-center px-4 pt-20 pb-10">
         <div className="w-full max-w-6xl">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:p-6 lg:p-10 items-center">
             <div className="hidden lg:block">
@@ -205,7 +205,7 @@ export default function RegisterPage() {
 
               <RegisterHeader />
 
-              <div className="bg-white/95 backdrop-blur rounded-3xl shadow-2xl p-8 sm:p-4 sm:p-6 lg:p-10 border border-white/40">
+              <div className="bg-white/95 backdrop-blur rounded-3xl shadow-2xl p-6 sm:p-8 lg:p-10 border border-white/40">
                 {message.show && <ErrorAlert type={message.type} text={message.text} />}
 
                 <RegisterForm

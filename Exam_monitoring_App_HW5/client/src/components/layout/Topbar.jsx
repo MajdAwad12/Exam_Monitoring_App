@@ -24,7 +24,7 @@ export default function Topbar({ me, onOpenSidebar }) {
 
   return (
     <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
-      <div className="h-16 sm:h-20 px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-3" role="banner">
+      <div className="min-h-16 sm:h-20 px-3 sm:px-6 lg:px-10 py-3 sm:py-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" role="banner">
         {/* Mobile: menu button */}
         <div className={"lg:hidden " + (isRtl ? "order-2" : "order-1")}>
           <button
@@ -39,7 +39,7 @@ export default function Topbar({ me, onOpenSidebar }) {
         </div>
 
         {/* Greeting */}
-        <div className={"min-w-0 flex-1 " + (isRtl ? "order-1" : "order-2")}>
+        <div className={"min-w-0 flex-1 w-full " + (isRtl ? "order-1" : "order-2")}>
           <h2 className="text-base sm:text-xl lg:text-2xl font-bold text-slate-800 dark:text-slate-100 truncate">
             {t("topbar.greeting")},{" "}
             <span className="text-slate-900 dark:text-white">{me?.fullName || t("topbar.defaultUser")}</span> 👋
@@ -47,7 +47,7 @@ export default function Topbar({ me, onOpenSidebar }) {
         </div>
 
         {/* Right side controls */}
-        <div className={"flex items-center gap-3 " + (isRtl ? "order-3" : "order-3")}>
+        <div className={"w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3 " + (isRtl ? "order-3" : "order-3")}>
           {/* Date (hide on very small) */}
           <div className="hidden sm:block text-right text-sm text-slate-500 dark:text-slate-300">
             <p>
@@ -56,7 +56,7 @@ export default function Topbar({ me, onOpenSidebar }) {
             <p className="text-[11px] text-slate-400 dark:text-slate-500">{t("topbar.footer")}</p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <ThemeToggle />
             <AccessibilityWidget placement="topbar" />
             <LanguageDropdown />

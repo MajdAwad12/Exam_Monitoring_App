@@ -122,7 +122,7 @@ export default function HomePage() {
         <div className="absolute -top-28 -left-28 w-[26rem] h-[26rem] rounded-full bg-white/10 blur-3xl" />
         <div className="absolute -bottom-36 -right-36 w-[34rem] h-[34rem] rounded-full bg-white/10 blur-3xl" />
 
-        <div className="relative mx-auto max-w-7xl px-6 py-16 md:py-20 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 py-12 sm:py-16 md:py-20 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-12 items-center">
           {/* Text */}
           <div className="text-white">
             {/* ✅ NO logo here (logo is already in Header) */}
@@ -140,11 +140,11 @@ export default function HomePage() {
             </p>
 
             {/* ✅ no login/register duplicates */}
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-8 flex flex-col sm:flex-row sm:flex-wrap gap-3">
               <button
                 type="button"
                 onClick={() => scrollToId("overview")}
-                className="px-7 py-3.5 rounded-full bg-white dark:bg-slate-950 text-indigo-700 font-extrabold
+                className="w-full sm:w-auto px-6 sm:px-7 py-3 rounded-full bg-white dark:bg-slate-950 text-indigo-700 font-extrabold
                            hover:bg-slate-100 dark:hover:bg-slate-800 dark:bg-slate-900 transition shadow-lg"
               >
                 {t("home.hero.cta.explore")}
@@ -153,7 +153,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() => scrollToId("product")}
-                className="px-7 py-3.5 rounded-full bg-white/10 border border-white/25 text-white font-extrabold
+                className="w-full sm:w-auto px-6 sm:px-7 py-3 rounded-full bg-white/10 border border-white/25 text-white font-extrabold
                            hover:bg-white/15 transition"
               >
                 {t("home.hero.cta.screens")}

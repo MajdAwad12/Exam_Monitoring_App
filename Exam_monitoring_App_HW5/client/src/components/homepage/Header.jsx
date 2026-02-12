@@ -12,13 +12,13 @@ export default function Header() {
   // ✅ Push the "content group" inward, but keep the logo stuck to the edge.
   // LTR: logo at far LEFT, everything else starts after a big left padding.
   // RTL: logo at far RIGHT, everything else starts after a big right padding.
-  const contentPad = isRtl ? "pr-36 sm:pr-44 lg:pr-56" : "pl-36 sm:pl-44 lg:pl-56";
+  const contentPad = isRtl ? "lg:pr-56" : "lg:pl-56";
 
   return (
     <header className="sticky top-0 z-50 bg-white/90 dark:bg-slate-950/80 backdrop-blur border-b border-slate-200 dark:border-slate-800">
       {/* ✅ Full width, no max-width so logo can touch the edge */}
-      <div className="w-full px-20 py-3">
-        <div className={"flex items-center justify-between gap-6 " + contentPad}>
+      <div className="w-full px-3 sm:px-6 lg:px-10 py-3">
+        <div className={"flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6 " + contentPad}>
           {/* ===== Brand (logo pinned to the edge) ===== */}
           <Link to="/" className="flex items-center gap-4 min-w-0 shrink-0">
             <img
@@ -64,22 +64,22 @@ export default function Header() {
           </div>
 
           {/* ===== Auth + Controls (stays at opposite edge) ===== */}
-          <nav className="flex items-center gap-3 shrink-0">
+          <nav className="w-full lg:w-auto flex flex-wrap items-center justify-between gap-3 shrink-0">
             <Link
               to="/login"
-              className="px-6 py-3 rounded-full border-2 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 dark:bg-slate-900 transition text-base font-extrabold shadow-sm"
+              className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-full border-2 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 dark:bg-slate-900 transition text-sm sm:text-base font-extrabold shadow-sm whitespace-nowrap"
             >
               {t("nav.login")}
             </Link>
 
             <Link
               to="/register"
-              className="px-6 py-3 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-sky-600 dark:hover:bg-sky-500 transition text-base font-extrabold shadow-md"
+              className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-sky-600 dark:hover:bg-sky-500 transition text-sm sm:text-base font-extrabold shadow-md whitespace-nowrap"
             >
               {t("nav.register")}
             </Link>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end lg:justify-start">
               <ThemeToggle />
               <AccessibilityWidget placement="topbar" />
               <LanguageDropdown className={isRtl ? "ml-2" : "mr-2"} />

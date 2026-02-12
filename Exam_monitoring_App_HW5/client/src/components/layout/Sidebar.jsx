@@ -31,7 +31,7 @@ function buildItemClass({ isActive, collapsed }) {
     ? "bg-sky-600 text-white shadow-sm"
     : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900/60";
 
-  const layout = collapsed ? "justify-center h-12 w-12 mx-auto" : "gap-3 px-4 py-3";
+  const layout = collapsed ? "justify-center h-12 w-12 mx-auto" : "gap-3 px-3 py-2.5 sm:px-4 sm:py-3";
 
   return `${base} ${active} ${layout}`;
 }
@@ -271,7 +271,7 @@ export default function Sidebar({
           className={
             "absolute top-0 bottom-0 " +
             (isRtl ? "right-0" : "left-0") +
-            " w-[86vw] max-w-[360px] bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 shadow-2xl"
+            " w-[88vw] sm:w-[420px] max-w-[420px] bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto"
           }
           role="dialog"
           aria-modal="true"
