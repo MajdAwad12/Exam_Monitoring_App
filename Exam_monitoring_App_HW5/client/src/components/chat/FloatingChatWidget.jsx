@@ -154,7 +154,7 @@ export default function FloatingChatWidget() {
   return (
     <div className={"fixed bottom-5 " + (isRtl ? "left-5" : "right-5") + " z-50 select-none"} dir={isRtl ? "rtl" : "ltr"}>
       {open && (
-        <div className="w-[92vw] sm:w-[380px] h-[560px] bg-white dark:bg-slate-950 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
+        <div className="w-[92vw] sm:w-[380px] h-[75vh] max-h-[75vh] sm:h-[560px] sm:max-h-[560px] bg-white dark:bg-slate-950 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
           {/* Header */}
           <div className="px-4 py-3 bg-gradient-to-r from-sky-600 to-indigo-600 text-white flex items-center justify-between">
             <div className="flex items-center gap-3">

@@ -967,18 +967,18 @@ export default function ClassroomMap({
             )}
           </div>
 
-          <div className="relative w-full h-[620px] md:h-[680px] bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
+          <div className="relative w-full h-[72vh] min-h-[420px] sm:min-h-[520px] md:h-[680px] overflow-auto overscroll-contain bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
             <div className="absolute left-1/2 top-4 -translate-x-1/2 w-[min(200px,92%)] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-4 py-2 text-center text-sm font-extrabold text-slate-800 dark:text-slate-100 shadow-sm">
               🚪 Door : Exit
             </div>
 
             <div className="absolute left-1/2 top-[88px] -translate-x-1/2 w-[min(980px,96%)]">
               <div
-                className="grid"
+                className="grid origin-top scale-[0.92] sm:scale-100"
                 style={{
                   gridTemplateColumns: "1fr 1fr 0.6fr 1fr 0.6fr 1fr 1fr",
                   gridTemplateRows: "repeat(5, 1fr)",
-                  gap: "18px",
+                  gap: "clamp(10px, 2.2vw, 18px)",
                 }}
               >
                 {Array.from({ length: 25 }).map((_, idx) => {
@@ -993,7 +993,7 @@ export default function ClassroomMap({
                   const toiletCount = Number(sf?.toiletCount || 0);
 
                   return (
-                    <div key={`seat-${key}`} style={{ gridColumn: gridCol, gridRow: r, height: "86px", minWidth: 0 }}>
+                    <div key={`seat-${key}`} style={{ gridColumn: gridCol, gridRow: r, height: "clamp(64px, 10vw, 86px)", minWidth: 0 }}>
                       {a ? (
                         <SeatCard
                           a={a}

@@ -1009,7 +1009,157 @@ export default function ManageExamsPage() {
           {refreshing ? <div className="text-sm text-slate-600 dark:text-slate-300">{t("common.loading")}</div> : null}
         </div>
 
-        <div className="mt-4 overflow-x-auto">
+
+        {/* Mobile list (cards) */}
+        <div className="mt-4 md:hidden space-y-3">
+          {paged.map((e) => {
+            const examId = getId(e);
+            const isWorking = workingId === examId;
+
+            const ws = windowState(e);
+            const windowActive = ws.active;
+            const windowFuture = ws.future;
+
+            const isRunning = String(e?.status || "").toLowerCase() === "running";
+            const canEnd = isRunning && (windowActive || me?.role === "admin");
+            const canStart = windowActive || isRunning;
+
+            const dbStatus = String(e?.status || "scheduled").toLowerCase();
+            const displayStatusRaw =
+              dbStatus === "ended" || dbStatus === "running"
+                ? dbStatus
+                : windowActive
+                ? "running"
+                : windowFuture
+                ? "scheduled"
+                : "ended";
+
+            const displayStatusLabel = t(`exam.status.${displayStatusRaw}`);
+
+            const roomsTxt =
+              safeArr(e.classrooms, [])
+                .map((r) => r?.name || r?.id)
+                .filter(Boolean)
+                .join(", ") || "--";
+
+            return (
+              <div
+                key={String(examId)}
+                className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-extrabold text-slate-900 dark:text-slate-100 truncate">
+                      {e.courseName || "--"}
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                      {fmtShort(e.startAt || e.examDate)} •{" "}
+                      {Array.isArray(e?.supervisors) ? e.supervisors.length : 0} {t("roles.supervisors")}
+                    </div>
+                  </div>
+
+                  <span className={`shrink-0 inline-flex items-center rounded-xl border px-2 py-1 ${statusBadge(displayStatusRaw)}`}>
+                    {displayStatusLabel}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid gap-2 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-slate-500 dark:text-slate-400">{t("admin.manageExams.table.headers.schedule")}</div>
+                    <div className="text-right text-slate-800 dark:text-slate-200">
+                      <div>{fmtDT(e.startAt)}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">→ {fmtDT(e.endAt)}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-slate-500 dark:text-slate-400">{t("admin.manageExams.table.headers.rooms")}</div>
+                    <div className="text-right text-slate-800 dark:text-slate-200">{roomsTxt}</div>
+                  </div>
+
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-slate-500 dark:text-slate-400">{t("admin.manageExams.table.headers.type")}</div>
+                    <div className="text-right">
+                      <span className={`inline-flex items-center rounded-xl border px-2 py-1 ${modeBadge(e.examMode)}`}>
+                        {t(`exam.mode.${String(e.examMode || "onsite").toLowerCase()}`)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-slate-500 dark:text-slate-400">{t("admin.manageExams.table.headers.id")}</div>
+                    <div className="text-right text-xs font-mono text-slate-700 dark:text-slate-300">
+                      {String(examId || "--")}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Btn
+                    onClick={() => openEdit(e)}
+                    className="w-full sm:w-auto border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 dark:bg-slate-900/40"
+                    title={t("admin.manageExams.tooltips.edit")}
+                  >
+                    {t("common.edit")}
+                  </Btn>
+
+                  <Btn
+                    onClick={() =>
+                      openConfirm({
+                        title: t("admin.manageExams.confirm.start.title"),
+                        text: t("admin.manageExams.confirm.start.text"),
+                        action: () => onStartExam(e),
+                      })
+                    }
+                    disabled={isWorking || !canStart}
+                    className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white"
+                    title={t("admin.manageExams.tooltips.start")}
+                  >
+                    {t("common.start")}
+                  </Btn>
+
+                  <Btn
+                    onClick={() =>
+                      openConfirm({
+                        title: t("admin.manageExams.confirm.end.title"),
+                        text: t("admin.manageExams.confirm.end.text"),
+                        action: () => onEndExam(e),
+                      })
+                    }
+                    disabled={isWorking || !canEnd}
+                    className="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white"
+                    title={t("admin.manageExams.tooltips.end")}
+                  >
+                    {t("common.end")}
+                  </Btn>
+
+                  <Btn
+                    onClick={() =>
+                      openConfirm({
+                        title: t("admin.manageExams.confirm.delete.title"),
+                        text: t("admin.manageExams.confirm.delete.text"),
+                        action: () => onDeleteExam(e),
+                      })
+                    }
+                    disabled={isWorking}
+                    className="w-full sm:w-auto border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    title={t("admin.manageExams.tooltips.delete")}
+                  >
+                    {t("common.delete")}
+                  </Btn>
+                </div>
+              </div>
+            );
+          })}
+
+          {paged.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-6 text-center text-sm text-slate-600 dark:text-slate-300">
+              {t("admin.manageExams.table.noResults")}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-4 hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-600 dark:text-slate-300">
