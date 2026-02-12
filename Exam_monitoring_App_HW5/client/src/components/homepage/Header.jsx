@@ -11,14 +11,14 @@ export default function Header() {
 
   // Keep the "logo pinned to the edge" feel on larger screens,
   // but avoid huge padding on mobile/tablet.
-  const contentPad = isRtl ? "md:pr-28 lg:pr-56" : "md:pl-28 lg:pl-56";
+const contentPad = isRtl ? "lg:pr-40 xl:pr-56" : "lg:pl-40 xl:pl-56";
 
   return (
     <header className="sticky top-0 z-50 bg-white/90 dark:bg-slate-950/80 backdrop-blur border-b border-slate-200 dark:border-slate-800">
       <div className="w-full px-3 sm:px-4 md:px-6 lg:px-10 py-3">
         <div
           className={
-            "flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-6 " +
+            "flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 md:gap-6 " +
             contentPad
           }
         >
@@ -41,7 +41,7 @@ export default function Header() {
           </Link>
 
           {/* ===== Helpdesk (show on md+ only; optional on phones) ===== */}
-          <div className="hidden md:flex items-center gap-3 text-sm text-slate-600 dark:text-slate-200 min-w-0">
+          <div className="hidden lg:flex items-center gap-3 text-sm text-slate-600 dark:text-slate-200 min-w-0">
             <span className="inline-flex items-center gap-2 min-w-0">
               📧{" "}
               <a
