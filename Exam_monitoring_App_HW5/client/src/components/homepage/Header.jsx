@@ -11,14 +11,14 @@ export default function Header() {
 
   // Keep the "logo pinned to the edge" feel on larger screens,
   // but avoid huge padding on mobile/tablet.
-const contentPad = isRtl ? "lg:pr-40 xl:pr-56" : "lg:pl-40 xl:pl-56";
+const contentPad = isRtl ? "xl:pr-56" : "xl:pl-56";
 
   return (
     <header className="sticky top-0 z-50 bg-white/90 dark:bg-slate-950/80 backdrop-blur border-b border-slate-200 dark:border-slate-800">
       <div className="w-full px-3 sm:px-4 md:px-6 lg:px-10 py-3">
         <div
           className={
-            "flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 md:gap-6 " +
+            "flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 md:gap-6 " +
             contentPad
           }
         >
@@ -41,7 +41,7 @@ const contentPad = isRtl ? "lg:pr-40 xl:pr-56" : "lg:pl-40 xl:pl-56";
           </Link>
 
           {/* ===== Helpdesk (show on md+ only; optional on phones) ===== */}
-          <div className="hidden lg:flex items-center gap-3 text-sm text-slate-600 dark:text-slate-200 min-w-0">
+          <div className="hidden xl:flex items-center gap-3 text-sm text-slate-600 dark:text-slate-200 min-w-0">
             <span className="inline-flex items-center gap-2 min-w-0">
               📧{" "}
               <a
@@ -66,7 +66,7 @@ const contentPad = isRtl ? "lg:pr-40 xl:pr-56" : "lg:pl-40 xl:pl-56";
           </div>
 
           {/* ===== Controls + Auth ===== */}
-          <nav className="w-full md:w-auto flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 shrink-0">
+          <nav className="w-full xl:w-auto flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 shrink-0">
             {/* Controls row: keep compact & wrap on small screens */}
             <div className="w-full sm:w-auto flex flex-wrap items-center gap-2 justify-between sm:justify-end">
               <div className="flex items-center gap-2">
