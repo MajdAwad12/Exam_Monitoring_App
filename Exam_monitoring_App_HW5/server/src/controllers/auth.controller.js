@@ -99,8 +99,6 @@ export async function login(req, res) {
     }
 
     const u = String(username).trim().toLowerCase();
-    console.log("[FORGOT FLOW] forgot hit:", { email });
-
     const user = await User.findOne({ username: u });
 
     if (!user) {
