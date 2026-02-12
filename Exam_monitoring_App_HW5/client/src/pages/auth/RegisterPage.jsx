@@ -124,7 +124,7 @@ export default function RegisterPage() {
       {/* Top controls: Theme + Accessibility + Language (also visible on Register) */}
       <div
         className={[
-          "fixed top-3 sm:top-5 z-50",
+        "fixed top-14 sm:top-5 z-50",
           isRtl ? "left-3 sm:left-5" : "right-3 sm:right-5",
           "flex items-center gap-2",
         ].join(" ")}

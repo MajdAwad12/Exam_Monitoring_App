@@ -245,7 +245,7 @@ export default function LoginPage() {
       {/* Top controls: Theme + Accessibility + Language (also visible on Login) */}
       <div
         className={[
-          "fixed top-3 sm:top-5 z-50",
+        "fixed top-14 sm:top-5 z-50",
           langPos,
           "flex items-center gap-2",
         ].join(" ")}
